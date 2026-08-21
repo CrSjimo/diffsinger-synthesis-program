@@ -1,9 +1,11 @@
 #ifndef DSSP_DUMPDEVICES_H
 #define DSSP_DUMPDEVICES_H
 
+#include <stdcorelib/support/commandline.h>
+
 namespace dssp{
 
-    void runDumpDevices();
+    extern stdc::cli::Command dumpDevicesCommand;
 
 }
 

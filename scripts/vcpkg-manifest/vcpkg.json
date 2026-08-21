@@ -3,8 +3,7 @@
     "dependencies": [
         "qmsetup",
         "stdcorelib",
-        "drogon",
-        "cli11"
+        "drogon"
     ],
     "vcpkg-configuration": {
         "overlay-ports": [

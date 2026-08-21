@@ -60,21 +60,27 @@ namespace dssp {
             return grouped;
         }
 
-    }
+        int runDumpDevices(const stdc::cli::ParseResult &) {
+            try {
+                const std::vector<DeviceInfo> devices = DeviceInfo::listDevices();
+                const DeviceInfo defaultDevice = DeviceInfo::defaultDevice();
 
-    void runDumpDevices() {
-        try {
-            const std::vector<DeviceInfo> devices = DeviceInfo::listDevices();
-            const DeviceInfo defaultDevice = DeviceInfo::defaultDevice();
+                stdc::json::Object root;
+                root.emplace("devices", stdc::json::Value(groupDevices(devices)));
+                root.emplace("default_device", stdc::json::Value(deviceToObject(defaultDevice, true)));
 
-            stdc::json::Object root;
-            root.emplace("devices", stdc::json::Value(groupDevices(devices)));
-            root.emplace("default_device", stdc::json::Value(deviceToObject(defaultDevice, true)));
-
-            std::cout << stdc::json::Value(std::move(root)).toJson(-1) << std::endl;
-        } catch (const std::exception &e) {
-            std::cerr << "Failed to list devices: " << e.what() << std::endl;
+                std::cout << stdc::json::Value(std::move(root)).toJson(-1) << std::endl;
+                return 0;
+            } catch (const std::exception &e) {
+                std::cerr << "Failed to list devices: " << e.what() << std::endl;
+                return 1;
+            }
         }
+
     }
+
+    stdc::cli::Command dumpDevicesCommand = stdc::cli::Command{"dump-devices", "Dump information of all devices to JSON"}
+        .addHelpOption()
+        .setHandler(runDumpDevices);
 
 }

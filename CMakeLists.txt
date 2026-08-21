@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.19)
 
 project(dssp
-    VERSION 0.1.0.0
+    VERSION 0.1.0
     LANGUAGES CXX
-    DESCRIPTION "DiffSinger synthesis program"
+    DESCRIPTION "DSSP - DiffSinger Synthesis Program"
 )
 
 # ----------------------------------
@@ -44,6 +44,7 @@ endif()
 # ----------------------------------
 # Project Variables
 # ----------------------------------
+set(DSSP_DESCRIPTION ${PROJECT_DESCRIPTION})
 set(DSSP_VERSION ${PROJECT_VERSION})
 set(DSSP_INSTALL_NAME ${PROJECT_NAME})
 set(DSSP_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})

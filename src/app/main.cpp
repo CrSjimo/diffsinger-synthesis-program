@@ -1,20 +1,19 @@
-#include <CLI/CLI.hpp>
+#include <stdcorelib/support/commandline.h>
+#include <stdcorelib/system.h>
 
 #include <dssp/DumpDevices.h>
-
-namespace {
-    constexpr const char *kAppDescription = "DSSP - DiffSinger Synthesis Program";
-}
+#include <dssp/Serve.h>
 
 int main(int argc, char **argv) {
     using namespace dssp;
 
-    CLI::App app{kAppDescription};
-    app.require_subcommand();
+    stdc::cli::Parser parser(
+        stdc::cli::Command{stdc::system::application_name(), DSSP_DESCRIPTION}
+            .addVersionOption(DSSP_VERSION)
+            .addHelpOption(true, false)
+            .addCommand(dumpDevicesCommand)
+            .addCommand(serveCommand)
+    );
 
-    auto *dumpDevices = app.add_subcommand("dump-devices", "Dump information of all devices to JSON");
-    dumpDevices->callback(runDumpDevices);
-
-    CLI11_PARSE(app, argc, argv);
-    return 0;
+    return parser.invoke(stdc::system::command_line_arguments().vec());
 }
