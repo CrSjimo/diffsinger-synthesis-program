@@ -15,5 +15,5 @@ int main(int argc, char **argv) {
             .addCommand(serveCommand)
     );
 
-    return parser.invoke(stdc::system::command_line_arguments().vec());
+    return parser.invoke(stdc::system::command_line_arguments());
 }
