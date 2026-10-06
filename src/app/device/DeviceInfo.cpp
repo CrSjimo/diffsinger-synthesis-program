@@ -2,13 +2,20 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdint>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
 
 #ifdef _WIN32
-#  include <dxgi1_6.h>
-#  include <wrl/client.h>
+#   include <windows.h>
+#   include <dxgi1_6.h>
+#   include <wrl/client.h>
+#elif defined(__APPLE__)
+#   include <sys/types.h>
+#   include <sys/sysctl.h>
+#elif defined(__linux__)
+#   include <unistd.h>
 #endif
 
 namespace dssp {
@@ -23,6 +30,26 @@ namespace dssp {
             std::string id;
             std::size_t memory = 0;
         };
+
+        uint64_t getMemorySize() {
+#if defined(_WIN32)
+            MEMORYSTATUSEX status{};
+            status.dwLength = sizeof(status);
+            return GlobalMemoryStatusEx(&status) ? static_cast<uint64_t>(status.ullTotalPhys) : 0;
+#elif defined(__APPLE__)
+            uint64_t size = 0;
+            size_t len = sizeof(size);
+            return sysctlbyname("hw.memsize", &size, &len, nullptr, 0) == 0 ? size : 0;
+#elif defined(__linux__)
+            const long pages = sysconf(_SC_PHYS_PAGES);
+            const long pageSize = sysconf(_SC_PAGE_SIZE);
+            return (pages > 0 && pageSize > 0)
+                ? static_cast<uint64_t>(pages) * static_cast<uint64_t>(pageSize)
+                : 0;
+#else
+            return 0;
+#endif
+        }
 
 #ifdef _WIN32
 
@@ -203,7 +230,7 @@ namespace dssp {
 
     std::vector<DeviceInfo> DeviceInfo::listDevices() {
         std::vector<DeviceInfo> devices;
-        devices.emplace_back(DeviceInfo{ExecutionProvider::CPU, 0, "CPU", "cpu", 0});
+        devices.emplace_back(DeviceInfo{ExecutionProvider::CPU, 0, "CPU", "cpu", getMemorySize()});
 
 #ifdef _WIN32
         for (const auto &gpu : listDirectMLGpus()) {

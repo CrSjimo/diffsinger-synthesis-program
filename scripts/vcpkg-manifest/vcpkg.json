@@ -3,10 +3,35 @@
     "dependencies": [
         "qmsetup",
         "stdcorelib",
-        "drogon"
+        "drogon",
+        {
+            "name": "synthrt",
+            "features": ["onnx"]
+        },
+        {
+            "name": "wolf",
+            "features": ["onnx"]
+        },
+        {
+            "name": "otter",
+            "features": ["onnx"]
+        }
     ],
+    "features": {
+        "cuda12": {
+            "description": "Enable dsinfer and ONNX Runtime CUDA 12.x support",
+            "supports": "x64 & (windows | linux)",
+            "dependencies": [
+                {
+                    "name": "synthrt",
+                    "features": ["cuda12"]
+                }
+            ]
+        }
+    },
     "vcpkg-configuration": {
         "overlay-ports": [
+            "../vcpkg-overrides",
             "../vcpkg/ports"
         ],
         "overlay-triplets": [

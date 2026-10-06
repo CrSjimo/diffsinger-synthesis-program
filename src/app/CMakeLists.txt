@@ -1,5 +1,9 @@
 find_package(stdcorelib CONFIG REQUIRED)
 find_package(Drogon CONFIG REQUIRED)
+find_package(synthrt CONFIG REQUIRED)
+find_package(dsinfer CONFIG REQUIRED)
+find_package(wolf CONFIG REQUIRED)
+find_package(otter CONFIG REQUIRED)
 
 file(GLOB_RECURSE _src CONFIGURE_DEPENDS *.cpp *.h)
 
@@ -28,5 +32,12 @@ target_link_libraries(dssp PRIVATE
     stdcorelib::stdcorelib
     Drogon::Drogon
     codecutil
+    synthrt::synthrt
+    dsinfer::dsinfer
+    wolf::wolf
+    otter::otter
     $<$<PLATFORM_ID:Windows>:dxgi.lib>
 )
+
+include("${DSSP_SOURCE_DIR}/cmake/DeployInference.cmake")
+dssp_deploy_inference_plugins(dssp)
