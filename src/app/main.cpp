@@ -4,11 +4,14 @@
 #include <stdcorelib/support/logging.h>
 #include <stdcorelib/system.h>
 
+#include <dsspapp/Logger.h>
 #include <dsspcli/DumpDevices.h>
 #include <dsspcli/Serve.h>
 
 int main(int argc, char **argv) {
     using namespace dssp;
+
+    installLogger();
 
     // stdcorelib's command-line/system APIs form the outer library boundary.
     try {
