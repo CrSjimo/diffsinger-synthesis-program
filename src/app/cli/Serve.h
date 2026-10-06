@@ -3,10 +3,10 @@
 
 #include <stdcorelib/support/commandline.h>
 
-namespace dssp{
+namespace dssp {
 
     extern stdc::cli::Command serveCommand;
 
 }
 
-#endif //DSSP_SERVE_H
+#endif // DSSP_SERVE_H

@@ -1,0 +1,64 @@
+#ifndef DSSP_INFERENCE_ENVIRONMENT_H
+#define DSSP_INFERENCE_ENVIRONMENT_H
+
+#include <expected>
+#include <filesystem>
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include <synthrt/Core/PackageHandle.h>
+
+#include <dsspinference/InferenceError.h>
+#include <dsspruntime/DeviceInfo.h>
+
+namespace srt { class SynthUnit; }
+namespace wolf { class LinguistSession; }
+
+namespace dssp::inference {
+
+    struct PluginSearchPath {
+        std::string category;
+        std::filesystem::path path;
+    };
+    struct OnnxOptions {
+        std::filesystem::path driverPath;
+        std::filesystem::path runtimePath;
+        runtime::ExecutionProvider executionProvider = runtime::ExecutionProvider::CPU;
+        int deviceIndex = 0;
+    };
+    struct EnvironmentOptions {
+        std::vector<std::filesystem::path> packageRoots;
+        std::vector<PluginSearchPath> pluginPaths;
+        // Empty for a metadata-only host or a host registering another runtime service.
+        std::optional<OnnxOptions> onnx;
+    };
+    struct PackageProblem {
+        std::filesystem::path path;
+        ResourceError error;
+    };
+
+    // Startup commits the package set once. Architecture catalogues retain this
+    // owner rather than keeping borrowed specs after their SynthUnit is gone.
+    class Environment final {
+    public:
+        static std::expected<std::shared_ptr<Environment>, InitializationError> create(const EnvironmentOptions &);
+        ~Environment();
+        Environment(const Environment &) = delete;
+        Environment &operator=(const Environment &) = delete;
+
+        srt::SynthUnit &unit() const noexcept;
+        wolf::LinguistSession &languages() const noexcept;
+        const std::vector<srt::PackageHandle> &packages() const noexcept;
+        const std::vector<PackageProblem> &problems() const noexcept;
+
+    private:
+        class Impl;
+        explicit Environment(std::unique_ptr<Impl>);
+        std::unique_ptr<Impl> impl_;
+    };
+
+}
+
+#endif // DSSP_INFERENCE_ENVIRONMENT_H

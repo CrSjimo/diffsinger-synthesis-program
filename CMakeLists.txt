@@ -13,6 +13,13 @@ option(DSSP_BUILD_TESTS "Build test cases" OFF)
 option(DSSP_INSTALL "Install application" ON)
 option(DSSP_ENABLE_CUDA "Enable CUDA" OFF)
 
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+if(DSSP_BUILD_TESTS)
+    enable_testing()
+endif()
+
 # ----------------------------------
 # CMake Settings
 # ----------------------------------

@@ -4,6 +4,13 @@
         "qmsetup",
         "stdcorelib",
         "drogon",
+        "jsoncpp",
+        "re2",
+        "icu",
+        "libmagic",
+        "uriparser",
+        "openssl",
+        "drlibs",
         {
             "name": "synthrt",
             "features": ["onnx"]
@@ -18,6 +25,10 @@
         }
     ],
     "features": {
+        "tests": {
+            "description": "Build DSSP tests with Google Test",
+            "dependencies": ["gtest"]
+        },
         "cuda12": {
             "description": "Enable dsinfer and ONNX Runtime CUDA 12.x support",
             "supports": "x64 & (windows | linux)",

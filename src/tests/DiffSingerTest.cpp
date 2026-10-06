@@ -1,0 +1,199 @@
+#include <atomic>
+#include <memory>
+#include <stop_token>
+#include <thread>
+#include <vector>
+
+#include <gtest/gtest.h>
+#include <wolf/Session/LinguistSession.h>
+
+#include <dsspapp/ArchComposition.h>
+#include <dssparchdiffsinger/Factory.h>
+#include <dssparchdiffsinger/SingerCatalog.h>
+#include <dsspmedia/Resources.h>
+#include <dssptests/TestFiles.h>
+
+namespace dssp::tests {
+
+    class DiffSingerTest : public ::testing::Test {
+    protected:
+        void SetUp() override {
+            const auto createdEnvironment = inference::Environment::create({});
+            ASSERT_TRUE(createdEnvironment);
+            environment = *createdEnvironment;
+            const auto createdMedia = media::Resources::create(std::filesystem::path(DSSP_TEST_RESOURCE_DIR) / "media" / "magic.mgc");
+            ASSERT_TRUE(createdMedia);
+            services = {environment, *createdMedia, std::filesystem::path(DSSP_TEST_RESOURCE_DIR) / "localization"};
+            const auto createdArchitecture = arch_diffsinger::create(services);
+            ASSERT_TRUE(createdArchitecture);
+            implementation = *createdArchitecture;
+        }
+
+        std::shared_ptr<inference::Environment> environment;
+        arch::ArchitectureServices services;
+        arch::ArchitecturePtr implementation;
+    };
+
+    TEST_F(DiffSingerTest, CompositionContainsTheCompiledSetAndFactoriesCreateIndependentInstances) {
+        const auto catalog = composeArchitectures(services);
+        ASSERT_TRUE(catalog);
+        ASSERT_EQ((*catalog)->entries().size(), 1U);
+        const auto implementation = (*catalog)->find(arch_diffsinger::Id);
+        ASSERT_NE(implementation, nullptr);
+        EXPECT_EQ(implementation->id(), "diffsinger");
+        EXPECT_EQ((*catalog)->find("DiffSinger"), nullptr);
+        const auto another = arch_diffsinger::create(services);
+        ASSERT_TRUE(another);
+        EXPECT_NE(implementation, *another);
+        EXPECT_EQ(implementation->id(), (*another)->id());
+    }
+
+    TEST_F(DiffSingerTest, EmptyEnvironmentAdvertisesMetadataAndReportsUnknownResources) {
+        EXPECT_TRUE(environment->packages().empty());
+        EXPECT_TRUE(environment->languages().catalog()->singers().empty());
+        const auto metadata = implementation->metadata({});
+        ASSERT_TRUE(metadata);
+        EXPECT_EQ(metadata->id, "diffsinger");
+        EXPECT_EQ(metadata->name, "DiffSinger");
+        EXPECT_EQ(metadata->parameters.size(), 10U);
+        for (const auto id : {"pitch", "expressiveness", "energy", "breathiness", "voicing", "tension", "mouth_opening", "gender", "velocity", "tone_shift"}) {
+            EXPECT_TRUE(metadata->parameters.contains(id));
+        }
+        const auto singers = implementation->singers({});
+        ASSERT_TRUE(singers);
+        EXPECT_TRUE(singers->empty());
+        const auto singer = implementation->singer({});
+        ASSERT_FALSE(singer);
+        EXPECT_NE(singer.error().get_if<arch::ResourceNotFoundError>(), nullptr);
+        const auto groups = implementation->groups({});
+        ASSERT_TRUE(groups);
+        EXPECT_TRUE(groups->empty());
+        const auto group = implementation->group({});
+        ASSERT_FALSE(group);
+        EXPECT_NE(group.error().get_if<arch::ResourceNotFoundError>(), nullptr);
+        const auto groupSingers = implementation->groupSingers({});
+        ASSERT_FALSE(groupSingers);
+        EXPECT_NE(groupSingers.error().get_if<arch::ResourceNotFoundError>(), nullptr);
+        const auto avatar = implementation->avatar({});
+        ASSERT_FALSE(avatar);
+        EXPECT_NE(avatar.error().get_if<arch::ResourceNotFoundError>(), nullptr);
+        const auto background = implementation->background({});
+        ASSERT_FALSE(background);
+        EXPECT_NE(background.error().get_if<arch::ResourceNotFoundError>(), nullptr);
+        const auto demoAudio = implementation->demoAudio({});
+        ASSERT_FALSE(demoAudio);
+        EXPECT_NE(demoAudio.error().get_if<arch::ResourceNotFoundError>(), nullptr);
+        const auto tag = implementation->envTag({});
+        ASSERT_TRUE(tag);
+        EXPECT_TRUE(tag->empty());
+    }
+
+    TEST_F(DiffSingerTest, MissingTranslationFilesDoNotPreventArchitectureMetadata) {
+        const TestFiles files;
+        auto untranslatedServices = services;
+        untranslatedServices.translationRoot = files.path();
+        const auto untranslated = arch_diffsinger::create(untranslatedServices);
+        ASSERT_TRUE(untranslated);
+        for (const auto locale : {"", "en-US", "zh-CN"}) {
+            const auto metadata = (*untranslated)->metadata({locale});
+            ASSERT_TRUE(metadata);
+            EXPECT_EQ(metadata->id, "diffsinger");
+            EXPECT_FALSE(metadata->name.empty());
+            ASSERT_EQ(metadata->parameters.size(), 10U);
+            for (const auto &[id, parameter] : metadata->parameters) {
+                EXPECT_FALSE(parameter.name.empty()) << id;
+            }
+        }
+    }
+
+    TEST_F(DiffSingerTest, EachSynthesisStageCompletesWithItsDefaultOutput) {
+        unsigned completed = 0;
+        implementation->pronunciation({}, {}, [&](auto result) {
+            ASSERT_TRUE(result);
+            EXPECT_TRUE(result->notes.empty());
+            ++completed;
+        });
+        implementation->phoneme({}, {}, [&](auto result) {
+            ASSERT_TRUE(result);
+            EXPECT_TRUE(result->notes.empty());
+            ++completed;
+        });
+        implementation->duration({}, {}, [&](auto result) {
+            ASSERT_TRUE(result);
+            EXPECT_TRUE(result->notes.empty());
+            ++completed;
+        });
+        implementation->parameter({}, {}, [&](auto result) {
+            ASSERT_TRUE(result);
+            EXPECT_TRUE(result->parameters.empty());
+            ++completed;
+        });
+        implementation->audio({}, {}, [&](auto result) {
+            ASSERT_TRUE(result);
+            EXPECT_TRUE(result->audioUrl.empty());
+            ++completed;
+        });
+        EXPECT_EQ(completed, 5U);
+    }
+
+    TEST_F(DiffSingerTest, CancelledRequestDoesNotCancelConcurrentRequests) {
+        std::stop_source cancelled;
+        cancelled.request_stop();
+        bool cancelledReply = false;
+        implementation->pronunciation({}, cancelled.get_token(), [&](auto result) {
+            ASSERT_FALSE(result);
+            EXPECT_NE(result.error().template get_if<arch::CancelledError>(), nullptr);
+            cancelledReply = true;
+        });
+        EXPECT_TRUE(cancelledReply);
+        std::atomic<unsigned> completed = 0;
+        std::vector<std::jthread> workers;
+        for (unsigned i = 0; i < 8; ++i) {
+            workers.emplace_back([&] {
+                implementation->pronunciation({}, {}, [&](auto result) {
+                    EXPECT_TRUE(result);
+                    ++completed;
+                });
+            });
+        }
+        workers.clear();
+        EXPECT_EQ(completed.load(), 8U);
+    }
+
+    TEST(DiffSinger, MissingWolfDefaultLyricRemainsEmptyForEveryLanguage) {
+        arch_diffsinger::SingerRecord record;
+        record.info.id = "singer";
+        record.name = srt::DisplayText("Singer");
+        for (const auto handle : {"cmn", "eng", "jpn", "yue", "deu"}) {
+            record.languages.emplace(handle, arch_diffsinger::LanguageRecord{inference::LanguageMetadata{srt::DisplayText(handle), {}}, wolf::Api::Linguist::L1::Depth::Pronunciation});
+        }
+        const auto info = arch_diffsinger::singerInfo(record, {});
+        ASSERT_TRUE(info);
+        ASSERT_EQ(info->languages.size(), record.languages.size());
+        for (const auto &[handle, language] : info->languages) {
+            EXPECT_EQ(language.name, handle);
+            EXPECT_TRUE(language.defaultLyric.empty());
+        }
+    }
+
+    TEST(DiffSinger, LogicalSpeakersMustHaveValidEmbeddingsInEveryConsumingStage) {
+        arch_diffsinger::StageRecord duration, acoustic, pitch;
+        duration.usesSpeakers = true;
+        duration.speakers = {"dur-first", "dur-second"};
+        duration.embeddedSpeakers = {"dur-first", "dur-second"};
+        duration.speakerMapping = {{"main", "dur-first"}, {"soft", "dur-second"}};
+        acoustic.usesSpeakers = true;
+        acoustic.speakers = {"ac-main", "ac-broken"};
+        acoustic.embeddedSpeakers = {"ac-main"};
+        acoustic.speakerMapping = {{"main", "ac-main"}, {"soft", "ac-broken"}, {"other", "undeclared"}};
+        // A stage without embeddings has no speaker condition to intersect.
+        const auto common = arch_diffsinger::commonSpeakers({{"duration", duration}, {"acoustic", acoustic}, {"pitch", pitch}});
+        EXPECT_EQ(common, std::vector<std::string>{"main"});
+        acoustic.speakerMapping.clear();
+        duration.speakerMapping = {{"ac-main", "dur-first"}};
+        EXPECT_EQ(arch_diffsinger::commonSpeakers({{"duration", duration}, {"acoustic", acoustic}}), std::vector<std::string>{"ac-main"});
+        acoustic.embeddedSpeakers.clear();
+        EXPECT_TRUE(arch_diffsinger::commonSpeakers({{"duration", duration}, {"acoustic", acoustic}}).empty());
+    }
+
+}

@@ -1,0 +1,15 @@
+en_US {
+    architecture { "DiffSinger" }
+    pitch { "Pitch" }
+    expressiveness { "Expressiveness" }
+    energy { "Energy" }
+    breathiness { "Breathiness" }
+    voicing { "Voicing" }
+    tension { "Tension" }
+    mouth_opening { "Mouth opening" }
+    gender { "Gender" }
+    velocity { "Velocity" }
+    tone_shift { "Tone shift" }
+    unitCent { " cent" }
+    unitDecibel { " dB" }
+}

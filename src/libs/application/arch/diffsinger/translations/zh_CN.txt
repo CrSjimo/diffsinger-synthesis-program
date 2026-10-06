@@ -1,0 +1,15 @@
+zh_CN {
+    architecture { "DiffSinger" }
+    pitch { "音高" }
+    expressiveness { "表现力" }
+    energy { "能量" }
+    breathiness { "气声" }
+    voicing { "发声" }
+    tension { "张力" }
+    mouth_opening { "开口度" }
+    gender { "性别偏移" }
+    velocity { "发音速度" }
+    tone_shift { "音区偏移" }
+    unitCent { " 音分" }
+    unitDecibel { " dB" }
+}

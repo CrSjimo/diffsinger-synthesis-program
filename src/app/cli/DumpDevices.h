@@ -3,10 +3,10 @@
 
 #include <stdcorelib/support/commandline.h>
 
-namespace dssp{
+namespace dssp {
 
     extern stdc::cli::Command dumpDevicesCommand;
 
 }
 
-#endif //DSSP_DUMPDEVICES_H
+#endif // DSSP_DUMPDEVICES_H

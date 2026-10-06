@@ -1,1 +1,1 @@
-add_subdirectory(codecutil)
+add_subdirectory(application)

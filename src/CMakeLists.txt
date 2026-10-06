@@ -2,10 +2,8 @@ include("conf.cmake")
 
 dssp_init_buildsystem()
 
-# ----------------------------------
-# Main Application
-# ----------------------------------
-add_subdirectory(app)
+# Generate application data directly in its deployment directory.
+set(DSSP_RESOURCE_BUILD_DIR "${DSSP_BUILD_DATA_DIR}")
 
 # ----------------------------------
 # Libraries
@@ -13,11 +11,14 @@ add_subdirectory(app)
 add_subdirectory(libs)
 
 # ----------------------------------
+# Main Application
+# ----------------------------------
+add_subdirectory(app)
+
+# ----------------------------------
 # Tests
 # ----------------------------------
 if(DSSP_BUILD_TESTS)
-    enable_testing()
-
     add_subdirectory(tests)
 endif()
 

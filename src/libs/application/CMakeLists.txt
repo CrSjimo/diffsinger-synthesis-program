@@ -1,0 +1,11 @@
+find_package(stdcorelib CONFIG REQUIRED)
+
+add_subdirectory(error)
+add_subdirectory(codecutil)
+add_subdirectory(runtime)
+add_subdirectory(localization)
+add_subdirectory(media)
+add_subdirectory(inference)
+add_subdirectory(arch)
+add_subdirectory(http)
+add_subdirectory(api)

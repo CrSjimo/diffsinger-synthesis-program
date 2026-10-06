@@ -9,20 +9,16 @@ function(dssp_deploy_inference_plugins target)
     # The upstream packages install plugins separately from their link targets.
     get_filename_component(_vcpkg_prefix "${ONNXRUNTIME_BUILDS_INCLUDE_DIR}" DIRECTORY)
     set(_library_source "${_vcpkg_prefix}/$<$<CONFIG:Debug>:debug/>lib")
+    set(_plugin_root "${DSSP_BUILD_PLUGINS_DIR}")
 
     if(WIN32)
-        set(_deploy_root "$<TARGET_FILE_DIR:${target}>")
         set(_runtime_source "${_vcpkg_prefix}/$<$<CONFIG:Debug>:debug/>bin")
+        set(_dependency_dir "${DSSP_BUILD_RUNTIME_DIR}")
+        set(_install_dependency_dir "${DSSP_INSTALL_RUNTIME_DIR}")
     else()
-        # This is a command-line executable, including on macOS.
-        set(_deploy_root "$<TARGET_FILE_DIR:${target}>/../lib")
         set(_runtime_source "${_library_source}")
-    endif()
-
-    if(DSSP_INSTALL)
-        set(_copy_args INSTALL_DIR .)
-    else()
-        set(_copy_args SKIP_INSTALL)
+        set(_dependency_dir "${DSSP_BUILD_LIBRARY_DIR}")
+        set(_install_dependency_dir "${DSSP_INSTALL_LIBRARY_DIR}")
     endif()
 
     # Categories and driver bundles are loaded at runtime, so linking the four
@@ -30,20 +26,28 @@ function(dssp_deploy_inference_plugins target)
     foreach(_library IN ITEMS dsinfer wolf otter)
         qm_add_copy_command(${target}
             SOURCES "${_library_source}/plugins/${_library}/"
-            DESTINATION "${_deploy_root}/plugins/${_library}"
-            ${_copy_args}
+            DESTINATION "${_plugin_root}/${_library}"
+            SKIP_INSTALL
         )
+        if(DSSP_INSTALL)
+            install(DIRECTORY "${_library_source}/plugins/${_library}/"
+                DESTINATION "${DSSP_INSTALL_PLUGINS_DIR}/${_library}")
+        endif()
     endforeach()
 
-    set(_ort_destination "${_deploy_root}/plugins/dsinfer/inferencedrivers/onnx/runtime")
+    set(_ort_destination "${_plugin_root}/dsinfer/inferencedrivers/onnx/runtime")
+    set(_ort_install_destination "${DSSP_INSTALL_PLUGINS_DIR}/dsinfer/inferencedrivers/onnx/runtime")
     if(NOT IS_DIRECTORY "${ONNXRUNTIME_BUILDS_RUNTIME_DIR}")
         message(FATAL_ERROR "The onnxruntime-builds default runtime payload is missing.")
     endif()
     qm_add_copy_command(${target}
         SOURCES "${ONNXRUNTIME_BUILDS_RUNTIME_DIR}/"
         DESTINATION "${_ort_destination}"
-        ${_copy_args}
+        SKIP_INSTALL
     )
+    if(DSSP_INSTALL)
+        install(DIRECTORY "${ONNXRUNTIME_BUILDS_RUNTIME_DIR}/" DESTINATION "${_ort_install_destination}")
+    endif()
 
     if(DSSP_ENABLE_CUDA)
         if(NOT IS_DIRECTORY "${ONNXRUNTIME_BUILDS_CUDA_RUNTIME_DIR}")
@@ -54,8 +58,11 @@ function(dssp_deploy_inference_plugins target)
         qm_add_copy_command(${target}
             SOURCES "${ONNXRUNTIME_BUILDS_CUDA_RUNTIME_DIR}/"
             DESTINATION "${_ort_destination}/cuda"
-            ${_copy_args}
+            SKIP_INSTALL
         )
+        if(DSSP_INSTALL)
+            install(DIRECTORY "${ONNXRUNTIME_BUILDS_CUDA_RUNTIME_DIR}/" DESTINATION "${_ort_install_destination}/cuda")
+        endif()
     endif()
 
     # Package data is prepared separately from building Wolf. Copy only package
@@ -74,8 +81,8 @@ function(dssp_deploy_inference_plugins target)
             get_filename_component(_package_name "${_package_dir}" NAME)
             qm_add_copy_command(${target}
                 SOURCES "${_package_dir}/"
-                DESTINATION "${_deploy_root}/wolf/packages/${_package_name}"
-                ${_copy_args}
+                DESTINATION "${DSSP_BUILD_DATA_DIR}/wolf/packages/${_package_name}"
+                SKIP_INSTALL
             )
         endforeach()
     endif()
@@ -89,9 +96,9 @@ function(dssp_deploy_inference_plugins target)
     add_custom_command(TARGET ${target} POST_BUILD
         COMMAND "${CMAKE_COMMAND}"
             "-Dqmcorecmd=${QMSETUP_CORECMD_EXECUTABLE}"
-            "-Dplugin_root=${_deploy_root}/plugins"
+            "-Dplugin_root=${_plugin_root}"
             "-Dlibrary_dir=${_runtime_source}"
-            "-Ddeploy_dir=${_deploy_root}"
+            "-Ddeploy_dir=${_dependency_dir}"
             -P "${DSSP_SOURCE_DIR}/cmake/DeployPluginDependencies.cmake"
         COMMENT "Deploy inference plugin dependencies with qmsetup"
         VERBATIM
@@ -108,25 +115,20 @@ function(dssp_deploy_inference_plugins target)
     )
 
     if(DSSP_INSTALL)
-        if(WIN32)
-            set(_install_plugin_root "${DSSP_INSTALL_RUNTIME_DIR}")
-        else()
-            set(_install_plugin_root "${DSSP_INSTALL_LIBRARY_DIR}")
-        endif()
         install(CODE "
             execute_process(
                 COMMAND \"${CMAKE_COMMAND}\"
                     \"-Dqmcorecmd=${QMSETUP_CORECMD_EXECUTABLE}\"
-                    \"-Dplugin_root=\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_install_plugin_root}/plugins\"
+                    \"-Dplugin_root=\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${DSSP_INSTALL_PLUGINS_DIR}\"
                     \"-Dlibrary_dir=${_runtime_source}\"
-                    \"-Ddeploy_dir=\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_install_plugin_root}\"
+                    \"-Ddeploy_dir=\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_install_dependency_dir}\"
                     -P \"${DSSP_SOURCE_DIR}/cmake/DeployPluginDependencies.cmake\"
                 COMMAND_ERROR_IS_FATAL ANY
             )
             execute_process(
                 COMMAND \"${CMAKE_COMMAND}\"
                     -Dexpect_cuda=${DSSP_ENABLE_CUDA}
-                    \"-Druntime_dir=\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_install_plugin_root}/plugins/dsinfer/inferencedrivers/onnx/runtime\"
+                    \"-Druntime_dir=\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_ort_install_destination}\"
                     -P \"${DSSP_SOURCE_DIR}/cmake/OrtRuntimeGate.cmake\"
                 COMMAND_ERROR_IS_FATAL ANY
             )

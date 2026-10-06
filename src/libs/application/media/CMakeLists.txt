@@ -1,0 +1,19 @@
+find_package(unofficial-libmagic CONFIG REQUIRED)
+
+file(GLOB _src CONFIGURE_DEPENDS *.cpp *.h)
+add_library(dssp_media STATIC ${_src})
+target_compile_features(dssp_media PUBLIC cxx_std_23)
+target_include_directories(dssp_media PUBLIC "$<BUILD_INTERFACE:${DSSP_BUILD_INCLUDE_DIR}>")
+target_link_libraries(dssp_media PUBLIC dssp_error)
+target_link_libraries(dssp_media PRIVATE dssp_codecutil unofficial::libmagic::libmagic stdcorelib::stdcorelib)
+dssp_sync_include(dssp_media PREFIX dsspmedia FORCE)
+
+set(_dictionary "${DSSP_RESOURCE_BUILD_DIR}/media/magic.mgc")
+add_custom_command(OUTPUT "${_dictionary}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${DSSP_RESOURCE_BUILD_DIR}/media"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${unofficial-libmagic_DICTIONARY}" "${_dictionary}"
+    DEPENDS "${unofficial-libmagic_DICTIONARY}"
+    VERBATIM
+)
+add_custom_target(dssp_media_resources DEPENDS "${_dictionary}")
+add_dependencies(dssp_media dssp_media_resources)
