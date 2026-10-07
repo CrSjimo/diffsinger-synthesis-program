@@ -22,7 +22,14 @@ namespace dssp::arch {
                 return std::unexpected{CatalogConstructionError("Duplicate architecture ID: " + std::string((*current)->id()))};
             }
         }
-        log.stdcDebug("Created architecture catalog (%1 entries)", entries.size());
+        std::string ids;
+        for (const auto &entry : entries) {
+            if (!ids.empty()) {
+                ids += ", ";
+            }
+            ids += entry->id();
+        }
+        log.stdcInfo("Available architectures: %1", ids.empty() ? "none" : ids);
         return ArchitectureCatalog(std::move(entries));
     }
     std::span<const ArchitecturePtr> ArchitectureCatalog::entries() const noexcept {

@@ -7,12 +7,10 @@
 
 #include <re2/re2.h>
 #include <stdcorelib/str.h>
-#include <stdcorelib/support/logging.h>
 #include <unicode/localematcher.h>
 
 namespace dssp::localization {
     namespace {
-        stdc::LogCategory log("dssp.localization.LocaleMatcher");
         std::string normalize(std::string_view input) {
             auto text = std::string(stdc::str::trim(input, " \t"));
             if (const auto suffix = text.find_first_of(".@"); suffix != std::string::npos) {
@@ -70,7 +68,6 @@ namespace dssp::localization {
             }
             const auto *matched = matcher.getBestMatchForListString(icu::StringPiece(preferences.data(), static_cast<int32_t>(preferences.size())), status);
             if (status == U_ILLEGAL_ARGUMENT_ERROR) {
-                log.stdcDebug("Ignoring malformed Accept-Language preferences");
                 return std::optional<std::size_t>{};
             }
             if (U_FAILURE(status)) {

@@ -5,16 +5,15 @@
 
 #include <stdcorelib/path.h>
 #include <stdcorelib/str.h>
-#include <stdcorelib/support/logging.h>
 
 #include <dssparchdiffsinger/Factory.h>
+#include <dssparchdiffsinger/LanguagePrediction.h>
 #include <dssparchdiffsinger/Metadata.h>
 #include <dsspinference/Display.h>
 #include <dsspmedia/Resources.h>
 
 namespace dssp::arch_diffsinger {
     namespace {
-        stdc::LogCategory log("dssp.arch_diffsinger.DiffSinger");
         template <class T, class Function>
         arch::CatalogResult<T> catalogueCall(Function &&function) {
             try {
@@ -129,20 +128,32 @@ namespace dssp::arch_diffsinger {
             return result;
         });
     }
-    arch::CatalogResult<std::vector<arch::GroupMetadata>> DiffSinger::groups(const arch::CatalogOptions &) const {
-        std::vector<arch::GroupMetadata> result;
-        result.reserve(catalog_->groups().size());
-        for (const auto &[id, group] : catalog_->groups()) {
-            result.push_back(group);
-        }
-        return result;
+    arch::CatalogResult<std::vector<arch::GroupMetadata>> DiffSinger::groups(const arch::CatalogOptions &options) const {
+        return catalogueCall<std::vector<arch::GroupMetadata>>([&]() -> arch::CatalogResult<std::vector<arch::GroupMetadata>> {
+            std::vector<arch::GroupMetadata> result;
+            result.reserve(catalog_->groups().size());
+            for (const auto &[id, group] : catalog_->groups()) {
+                auto info = groupInfo(group, options);
+                if (!info) {
+                    return std::unexpected{std::move(info.error())};
+                }
+                result.push_back(std::move(*info));
+            }
+            return result;
+        });
     }
     arch::CatalogResult<std::optional<arch::GroupMetadata>> DiffSinger::group(const arch::ResourceQuery &query) const {
-        const auto found = catalog_->groups().find(query.id);
-        if (found == catalog_->groups().end()) {
-            return fail<arch::CatalogErrors>(arch::ResourceNotFoundError("Group does not exist: " + query.id));
-        }
-        return std::optional{found->second};
+        return catalogueCall<std::optional<arch::GroupMetadata>>([&]() -> arch::CatalogResult<std::optional<arch::GroupMetadata>> {
+            const auto found = catalog_->groups().find(query.id);
+            if (found == catalog_->groups().end()) {
+                return fail<arch::CatalogErrors>(arch::ResourceNotFoundError("Group does not exist: " + query.id));
+            }
+            auto info = groupInfo(found->second, query.display);
+            if (!info) {
+                return std::unexpected{std::move(info.error())};
+            }
+            return std::optional{std::move(*info)};
+        });
     }
     arch::CatalogResult<std::vector<arch::SingerInfo>> DiffSinger::groupSingers(const arch::ResourceQuery &query) const {
         return catalogueCall<std::vector<arch::SingerInfo>>([&]() -> arch::CatalogResult<std::vector<arch::SingerInfo>> {
@@ -165,24 +176,19 @@ namespace dssp::arch_diffsinger {
     std::expected<std::string, arch::EnvironmentErrors> DiffSinger::envTag(arch::MultiSingerContext) const {
         return std::string{};
     }
-    void DiffSinger::pronunciation(arch::PronunciationInput, std::stop_token stop, arch::Completion<arch::PronunciationOutput> cb) const {
-        log.stdcDebug("Handling pronunciation");
-        completeEmpty(stop, std::move(cb));
+    void DiffSinger::pronunciation(arch::PronunciationInput input, std::stop_token stop, arch::Completion<arch::PronunciationOutput> cb) const {
+        predictPronunciation(catalog_, std::move(input), stop, std::move(cb));
     }
-    void DiffSinger::phoneme(arch::PhonemeInput, std::stop_token stop, arch::Completion<arch::PhonemeOutput> cb) const {
-        log.stdcDebug("Handling phoneme");
-        completeEmpty(stop, std::move(cb));
+    void DiffSinger::phoneme(arch::PhonemeInput input, std::stop_token stop, arch::Completion<arch::PhonemeOutput> cb) const {
+        predictPhoneme(catalog_, std::move(input), stop, std::move(cb));
     }
     void DiffSinger::duration(arch::DurationInput, std::stop_token stop, arch::Completion<arch::DurationOutput> cb) const {
-        log.stdcDebug("Handling duration");
         completeEmpty(stop, std::move(cb));
     }
     void DiffSinger::parameter(arch::ParameterInput, std::stop_token stop, arch::Completion<arch::ParameterOutput> cb) const {
-        log.stdcDebug("Handling parameter");
         completeEmpty(stop, std::move(cb));
     }
     void DiffSinger::audio(arch::AudioInput, std::stop_token stop, arch::Completion<arch::AudioOutput> cb) const {
-        log.stdcDebug("Handling audio");
         completeEmpty(stop, std::move(cb));
     }
 

@@ -7,14 +7,23 @@
 #include <string>
 #include <vector>
 
+// Preserve the caller's Windows SDK macro while parsing synthrt's interface().
+#ifdef _WIN32
+#    pragma push_macro("interface")
+#    undef interface
+#endif
+
 #include <synthrt/Core/ContribSpec.h>
 #include <synthrt/SVS/SingerContrib.h>
-#include <wolf/Session/LinguistSession.h>
+
+#ifdef _WIN32
+#    pragma pop_macro("interface")
+#endif
 
 #include <dssparch/Errors.h>
 #include <dssparch/Types.h>
 #include <dsspinference/Environment.h>
-#include <dsspinference/LanguageMetadata.h>
+#include <dsspinference/LanguageRoute.h>
 
 namespace dssp::arch_diffsinger {
 
@@ -26,21 +35,22 @@ namespace dssp::arch_diffsinger {
         std::set<std::string> embeddedSpeakers;
         std::map<std::string, std::string> speakerMapping;
     };
-    struct LanguageRecord {
-        inference::LanguageMetadata metadata;
-        wolf::Api::Linguist::L1::Depth depth = wolf::Api::Linguist::L1::Depth::Pronunciation;
+    struct GroupRecord {
+        arch::GroupMetadata info;
+        // DisplayText stays immutable; names are selected for each HTTP response.
+        std::map<std::string, srt::DisplayText> languageNames;
     };
     struct SingerRecord {
         srt::PackageHandle package;
         const srt::SingerSpec *spec = nullptr;
-        wolf::SingerRef ref;
         arch::SingerInfo info;
         srt::DisplayText name;
         srt::DisplayText avatar;
         srt::DisplayText background;
         srt::DisplayText demoAudio;
         std::map<std::string, StageRecord> stages;
-        std::map<std::string, LanguageRecord> languages;
+        std::map<std::string, inference::LanguageRoute> languages;
+        std::vector<std::string> reservedPhonemes;
         std::vector<std::string> speakers;
         // Keep the model's exported order after applying the singer's import subset.
         std::vector<std::string> variancePredictions;
@@ -53,7 +63,7 @@ namespace dssp::arch_diffsinger {
     public:
         static std::expected<std::shared_ptr<const SingerCatalog>, inference::ResourceError> discover(std::shared_ptr<inference::Environment>);
         const std::map<std::string, SingerRecord> &singers() const noexcept { return singers_; }
-        const std::map<std::string, arch::GroupMetadata> &groups() const noexcept { return groups_; }
+        const std::map<std::string, GroupRecord> &groups() const noexcept { return groups_; }
         const SingerRecord *find(std::string_view id) const;
         const std::shared_ptr<inference::Environment> &environment() const noexcept { return environment_; }
 
@@ -62,11 +72,12 @@ namespace dssp::arch_diffsinger {
         // Retains the unit until all borrowed specs and package handles are gone.
         std::shared_ptr<inference::Environment> environment_;
         std::map<std::string, SingerRecord> singers_;
-        std::map<std::string, arch::GroupMetadata> groups_;
+        std::map<std::string, GroupRecord> groups_;
     };
 
     std::vector<std::string> commonSpeakers(const std::map<std::string, StageRecord> &);
     arch::CatalogResult<arch::SingerInfo> singerInfo(const SingerRecord &, const arch::CatalogOptions &);
+    arch::CatalogResult<arch::GroupMetadata> groupInfo(const GroupRecord &, const arch::CatalogOptions &);
 }
 
 #endif // DSSP_ARCHDIFFSINGER_SINGERCATALOG_H

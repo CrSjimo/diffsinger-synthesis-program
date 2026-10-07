@@ -14,7 +14,7 @@ namespace dssp::api_v1 {
     Json::Value toJson(const dto::ParameterPresentation &value);
     Json::Value toJson(const dto::ArchitectureMetadata &value);
     Json::Value toJson(const dto::GroupMetadata &value);
-    Json::Value toJson(const dto::SingerLanguageInfo &value);
+    Json::Value toJson(const dto::GroupLanguageInfo &value);
     Json::Value toJson(const dto::SingerInfo &value);
     Json::Value toJson(const dto::SingerAvatarResponse &value);
     Json::Value toJson(const dto::SingerBackgroundResponse &value);

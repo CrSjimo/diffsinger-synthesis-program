@@ -22,12 +22,12 @@ namespace dssp::tests {
         std::string_view id() const noexcept override { return id_; }
         arch::CatalogResult<arch::ArchitectureMetadata> metadata(const arch::CatalogOptions &) const override { return arch::ArchitectureMetadata{id_, "test architecture", {}}; }
         arch::CatalogResult<std::vector<arch::SingerInfo>> singers(const arch::CatalogOptions &) const override { return std::vector<arch::SingerInfo>{}; }
-        arch::CatalogResult<std::optional<arch::SingerInfo>> singer(const arch::ResourceQuery &) const override { return std::optional<arch::SingerInfo>{}; }
-        arch::CatalogResult<std::string> avatar(const arch::SingerMediaQuery &) const override { return std::string{}; }
-        arch::CatalogResult<std::string> background(const arch::SingerMediaQuery &) const override { return std::string{}; }
-        arch::CatalogResult<std::vector<arch::SingerDemoAudio>> demoAudio(const arch::SingerMediaQuery &) const override { return std::vector<arch::SingerDemoAudio>{}; }
-        arch::CatalogResult<std::vector<arch::GroupMetadata>> groups(const arch::CatalogOptions &) const override { return std::vector<arch::GroupMetadata>{}; }
-        arch::CatalogResult<std::optional<arch::GroupMetadata>> group(const arch::ResourceQuery &) const override { return std::optional<arch::GroupMetadata>{}; }
+        arch::CatalogResult<std::optional<arch::SingerInfo>> singer(const arch::ResourceQuery &query) const override { return onSinger ? onSinger(query) : arch::CatalogResult<std::optional<arch::SingerInfo>>{std::optional<arch::SingerInfo>{}}; }
+        arch::CatalogResult<std::string> avatar(const arch::SingerMediaQuery &query) const override { return onAvatar ? onAvatar(query) : arch::CatalogResult<std::string>{std::string{}}; }
+        arch::CatalogResult<std::string> background(const arch::SingerMediaQuery &query) const override { return onBackground ? onBackground(query) : arch::CatalogResult<std::string>{std::string{}}; }
+        arch::CatalogResult<std::vector<arch::SingerDemoAudio>> demoAudio(const arch::SingerMediaQuery &query) const override { return onDemoAudio ? onDemoAudio(query) : arch::CatalogResult<std::vector<arch::SingerDemoAudio>>{std::vector<arch::SingerDemoAudio>{}}; }
+        arch::CatalogResult<std::vector<arch::GroupMetadata>> groups(const arch::CatalogOptions &options) const override { return onGroups ? onGroups(options) : arch::CatalogResult<std::vector<arch::GroupMetadata>>{std::vector<arch::GroupMetadata>{}}; }
+        arch::CatalogResult<std::optional<arch::GroupMetadata>> group(const arch::ResourceQuery &query) const override { return onGroup ? onGroup(query) : arch::CatalogResult<std::optional<arch::GroupMetadata>>{std::optional<arch::GroupMetadata>{}}; }
         arch::CatalogResult<std::vector<arch::SingerInfo>> groupSingers(const arch::ResourceQuery &) const override { return std::vector<arch::SingerInfo>{}; }
         std::expected<std::string, arch::EnvironmentErrors> envTag(arch::MultiSingerContext) const override { return std::string{}; }
         void pronunciation(arch::PronunciationInput input, std::stop_token stop, arch::Completion<arch::PronunciationOutput> completion) const override {
@@ -42,6 +42,12 @@ namespace dssp::tests {
         void parameter(arch::ParameterInput, std::stop_token stop, arch::Completion<arch::ParameterOutput> completion) const override { complete(stop, std::move(completion)); }
         void audio(arch::AudioInput, std::stop_token stop, arch::Completion<arch::AudioOutput> completion) const override { complete(stop, std::move(completion)); }
 
+        std::function<arch::CatalogResult<std::optional<arch::SingerInfo>>(const arch::ResourceQuery &)> onSinger;
+        std::function<arch::CatalogResult<std::string>(const arch::SingerMediaQuery &)> onAvatar;
+        std::function<arch::CatalogResult<std::string>(const arch::SingerMediaQuery &)> onBackground;
+        std::function<arch::CatalogResult<std::vector<arch::SingerDemoAudio>>(const arch::SingerMediaQuery &)> onDemoAudio;
+        std::function<arch::CatalogResult<std::vector<arch::GroupMetadata>>(const arch::CatalogOptions &)> onGroups;
+        std::function<arch::CatalogResult<std::optional<arch::GroupMetadata>>(const arch::ResourceQuery &)> onGroup;
         std::function<void(arch::PronunciationInput, std::stop_token, arch::Completion<arch::PronunciationOutput>)> onPronunciation;
 
     private:

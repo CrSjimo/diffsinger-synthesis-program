@@ -9,7 +9,6 @@
 
 // Parse interface() declarations before provider SDK headers introduce Windows macros.
 #include <synthrt/Core/SynthUnit.h>
-#include <wolf/Session/LinguistSession.h>
 
 #include <onnxruntime_c_api.h>
 #if defined(_WIN32) && __has_include(<dml_provider_factory.h>)
@@ -72,6 +71,7 @@ namespace dssp::inference {
             }
             bool found = false;
             for (int i = 0; i < count; ++i) {
+                log.stdcTrace("ONNX Runtime advertises execution provider %1", providers[i]);
                 found = found || std::string_view(providers[i]) == wanted;
             }
             auto *released = api.ReleaseAvailableProviders(providers, count);
@@ -162,6 +162,10 @@ namespace dssp::inference {
             std::vector<DiscoveredPackage> directories;
             for (std::size_t rootIndex = 0; rootIndex < roots.size(); ++rootIndex) {
                 const auto &root = roots[rootIndex];
+                if (log.isLevelEnabled(stdc::Logger::Trace)) {
+                    log.stdcTrace("Scanning package root %1 (priority %2)", stdc::path::to_utf8(root), rootIndex);
+                }
+                const auto previousCount = directories.size();
                 std::set<fs::path> found;
                 std::error_code error;
                 if (!fs::is_directory(root, error)) {
@@ -187,6 +191,9 @@ namespace dssp::inference {
                             problems.push_back({directory, std::move(problem)});
                             continue;
                         }
+                        if (log.isLevelEnabled(stdc::Logger::Trace)) {
+                            log.stdcTrace("Found package declaration in %1", stdc::path::to_utf8(canonical));
+                        }
                         found.insert(std::move(canonical));
                         continue;
                     }
@@ -195,6 +202,8 @@ namespace dssp::inference {
                         const auto status = iterator->symlink_status(error);
                         if (!error && fs::is_directory(status)) {
                             pending.push_back(iterator->path());
+                        } else if (!error && fs::is_symlink(status) && log.isLevelEnabled(stdc::Logger::Trace)) {
+                            log.stdcTrace("Skipping symbolic link during package discovery: %1", stdc::path::to_utf8(iterator->path()));
                         }
                         if (!error) {
                             iterator.increment(error);
@@ -209,8 +218,11 @@ namespace dssp::inference {
                 for (const auto &directory : found) {
                     if (visited.insert(directory).second) {
                         directories.push_back({directory, rootIndex});
+                    } else if (log.isLevelEnabled(stdc::Logger::Trace)) {
+                        log.stdcTrace("Ignoring package directory already discovered in an earlier root: %1", stdc::path::to_utf8(directory));
                     }
                 }
+                log.stdcDebug("Package root %1 contributed %2 new declarations (%3 candidates)", rootIndex, directories.size() - previousCount, found.size());
             }
             return directories;
         }
@@ -218,26 +230,38 @@ namespace dssp::inference {
 
     class Environment::Impl {
     public:
-        // Destruction is reversed: Wolf executives, handles, unit/driver, factory.
+        // Destruction is reversed: inference pools, handles, unit/driver, factory.
         ds::InferenceDriverFactory drivers;
         srt::SynthUnit unit;
         std::vector<srt::PackageHandle> packages;
-        std::unique_ptr<wolf::LinguistSession> languages;
         std::vector<PackageProblem> problems;
+        std::map<std::string, resource::CacheOptions> cacheOptions;
+        std::map<std::string, std::unique_ptr<InferencePool>> pools;
+        std::mutex poolsMutex;
+        std::once_flag shutdownOnce;
+        bool stopped = false;
     };
 
     std::expected<std::shared_ptr<Environment>, InitializationError> Environment::create(const EnvironmentOptions &options) {
         // All native calls are contained in this integration boundary. No model
         // executive, pipeline or session is created during initialization/discovery.
         try {
+            log.stdcDebug("Initializing shared inference environment (%1 package roots, %2 plugin paths, ONNX configured=%3)", options.packageRoots.size(), options.pluginPaths.size(), options.onnx.has_value());
             wolf::linkLinguistCategory();
             otter::linkAnalysisCategory();
             auto impl = std::make_unique<Impl>();
+            impl->cacheOptions = options.cacheGroups;
             std::map<std::string, std::vector<std::filesystem::path>> pluginPaths;
             for (const auto &entry : options.pluginPaths) {
                 pluginPaths[entry.category].push_back(entry.path);
             }
             for (const auto &[category, paths] : pluginPaths) {
+                log.stdcDebug("Configuring %1 plugin search paths for category %2", paths.size(), category);
+                if (log.isLevelEnabled(stdc::Logger::Trace)) {
+                    for (const auto &path : paths) {
+                        log.stdcTrace("Category %1 plugin search path: %2", category, stdc::path::to_utf8(path));
+                    }
+                }
                 impl->unit.setPluginPaths(category, paths);
             }
             if (options.onnx) {
@@ -257,6 +281,9 @@ namespace dssp::inference {
                     return std::unexpected{InitializationError("The ONNX driver requires a runtime library named " + std::string(runtimeFile))};
                 }
                 const std::filesystem::path driverPaths[] = {onnx.driverPath};
+                if (log.isLevelEnabled(stdc::Logger::Debug)) {
+                    log.stdcDebug("ONNX driver directory: %1; runtime library: %2", stdc::path::to_utf8(onnx.driverPath), stdc::path::to_utf8(onnx.runtimePath));
+                }
                 impl->drivers.setPluginPaths(driverPaths);
                 auto *loader = impl->drivers.find(ds::Api::Onnx::API_NAME);
                 if (!loader) {
@@ -288,6 +315,8 @@ namespace dssp::inference {
                     return std::unexpected{InitializationError("Cannot register the ONNX runtime service", nativeError(added.error(), "SynthUnit::addRuntimeService"))};
                 }
                 log.stdcInfo("Initialized inference provider %1 on device %2", runtime::DeviceInfo::executionProviderToString(onnx.executionProvider), onnx.deviceIndex);
+            } else {
+                log.stdcDebug("Creating a declaration-only environment without an ONNX runtime service");
             }
             auto directories = discover(options.packageRoots, impl->problems);
             if (!directories) {
@@ -300,6 +329,9 @@ namespace dssp::inference {
             std::vector<std::filesystem::path> searchPaths;
             for (const auto &entry : *directories) {
                 const auto &directory = entry.path;
+                if (log.isLevelEnabled(stdc::Logger::Trace)) {
+                    log.stdcTrace("Reading package declaration: %1", stdc::path::to_utf8(directory));
+                }
                 auto parsed = impl->unit.openPackage(directory, srt::SynthUnit::DataOnly);
                 if (!parsed) {
                     ResourceError problem("Cannot parse package declaration", nativeError(parsed.error(), "SynthUnit::openPackage(DataOnly)"));
@@ -308,6 +340,9 @@ namespace dssp::inference {
                     continue;
                 }
                 auto package = parsed.take();
+                if (log.isLevelEnabled(stdc::Logger::Trace)) {
+                    log.stdcTrace("Parsed package %1@%2 from root %3", package.id(), package.version().toString(), entry.rootIndex);
+                }
                 const auto identity = std::make_pair(package.id(), package.version());
                 if (const auto [it, inserted] = identities.emplace(identity, directory); !inserted) {
                     return std::unexpected{InitializationError("Duplicate package " + package.id() + "@" + package.version().toString() + " in " + stdc::path::to_utf8(it->second) + " and " + stdc::path::to_utf8(directory))};
@@ -325,11 +360,23 @@ namespace dssp::inference {
                 declarations.push_back(std::move(package));
             }
             impl->unit.setPackagePaths(searchPaths);
+            log.stdcDebug("Resolving %1 package declarations using %2 dependency search directories", declarations.size(), searchPaths.size());
+            if (log.isLevelEnabled(stdc::Logger::Trace)) {
+                for (const auto &path : searchPaths) {
+                    log.stdcTrace("Dependency search directory: %1", stdc::path::to_utf8(path));
+                }
+            }
             for (const auto &declaration : declarations) {
                 // An earlier root may already have committed this dependency.
                 if (auto loaded = impl->unit.findLoadedPackage(declaration.id(), declaration.version())) {
+                    if (log.isLevelEnabled(stdc::Logger::Trace)) {
+                        log.stdcTrace("Reusing package %1@%2 already loaded as a dependency", declaration.id(), declaration.version().toString());
+                    }
                     impl->packages.push_back(std::move(*loaded));
                     continue;
+                }
+                if (log.isLevelEnabled(stdc::Logger::Trace)) {
+                    log.stdcTrace("Validating package %1@%2 and resolving its bindings", declaration.id(), declaration.version().toString());
                 }
                 auto loaded = impl->unit.openPackage(declaration.path(), srt::SynthUnit::Load);
                 if (!loaded) {
@@ -343,8 +390,14 @@ namespace dssp::inference {
             // Keep dependencies that were committed even if they were not direct roots.
             impl->packages = impl->unit.loadedPackages();
             std::ranges::sort(impl->packages, [](const auto &left, const auto &right) { return std::make_pair(left.id(), left.version()) < std::make_pair(right.id(), right.version()); });
-            impl->languages = std::make_unique<wolf::LinguistSession>(impl->unit);
-            log.stdcInfo("Discovered %1 loaded packages, %2 invalid packages", impl->packages.size(), impl->problems.size());
+            for (const auto &[group, cache] : impl->cacheOptions) {
+                auto pool = InferencePool::create(group, cache);
+                if (!pool) {
+                    return std::unexpected{std::move(pool.error())};
+                }
+                impl->pools.emplace(group, std::move(*pool));
+            }
+            log.stdcInfo("Package catalogue ready: %1 available packages, %2 rejected entries", impl->packages.size(), impl->problems.size());
             return std::shared_ptr<Environment>(new Environment(std::move(impl)));
         } catch (const std::exception &error) {
             return std::unexpected{InitializationError("Inference library initialization failed", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"inference libraries", "initialize environment", "exception"}))};
@@ -352,9 +405,36 @@ namespace dssp::inference {
     }
 
     Environment::Environment(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
-    Environment::~Environment() = default;
+    Environment::~Environment() { shutdown(); }
     srt::SynthUnit &Environment::unit() const noexcept { return impl_->unit; }
-    wolf::LinguistSession &Environment::languages() const noexcept { return *impl_->languages; }
+    std::expected<InferencePool *, InitializationError> Environment::inferences(std::string_view group) {
+        const std::lock_guard lock(impl_->poolsMutex);
+        if (impl_->stopped) {
+            return std::unexpected{InitializationError("Inference environment has been shut down")};
+        }
+        const auto found = impl_->pools.find(std::string(group));
+        if (found != impl_->pools.end()) {
+            return found->second.get();
+        }
+        auto pool = InferencePool::create(std::string(group));
+        if (!pool) {
+            return std::unexpected{std::move(pool.error())};
+        }
+        auto *result = pool->get();
+        impl_->pools.emplace(group, std::move(*pool));
+        return result;
+    }
+    void Environment::shutdown() {
+        std::call_once(impl_->shutdownOnce, [&] {
+            {
+                const std::lock_guard lock(impl_->poolsMutex);
+                impl_->stopped = true;
+            }
+            for (const auto &[group, pool] : impl_->pools) {
+                pool->shutdown();
+            }
+        });
+    }
     const std::vector<srt::PackageHandle> &Environment::packages() const noexcept { return impl_->packages; }
     const std::vector<PackageProblem> &Environment::problems() const noexcept { return impl_->problems; }
 

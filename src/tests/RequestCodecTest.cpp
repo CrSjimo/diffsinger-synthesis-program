@@ -156,6 +156,22 @@ namespace dssp::tests {
         EXPECT_TRUE(http::validateUri("urn:dssp:resource"));
     }
 
+    TEST(RequestCodec, UriValidationPreservesEscapesWithoutDecodingOrNormalizingThePayload) {
+        for (const auto url : {"https://example.com/a%2Fb%252Fc?source=%23fragment&token=%25%2B#part%2Fone", "data:audio/wav;base64,YQ%2B%2F%3D%3D", "data:application/octet-stream,%00%25%2B%2F%3F%23"}) {
+            SCOPED_TRACE(url);
+            Json::Value json;
+            json["extractor"] = "missing-model";
+            json["input"]["audioUrl"] = url;
+            const auto decoded = v1::fromJson<dto::ExtractionRequest>(json);
+            ASSERT_TRUE(decoded);
+            EXPECT_EQ(decoded->input.audioUrl, url);
+        }
+        for (const auto url : {"https://example.com/%", "https://example.com/%2", "https://example.com/%GG", "data:audio/wav,%2Z"}) {
+            SCOPED_TRACE(url);
+            EXPECT_FALSE(http::validateUri(url));
+        }
+    }
+
     TEST(RequestCodec, AudioFormatsRetainOrderAndRejectParametersAndWildcards) {
         auto json = pieceRequest();
         json["acceptableFormats"] = Json::Value(Json::arrayValue);

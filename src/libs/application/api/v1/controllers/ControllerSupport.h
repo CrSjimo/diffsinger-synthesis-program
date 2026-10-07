@@ -14,7 +14,7 @@ namespace dssp::api_v1::detail {
         if (context.stopRequested()) {
             return;
         }
-        callback(http::jsonResponse(toJson(Response{})));
+        callback(http::jsonResponse(toJson(Response{}), context.logContext()));
     }
 
     template <class Request, class Response>
@@ -28,12 +28,12 @@ namespace dssp::api_v1::detail {
             return;
         }
         if (!input) {
-            callback(http::problemResponse(input.error()));
+            callback(http::problemResponse(input.error(), context.logContext()));
             return;
         }
         // Future service calls receive *input and context. In asynchronous handlers,
         // move both into the completion state and check cancellation before replying.
-        callback(http::jsonResponse(toJson(Response{})));
+        callback(http::jsonResponse(toJson(Response{}), context.logContext()));
     }
 
 }

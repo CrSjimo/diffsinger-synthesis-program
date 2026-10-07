@@ -70,7 +70,7 @@ namespace dssp::media {
             if (magic_load_buffers(impl->cookie, &buffer, &size, 1) != 0) {
                 return std::unexpected{magicError(impl->cookie, "magic_load_buffers")};
             }
-            log.stdcInfo("Initialized MIME detector with the deployed database");
+            log.stdcDebug("MIME database ready: %1 (%2 bytes)", stdc::path::to_utf8(dictionary), impl->dictionary.size());
             return std::shared_ptr<Resources>(new Resources(std::move(impl)));
         } catch (const std::exception &error) {
             return std::unexpected{MediaError("Media resource initialization failed", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"filesystem/libmagic", "initialize media resources", "exception"}))};
@@ -84,12 +84,15 @@ namespace dssp::media {
         if (bytes.empty()) {
             return std::unexpected{MediaError("The declared media resource is empty")};
         }
-        const std::lock_guard lock(impl_->mutex);
-        const auto *type = magic_buffer(impl_->cookie, bytes.data(), bytes.size());
-        if (!type) {
-            return std::unexpected{magicError(impl_->cookie, "magic_buffer")};
+        std::string result;
+        {
+            const std::lock_guard lock(impl_->mutex);
+            const auto *type = magic_buffer(impl_->cookie, bytes.data(), bytes.size());
+            if (!type) {
+                return std::unexpected{magicError(impl_->cookie, "magic_buffer")};
+            }
+            result = type;
         }
-        const std::string result(type);
         if (!result.starts_with(kind == Kind::Image ? "image/" : "audio/")) {
             return std::unexpected{MediaError("The declared resource has no recognizable format of the required media kind (detected " + result + ")")};
         }
@@ -107,6 +110,9 @@ namespace dssp::media {
                 return std::unexpected{std::move(type.error())};
             }
             const codecutil::Base64EncodingView encoded(*bytes);
+            if (log.isLevelEnabled(stdc::Logger::Trace)) {
+                log.stdcTrace("Media resource %1: type=%2, bytes=%3", stdc::path::to_utf8(path), *type, bytes->size());
+            }
             return Resource{*type, "data:" + *type + ";base64," + std::string(encoded.begin(), encoded.end())};
         } catch (const std::exception &error) {
             return std::unexpected{MediaError("Media resource read failed", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"filesystem/libmagic", "read media resource", "exception"}))};

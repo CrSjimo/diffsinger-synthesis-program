@@ -10,6 +10,8 @@
 
 #include <drogon/HttpRequest.h>
 
+#include <dssphttp/AccessLog.h>
+
 namespace dssp::http {
     class RequestLifetimeRegistry;
 
@@ -19,6 +21,9 @@ namespace dssp::http {
     class RequestContext {
     public:
         struct State;
+        // Shares the access log ID; zero denotes an empty context.
+        std::uint64_t id() const noexcept;
+        const RequestLog &logContext() const noexcept;
         std::stop_token cancellation() const noexcept;
         bool stopRequested() const noexcept;
         const std::string &acceptLanguage() const noexcept;
@@ -33,9 +38,10 @@ namespace dssp::http {
         RequestContext track(const drogon::HttpRequest &request);
         void connectionChanged(const trantor::TcpConnectionPtr &connection);
         void cancelAll();
-        void release(std::uint64_t id);
 
     private:
+        friend struct RequestContext::State;
+        void release(std::uint64_t registrationId);
         struct Entry {
             std::weak_ptr<trantor::TcpConnection> connection;
             std::weak_ptr<RequestContext::State> state;

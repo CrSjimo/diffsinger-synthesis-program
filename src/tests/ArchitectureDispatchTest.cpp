@@ -1,6 +1,7 @@
 #include <atomic>
 #include <memory>
 #include <stop_token>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <utility>
@@ -9,6 +10,7 @@
 #include <gtest/gtest.h>
 
 #include <dsspapiv1/ArchitectureDispatch.h>
+#include <dssptests/LogCapture.h>
 #include <dssptests/TestArchitecture.h>
 
 namespace dssp::tests {
@@ -139,6 +141,23 @@ namespace dssp::tests {
         first.join();
         second.join();
         EXPECT_EQ(replies.load(), 1U);
+    }
+
+    TEST(ArchitectureDispatch, ThrowingHttpCallbackIsContainedAtTheAsynchronousLibraryBoundary) {
+        LogCapture logs;
+        const auto lifetime = std::make_shared<http::RequestLifetimeRegistry>();
+        const auto request = pronunciationRequest();
+        unsigned attempts = 0;
+        const auto complete = api_v1::detail::completion<api_v1::dto::PronunciationResponse, arch::PronunciationOutput>([&](const auto &) {
+            ++attempts;
+            throw std::runtime_error("simulated HTTP callback failure");
+        }, lifetime->track(*request));
+        EXPECT_NO_THROW(complete(arch::PronunciationOutput{}));
+        complete(arch::PronunciationOutput{});
+        EXPECT_EQ(attempts, 1U);
+        const auto errors = logs.records("dssp.api_v1.ArchitectureDispatch", stdc::Logger::Critical);
+        ASSERT_EQ(errors.size(), 1U);
+        EXPECT_NE(errors.front().message.find("simulated HTTP callback failure"), std::string::npos);
     }
 
 }

@@ -3,6 +3,7 @@
 
 #include <expected>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -11,10 +12,10 @@
 #include <synthrt/Core/PackageHandle.h>
 
 #include <dsspinference/InferenceError.h>
+#include <dsspinference/InferencePool.h>
 #include <dsspruntime/DeviceInfo.h>
 
 namespace srt { class SynthUnit; }
-namespace wolf { class LinguistSession; }
 
 namespace dssp::inference {
 
@@ -33,6 +34,7 @@ namespace dssp::inference {
         std::vector<PluginSearchPath> pluginPaths;
         // Empty for a metadata-only host or a host registering another runtime service.
         std::optional<OnnxOptions> onnx;
+        std::map<std::string, resource::CacheOptions> cacheGroups;
     };
     struct PackageProblem {
         std::filesystem::path path;
@@ -49,7 +51,8 @@ namespace dssp::inference {
         Environment &operator=(const Environment &) = delete;
 
         srt::SynthUnit &unit() const noexcept;
-        wolf::LinguistSession &languages() const noexcept;
+        std::expected<InferencePool *, InitializationError> inferences(std::string_view group);
+        void shutdown();
         const std::vector<srt::PackageHandle> &packages() const noexcept;
         const std::vector<PackageProblem> &problems() const noexcept;
 

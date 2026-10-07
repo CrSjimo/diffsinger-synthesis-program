@@ -2,6 +2,7 @@ find_package(stdcorelib CONFIG REQUIRED)
 
 add_subdirectory(error)
 add_subdirectory(codecutil)
+add_subdirectory(resource)
 add_subdirectory(runtime)
 add_subdirectory(localization)
 add_subdirectory(media)

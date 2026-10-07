@@ -5,7 +5,6 @@
 #include <vector>
 
 #include <gtest/gtest.h>
-#include <wolf/Session/LinguistSession.h>
 
 #include <dsspapp/ArchComposition.h>
 #include <dssparchdiffsinger/Factory.h>
@@ -50,7 +49,6 @@ namespace dssp::tests {
 
     TEST_F(DiffSingerTest, EmptyEnvironmentAdvertisesMetadataAndReportsUnknownResources) {
         EXPECT_TRUE(environment->packages().empty());
-        EXPECT_TRUE(environment->languages().catalog()->singers().empty());
         const auto metadata = implementation->metadata({});
         ASSERT_TRUE(metadata);
         EXPECT_EQ(metadata->id, "diffsinger");
@@ -106,16 +104,16 @@ namespace dssp::tests {
         }
     }
 
-    TEST_F(DiffSingerTest, EachSynthesisStageCompletesWithItsDefaultOutput) {
+    TEST_F(DiffSingerTest, UnimplementedSynthesisStagesCompleteWithDefaultOutputsAndLanguageStagesValidateSinger) {
         unsigned completed = 0;
         implementation->pronunciation({}, {}, [&](auto result) {
-            ASSERT_TRUE(result);
-            EXPECT_TRUE(result->notes.empty());
+            ASSERT_FALSE(result);
+            EXPECT_NE(result.error().template get_if<arch::InvalidInputError>(), nullptr);
             ++completed;
         });
         implementation->phoneme({}, {}, [&](auto result) {
-            ASSERT_TRUE(result);
-            EXPECT_TRUE(result->notes.empty());
+            ASSERT_FALSE(result);
+            EXPECT_NE(result.error().template get_if<arch::InvalidInputError>(), nullptr);
             ++completed;
         });
         implementation->duration({}, {}, [&](auto result) {
@@ -151,7 +149,7 @@ namespace dssp::tests {
         for (unsigned i = 0; i < 8; ++i) {
             workers.emplace_back([&] {
                 implementation->pronunciation({}, {}, [&](auto result) {
-                    EXPECT_TRUE(result);
+                    EXPECT_FALSE(result);
                     ++completed;
                 });
             });
@@ -161,19 +159,38 @@ namespace dssp::tests {
     }
 
     TEST(DiffSinger, MissingWolfDefaultLyricRemainsEmptyForEveryLanguage) {
-        arch_diffsinger::SingerRecord record;
-        record.info.id = "singer";
-        record.name = srt::DisplayText("Singer");
+        arch_diffsinger::GroupRecord record;
+        record.info.id = "group";
         for (const auto handle : {"cmn", "eng", "jpn", "yue", "deu"}) {
-            record.languages.emplace(handle, arch_diffsinger::LanguageRecord{inference::LanguageMetadata{srt::DisplayText(handle), {}}, wolf::Api::Linguist::L1::Depth::Pronunciation});
+            record.info.languages.emplace(handle, arch::GroupLanguageInfo{});
+            record.languageNames.emplace(handle, srt::DisplayText(handle));
         }
-        const auto info = arch_diffsinger::singerInfo(record, {});
+        const auto info = arch_diffsinger::groupInfo(record, {});
         ASSERT_TRUE(info);
-        ASSERT_EQ(info->languages.size(), record.languages.size());
+        ASSERT_EQ(info->languages.size(), record.languageNames.size());
         for (const auto &[handle, language] : info->languages) {
             EXPECT_EQ(language.name, handle);
             EXPECT_TRUE(language.defaultLyric.empty());
         }
+    }
+
+    TEST(DiffSinger, GroupLocalizationRetainsEachLanguageCapabilityAndTheCommittedSnapshot) {
+        arch_diffsinger::GroupRecord record;
+        record.info.id = "group";
+        record.info.languages.emplace("eng", arch::GroupLanguageInfo{"eng", "supplied lyric", arch::PronunciationMode::Full, arch::PhonemeMode::Full});
+        record.info.languages.emplace("cmn", arch::GroupLanguageInfo{"cmn", {}, arch::PronunciationMode::Skip, arch::PhonemeMode::TokenOnly});
+        record.languageNames.emplace("eng", srt::DisplayText("English"));
+        record.languageNames.emplace("cmn", srt::DisplayText("Mandarin"));
+        const auto info = arch_diffsinger::groupInfo(record, {});
+        ASSERT_TRUE(info);
+        EXPECT_EQ(info->languages.at("eng").name, "English");
+        EXPECT_EQ(info->languages.at("eng").defaultLyric, "supplied lyric");
+        EXPECT_EQ(info->languages.at("eng").phonemeMode, arch::PhonemeMode::Full);
+        EXPECT_EQ(info->languages.at("cmn").name, "Mandarin");
+        EXPECT_EQ(info->languages.at("cmn").pronunciationMode, arch::PronunciationMode::Skip);
+        EXPECT_EQ(info->languages.at("cmn").phonemeMode, arch::PhonemeMode::TokenOnly);
+        EXPECT_EQ(record.info.languages.at("eng").name, "eng");
+        EXPECT_EQ(record.info.languages.at("cmn").name, "cmn");
     }
 
     TEST(DiffSinger, LogicalSpeakersMustHaveValidEmbeddingsInEveryConsumingStage) {

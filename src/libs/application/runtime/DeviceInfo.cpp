@@ -2,10 +2,13 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <sstream>
 #include <utility>
+
+#include <stdcorelib/support/logging.h>
 
 #ifdef _WIN32
 #    include <dxgi1_6.h>
@@ -23,7 +26,24 @@ namespace dssp::runtime {
 
     namespace {
 
+        stdc::LogCategory log("dssp.runtime.DeviceInfo");
+
         constexpr std::size_t kMinGpuVramBytes = 1ULL * 1024 * 1024 * 1024;
+
+        bool isPreferredDirectMLDevice(const DeviceInfo &device) {
+            // DXGI IDs encode the PCI device ID followed by the vendor ID.
+            const auto &id = device.id();
+            unsigned vendor = 0;
+            if (id.size() == 8) {
+                const auto [end, error] = std::from_chars(id.data() + 4, id.data() + 8, vendor, 16);
+                if (error == std::errc{} && end == id.data() + 8 && (vendor == 0x10DE || vendor == 0x1002 || vendor == 0x174B)) {
+                    return true;
+                }
+            }
+            auto name = device.description();
+            std::transform(name.begin(), name.end(), name.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+            return name == "nvidia";
+        }
 
         struct GpuData {
             int index = -1;
@@ -102,12 +122,15 @@ namespace dssp::runtime {
                 }
 
                 if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) {
+                    log.stdcTrace("Excluding DXGI software adapter %1 from DirectML devices", adapterIndex);
                     continue;
                 }
 
                 if (desc.DedicatedVideoMemory < kMinGpuVramBytes) {
+                    log.stdcTrace("Excluding DXGI adapter %1 with %2 bytes of VRAM (minimum %3)", adapterIndex, desc.DedicatedVideoMemory, kMinGpuVramBytes);
                     continue;
                 }
+                log.stdcTrace("Discovered DirectML adapter %1 with %2 bytes of VRAM", adapterIndex, desc.DedicatedVideoMemory);
 
                 gpus.push_back(createGpuDataFromDesc(desc, adapterIndex));
             }
@@ -121,6 +144,7 @@ namespace dssp::runtime {
 #ifdef DSSP_ENABLE_CUDA
 
         std::expected<std::string, DeviceError> getCommandOutput() {
+            log.stdcTrace("Querying CUDA devices using nvidia-smi");
             constexpr const char *kCommand = "nvidia-smi --query-gpu=index,name,memory.total,uuid,pci.device_id "
                                              "--format=csv,noheader,nounits";
 
@@ -225,8 +249,10 @@ namespace dssp::runtime {
                     return std::unexpected{std::move(data.error())};
                 }
                 if (data->memory < kMinGpuVramBytes) {
+                    log.stdcTrace("Excluding CUDA device %1 with %2 bytes of VRAM (minimum %3)", data->index, data->memory, kMinGpuVramBytes);
                     continue;
                 }
+                log.stdcTrace("Discovered CUDA device %1 with %2 bytes of VRAM", data->index, data->memory);
                 gpus.push_back(std::move(*data));
             }
             return gpus;
@@ -236,35 +262,83 @@ namespace dssp::runtime {
 
     }
 
-    std::expected<std::vector<DeviceInfo>, DeviceError> DeviceInfo::listDevices() {
+    std::expected<std::vector<DeviceInfo>, DeviceError> DeviceInfo::listDevices(std::optional<ExecutionProvider> provider) {
+        log.stdcTrace("Enumerating execution devices for %1", provider ? executionProviderToString(*provider) : "all providers");
         std::vector<DeviceInfo> devices;
-        devices.emplace_back(DeviceInfo{ExecutionProvider::CPU, 0, "CPU", "cpu", getMemorySize()});
+        if (!provider || *provider == ExecutionProvider::CPU) {
+            devices.emplace_back(DeviceInfo{ExecutionProvider::CPU, 0, "CPU", "cpu", getMemorySize()});
+        }
 
 #ifdef _WIN32
-        auto directMLGpus = listDirectMLGpus();
-        if (!directMLGpus) {
-            return std::unexpected{std::move(directMLGpus.error())};
-        }
-        for (const auto &gpu : *directMLGpus) {
-            devices.emplace_back(DeviceInfo{ExecutionProvider::DirectML, gpu.index, gpu.description, gpu.id, gpu.memory});
+        if (!provider || *provider == ExecutionProvider::DirectML) {
+            auto directMLGpus = listDirectMLGpus();
+            if (!directMLGpus) {
+                return std::unexpected{std::move(directMLGpus.error())};
+            }
+            for (const auto &gpu : *directMLGpus) {
+                devices.emplace_back(DeviceInfo{ExecutionProvider::DirectML, gpu.index, gpu.description, gpu.id, gpu.memory});
+            }
         }
 #endif
 
 #ifdef DSSP_ENABLE_CUDA
-        auto cudaGpus = listCudaGpus();
-        if (!cudaGpus) {
-            return std::unexpected{std::move(cudaGpus.error())};
-        }
-        for (const auto &gpu : *cudaGpus) {
-            devices.emplace_back(DeviceInfo{ExecutionProvider::CUDA, gpu.index, gpu.description, gpu.id, gpu.memory});
+        if (!provider || *provider == ExecutionProvider::CUDA) {
+            auto cudaGpus = listCudaGpus();
+            if (!cudaGpus) {
+                return std::unexpected{std::move(cudaGpus.error())};
+            }
+            for (const auto &gpu : *cudaGpus) {
+                devices.emplace_back(DeviceInfo{ExecutionProvider::CUDA, gpu.index, gpu.description, gpu.id, gpu.memory});
+            }
         }
 #endif
 
+        log.stdcDebug("Available execution devices for %1: %2", provider ? executionProviderToString(*provider) : "all providers", devices.size());
         return devices;
     }
 
-    DeviceInfo DeviceInfo::defaultDevice() {
-        return DeviceInfo(ExecutionProvider::CPU, 0, "CPU", "cpu", 0);
+    DeviceInfo::ExecutionProvider DeviceInfo::defaultExecutionProvider() noexcept {
+#ifdef _WIN32
+        return ExecutionProvider::DirectML;
+#else
+        return ExecutionProvider::CPU;
+#endif
+    }
+
+    std::expected<DeviceInfo, DeviceError> DeviceInfo::defaultDevice(ExecutionProvider provider) {
+        auto devices = listDevices(provider);
+        if (!devices) {
+            return std::unexpected{std::move(devices.error())};
+        }
+        return defaultDevice(*devices, provider);
+    }
+
+    std::expected<DeviceInfo, DeviceError> DeviceInfo::defaultDevice(std::span<const DeviceInfo> devices, ExecutionProvider provider) {
+        const DeviceInfo *selected = nullptr;
+        bool selectedPreferred = false;
+        for (const auto &device : devices) {
+            if (device.executionProvider() != provider || device.index() < 0) {
+                continue;
+            }
+            if (provider == ExecutionProvider::CPU && device.index() != 0) {
+                continue;
+            }
+            if ((provider == ExecutionProvider::DirectML || provider == ExecutionProvider::CUDA) && device.memory() < kMinGpuVramBytes) {
+                continue;
+            }
+            const bool preferred = provider == ExecutionProvider::DirectML && isPreferredDirectMLDevice(device);
+            if (!selected || (preferred && !selectedPreferred) ||
+                (preferred == selectedPreferred && (device.memory() > selected->memory() ||
+                                                   (device.memory() == selected->memory() && device.index() < selected->index())))) {
+                selected = &device;
+                selectedPreferred = preferred;
+            }
+        }
+        if (!selected) {
+            return std::unexpected{DeviceError("No available device found for execution provider " + executionProviderToString(provider))};
+        }
+        log.stdcDebug("Selected default execution provider %1, native device %2 (%3)", executionProviderToString(provider), selected->index(), selected->description());
+        return *selected;
     }
 
     std::string DeviceInfo::executionProviderToString(ExecutionProvider ep) {

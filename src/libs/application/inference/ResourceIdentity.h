@@ -6,12 +6,24 @@
 #include <string>
 #include <string_view>
 
+// Preserve the caller's Windows SDK macro while parsing synthrt's interface().
+#ifdef _WIN32
+#    pragma push_macro("interface")
+#    undef interface
+#endif
+
 #include <synthrt/Core/ContribSpec.h>
+
+#ifdef _WIN32
+#    pragma pop_macro("interface")
+#endif
 
 #include <dsspinference/InferenceError.h>
 
 namespace dssp::inference {
-    // Collision-free, versioned encoding of package/version/category/contribution.
+    // Fully qualified public reference: package=version:category/contribution.
+    std::string resourceReference(const srt::ContribSpec &);
+    // Internal graph key; its encoding is retained to keep group fingerprints stable.
     std::string resourceId(const srt::ContribSpec &);
     std::expected<std::string, ResourceError> fingerprint(std::string_view);
     // Includes resolved target versions and recursive imports. Singer-level

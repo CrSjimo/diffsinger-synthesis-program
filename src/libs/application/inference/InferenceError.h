@@ -1,7 +1,7 @@
 #ifndef DSSP_INFERENCE_INFERENCEERROR_H
 #define DSSP_INFERENCE_INFERENCEERROR_H
 
-#include <dssperror/Error.h>
+#include <dssperror/ErrorSet.h>
 
 namespace dssp::inference {
 
@@ -15,6 +15,19 @@ namespace dssp::inference {
         using ErrorType::ErrorType;
         std::string_view kind() const noexcept override { return "dssp.inference.resource"; }
     };
+    class ExecutionError final : public ErrorType<ExecutionError> {
+    public:
+        using ErrorType::ErrorType;
+        std::string_view kind() const noexcept override { return "dssp.inference.execution"; }
+    };
+    class CancelledError final : public ErrorType<CancelledError> {
+    public:
+        using ErrorType::ErrorType;
+        std::string_view kind() const noexcept override { return "dssp.inference.cancelled"; }
+    };
+    using ExecutionErrors = ErrorSet<ExecutionError, CancelledError>;
+    template <class T>
+    using ExecutionResult = std::expected<T, ExecutionErrors>;
 
 }
 

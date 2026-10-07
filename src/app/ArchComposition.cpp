@@ -7,10 +7,13 @@
 #include <utility>
 #include <vector>
 
+#include <stdcorelib/support/logging.h>
+
 #include <dssparchdiffsinger/Factory.h>
 
 namespace dssp {
     namespace {
+        stdc::LogCategory log("dssp.ArchComposition");
         struct BuiltinArchitecture {
             std::string_view id;
             std::expected<arch::ArchitecturePtr, arch::CatalogConstructionError> (*create)(const arch::ArchitectureServices &);
@@ -49,6 +52,7 @@ namespace dssp {
     std::expected<std::shared_ptr<const arch::ArchitectureCatalog>, arch::CatalogConstructionError> composeArchitectures(const arch::ArchitectureServices &services) {
         std::vector<arch::ArchitecturePtr> entries;
         entries.reserve(builtins.size());
+        log.stdcDebug("Creating %1 compiled architecture implementations", builtins.size());
         for (const auto &builtin : builtins) {
             auto implementation = builtin.create(services);
             if (!implementation) {

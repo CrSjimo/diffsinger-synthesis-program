@@ -3,7 +3,6 @@
 #include <gtest/gtest.h>
 #include <stdcorelib/support/versionnumber.h>
 #include <synthrt/Core/SynthUnit.h>
-#include <wolf/Session/LinguistSession.h>
 
 #include <dsspinference/Environment.h>
 #include <dssptests/TestFiles.h>
@@ -15,7 +14,9 @@ namespace dssp::tests {
         EXPECT_NE((*host)->unit().category("linguist"), nullptr);
         EXPECT_NE((*host)->unit().category("analysis"), nullptr);
         EXPECT_TRUE((*host)->packages().empty());
-        EXPECT_TRUE((*host)->languages().catalog()->singers().empty());
+        const auto language = (*host)->inferences("diffsinger-language");
+        ASSERT_TRUE(language);
+        EXPECT_EQ((*language)->residentCount(), 0U);
     }
 
     TEST(Inference, InvalidPackageDoesNotHideValidVersionsAndNestedModelDirectoriesAreIgnored) {

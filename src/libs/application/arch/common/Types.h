@@ -162,29 +162,41 @@ namespace dssp::arch {
         TokenOnly,
         Skip
     };
+    enum class DurationMode {
+        Full,
+        Skip
+    };
+    enum class ParameterRetakeMode {
+        Full,
+        Range
+    };
     struct DirectParameter {};
     struct IndirectParameter {
         std::vector<std::string> dependsOn;
+        ParameterRetakeMode retakeMode = ParameterRetakeMode::Full;
+    };
+    struct GroupLanguageInfo {
+        std::string name;
+        std::string defaultLyric;
+        PronunciationMode pronunciationMode = PronunciationMode::Skip;
+        PhonemeMode phonemeMode = PhonemeMode::Skip;
     };
     struct GroupMetadata {
         std::string id;
         std::string arch;
-        PronunciationMode pronunciationMode = PronunciationMode::Skip;
-        PhonemeMode phonemeMode = PhonemeMode::Skip;
+        std::map<std::string, GroupLanguageInfo> languages;
+        DurationMode durationMode = DurationMode::Skip;
         std::map<std::string, std::variant<DirectParameter, IndirectParameter>> parameterPipeline;
         std::vector<std::string> audioDependencies;
         bool mixable = false;
-    };
-    struct SingerLanguageInfo {
-        std::string name;
-        std::string defaultLyric;
+        Json::Value archSpecificInfo;
+        Json::Value defaultArchExtra;
     };
     struct SingerInfo {
         std::string id;
         std::string name;
         std::string arch;
         std::string group;
-        std::map<std::string, SingerLanguageInfo> languages;
         std::string defaultLanguage;
         Json::Value archSpecificInfo;
         Json::Value defaultExtra;

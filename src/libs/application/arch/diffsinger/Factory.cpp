@@ -22,6 +22,10 @@ namespace dssp::arch_diffsinger {
         if (!catalog) {
             return std::unexpected{arch::CatalogConstructionError("Cannot initialize the DiffSinger singer catalogue", catalog.error().clone())};
         }
+        const auto pool = services.inference->inferences("diffsinger-language");
+        if (!pool) {
+            return std::unexpected{arch::CatalogConstructionError("Cannot initialize the language inference cache group", pool.error().clone())};
+        }
         return std::make_shared<const DiffSinger>(std::move(*catalog), services.media, std::move(*translations));
     }
 }

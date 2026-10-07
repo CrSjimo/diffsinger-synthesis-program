@@ -130,29 +130,61 @@ namespace dssp::tests {
         arch::GroupMetadata group;
         group.id = "group";
         group.arch = "diffsinger";
-        group.pronunciationMode = arch::PronunciationMode::Full;
-        group.phonemeMode = arch::PhonemeMode::TokenOnly;
+        group.languages.emplace("eng", arch::GroupLanguageInfo{"English", "lyric", arch::PronunciationMode::Full, arch::PhonemeMode::TokenOnly});
+        group.languages.emplace("cmn", arch::GroupLanguageInfo{"Mandarin", {}, arch::PronunciationMode::Full, arch::PhonemeMode::Full});
+        group.languages.emplace("deu", arch::GroupLanguageInfo{"German", {}, arch::PronunciationMode::Skip, arch::PhonemeMode::Skip});
+        group.durationMode = arch::DurationMode::Full;
         group.parameterPipeline.emplace("pitch", arch::DirectParameter{});
-        group.parameterPipeline.emplace("energy", arch::IndirectParameter{{"pitch", "voicing"}});
+        group.parameterPipeline.emplace("voicing", arch::DirectParameter{});
+        group.parameterPipeline.emplace("energy", arch::IndirectParameter{{"pitch", "voicing"}, arch::ParameterRetakeMode::Range});
+        group.parameterPipeline.emplace("breathiness", arch::IndirectParameter{{"pitch"}, arch::ParameterRetakeMode::Full});
         group.audioDependencies = {"pitch", "energy"};
-        group.mixable = true;
+        group.mixable = false;
         const auto body = api_v1::toJson(api_v1::toDto(std::move(group)));
-        EXPECT_EQ(body["pronunciationMode"].asString(), "full");
-        EXPECT_EQ(body["phonemeMode"].asString(), "token_only");
+        EXPECT_FALSE(body.isMember("pronunciationMode"));
+        EXPECT_FALSE(body.isMember("phonemeMode"));
+        EXPECT_EQ(body["languages"]["eng"]["name"].asString(), "English");
+        EXPECT_EQ(body["languages"]["eng"]["defaultLyric"].asString(), "lyric");
+        EXPECT_EQ(body["languages"]["eng"]["pronunciationMode"].asString(), "full");
+        EXPECT_EQ(body["languages"]["eng"]["phonemeMode"].asString(), "token_only");
+        EXPECT_EQ(body["languages"]["cmn"]["phonemeMode"].asString(), "full");
+        EXPECT_EQ(body["languages"]["deu"]["pronunciationMode"].asString(), "skip");
+        EXPECT_EQ(body["languages"]["deu"]["phonemeMode"].asString(), "skip");
+        EXPECT_EQ(body["durationMode"].asString(), "full");
         EXPECT_EQ(body["parameterPipeline"]["pitch"]["type"].asString(), "direct");
         EXPECT_EQ(body["parameterPipeline"]["energy"]["type"].asString(), "indirect");
         EXPECT_EQ(body["parameterPipeline"]["energy"]["dependsOn"][0].asString(), "pitch");
         EXPECT_EQ(body["parameterPipeline"]["energy"]["dependsOn"][1].asString(), "voicing");
+        EXPECT_EQ(body["parameterPipeline"]["energy"]["retakeMode"].asString(), "range");
+        EXPECT_EQ(body["parameterPipeline"]["breathiness"]["retakeMode"].asString(), "full");
+        EXPECT_FALSE(body["parameterPipeline"]["pitch"].isMember("retakeMode"));
         EXPECT_EQ(body["audioDependencies"][1].asString(), "energy");
-        EXPECT_TRUE(body["mixable"].asBool());
+        EXPECT_FALSE(body["mixable"].asBool());
     }
 
-    TEST(ArchitectureMapping, SingerOutputRetainsArbitraryExtensionsAndLanguageMetadata) {
+    TEST(ArchitectureMapping, GroupExtensionsRetainEveryJsonTypeIncludingNull) {
+        Json::Value array(Json::arrayValue), object(Json::objectValue);
+        array.append("item");
+        object["nested"] = array;
+        const std::vector<Json::Value> values{Json::Value{}, Json::Value(Json::objectValue), array, object, Json::Value("text"), Json::Value(true), Json::Value(7), Json::Value(0.25)};
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            SCOPED_TRACE(i);
+            arch::GroupMetadata group;
+            group.archSpecificInfo = values[i];
+            group.defaultArchExtra = values[values.size() - 1 - i];
+            const auto body = api_v1::toJson(api_v1::toDto(std::move(group)));
+            EXPECT_TRUE(body.isMember("archSpecificInfo"));
+            EXPECT_TRUE(body.isMember("defaultArchExtra"));
+            EXPECT_EQ(body["archSpecificInfo"], values[i]);
+            EXPECT_EQ(body["defaultArchExtra"], values[values.size() - 1 - i]);
+        }
+    }
+
+    TEST(ArchitectureMapping, SingerOutputRetainsArbitraryExtensionsAndDefaultLanguageWithoutSharedCapabilities) {
         arch::SingerInfo singer;
         singer.id = "singer";
         singer.arch = "diffsinger";
         singer.group = "group";
-        singer.languages.emplace("eng", arch::SingerLanguageInfo{"English", "la"});
         singer.defaultLanguage = "eng";
         singer.archSpecificInfo = Json::Value(Json::arrayValue);
         singer.archSpecificInfo.append("speaker-A");
@@ -160,7 +192,7 @@ namespace dssp::tests {
         const auto body = api_v1::toJson(api_v1::toDto(std::move(singer)));
         EXPECT_EQ(body["arch"].asString(), "diffsinger");
         EXPECT_EQ(body["group"].asString(), "group");
-        EXPECT_EQ(body["languages"]["eng"]["defaultLyric"].asString(), "la");
+        EXPECT_FALSE(body.isMember("languages"));
         EXPECT_EQ(body["defaultLanguage"].asString(), "eng");
         EXPECT_TRUE(body["archSpecificInfo"].isArray());
         EXPECT_EQ(body["archSpecificInfo"][0].asString(), "speaker-A");

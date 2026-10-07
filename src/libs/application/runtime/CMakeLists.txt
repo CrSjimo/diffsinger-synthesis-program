@@ -13,7 +13,7 @@ target_compile_definitions(dssp_runtime PRIVATE
     DSSP_PLUGIN_RELATIVE_DIR="${_plugin_relative_dir}"
     DSSP_DATA_RELATIVE_DIR="${_data_relative_dir}"
 )
-target_link_libraries(dssp_runtime PUBLIC dssp_error stdcorelib::stdcorelib synthrt::synthrt)
+target_link_libraries(dssp_runtime PUBLIC dssp_error dssp_resource stdcorelib::stdcorelib synthrt::synthrt)
 target_link_libraries(dssp_runtime PRIVATE $<$<PLATFORM_ID:Windows>:dxgi.lib>)
 if(DSSP_ENABLE_CUDA)
     target_compile_definitions(dssp_runtime PRIVATE DSSP_ENABLE_CUDA)

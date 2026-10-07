@@ -63,12 +63,17 @@ namespace dssp {
                 return 1;
             }
             try {
-                const runtime::DeviceInfo defaultDevice = runtime::DeviceInfo::defaultDevice();
+                const auto defaultDevice = runtime::DeviceInfo::defaultDevice(*devices);
+                if (!defaultDevice) {
+                    log.stdcCritical("Failed to select default device: %1", defaultDevice.error().formatChain());
+                    return 1;
+                }
 
                 stdc::json::Object root;
                 root.emplace("devices", stdc::json::Value(groupDevices(*devices)));
-                root.emplace("default_device", stdc::json::Value(deviceToObject(defaultDevice, true)));
+                root.emplace("default_device", stdc::json::Value(deviceToObject(*defaultDevice, true)));
 
+                log.stdcDebug("Writing %1 execution device records to standard output", devices->size());
                 std::cout << stdc::json::Value(std::move(root)).toJson(-1) << std::endl;
                 return 0;
             } catch (const std::exception &e) {

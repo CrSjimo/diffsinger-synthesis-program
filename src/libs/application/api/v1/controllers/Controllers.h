@@ -36,10 +36,13 @@ namespace dssp::api_v1 {
             ADD_METHOD_TO(CatalogController::architecture, "/v1/arch/{1}", drogon::Get);
             ADD_METHOD_TO(CatalogController::singers, "/v1/singer", drogon::Get);
             ADD_METHOD_TO(CatalogController::archSingers, "/v1/arch/{1}/singer", drogon::Get);
-            ADD_METHOD_TO(CatalogController::singer, "/v1/arch/{1}/singer/{2}", drogon::Get);
-            ADD_METHOD_TO(CatalogController::avatar, "/v1/arch/{1}/singer/{2}/avatar", drogon::Get);
-            ADD_METHOD_TO(CatalogController::background, "/v1/arch/{1}/singer/{2}/background", drogon::Get);
-            ADD_METHOD_TO(CatalogController::demoAudio, "/v1/arch/{1}/singer/{2}/demo-audio", drogon::Get);
+            // Drogon decodes the path before routing, including %2F inside a reference.
+            // Capture package:category/contribution as one ID. Its final contribution
+            // segment also keeps media routes distinct when a singer is named "avatar".
+            ADD_METHOD_VIA_REGEX(CatalogController::singer, R"(/v1/arch/([^/]+)/singer/([^:]+:[^/]+/[^/]+))", drogon::Get);
+            ADD_METHOD_VIA_REGEX(CatalogController::avatar, R"(/v1/arch/([^/]+)/singer/([^:]+:[^/]+/[^/]+)/avatar)", drogon::Get);
+            ADD_METHOD_VIA_REGEX(CatalogController::background, R"(/v1/arch/([^/]+)/singer/([^:]+:[^/]+/[^/]+)/background)", drogon::Get);
+            ADD_METHOD_VIA_REGEX(CatalogController::demoAudio, R"(/v1/arch/([^/]+)/singer/([^:]+:[^/]+/[^/]+)/demo-audio)", drogon::Get);
             ADD_METHOD_TO(CatalogController::groups, "/v1/arch/{1}/group", drogon::Get);
             ADD_METHOD_TO(CatalogController::group, "/v1/arch/{1}/group/{2}", drogon::Get);
             ADD_METHOD_TO(CatalogController::groupSingers, "/v1/arch/{1}/group/{2}/singer", drogon::Get);

@@ -33,7 +33,7 @@ namespace dssp::api_v1 {
     dto::ParameterPresentation toDto(arch::ParameterPresentation);
     dto::ArchitectureMetadata toDto(arch::ArchitectureMetadata);
     dto::GroupMetadata toDto(arch::GroupMetadata);
-    dto::SingerLanguageInfo toDto(arch::SingerLanguageInfo);
+    dto::GroupLanguageInfo toDto(arch::GroupLanguageInfo);
     dto::SingerInfo toDto(arch::SingerInfo);
     dto::SingerDemoAudio toDto(arch::SingerDemoAudio);
     dto::Pronunciation toDto(arch::Pronunciation);

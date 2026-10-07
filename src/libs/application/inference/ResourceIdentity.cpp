@@ -12,6 +12,7 @@
 #include <stdcorelib/path.h>
 
 #include <synthrt/Core/ContribImportBinding.h>
+#include <synthrt/Core/ContribLocator.h>
 
 #include <dsspcodecutil/codecutil.h>
 
@@ -83,6 +84,14 @@ namespace dssp::inference {
             std::ranges::sort(imports, [](const auto &left, const auto &right) { return left.toObject().find("role")->second.toString() < right.toObject().find("role")->second.toString(); });
             return imports;
         }
+    }
+
+    std::string resourceReference(const srt::ContribSpec &spec) {
+        const auto package = spec.package();
+        // The installed ContribLocator formats the category/contribution suffix
+        // but carries no version. Pin the owning package separately in the reference.
+        const srt::ContribLocator local(spec.locator().category(), spec.locator().contributionId());
+        return package.id() + '=' + package.version().toString() + local.toString();
     }
 
     std::string resourceId(const srt::ContribSpec &spec) {

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <exception>
 #include <optional>
+#include <tuple>
 
 #include <stdcorelib/path.h>
 #include <stdcorelib/support/systempaths.h>
@@ -106,6 +107,12 @@ namespace dssp::runtime {
             if (!number(*text, config.deviceIndex) || config.deviceIndex < 0) {
                 return std::unexpected{ConfigurationError("--device-index", "Device index must be a nonnegative integer")};
             }
+        } else {
+            auto device = DeviceInfo::defaultDevice(config.executionProvider);
+            if (!device) {
+                return std::unexpected{ConfigurationError("--device-index", "Cannot select a default device for the configured execution provider", device.error().clone())};
+            }
+            config.deviceIndex = device->index();
         }
         if (config.executionProvider == ExecutionProvider::CPU && config.deviceIndex != 0) {
             return std::unexpected{ConfigurationError("--device-index", "The CPU backend has only device index 0")};
@@ -113,6 +120,34 @@ namespace dssp::runtime {
         if (const auto text = value("--silence-threshold", "DSSP_SILENCE_THRESHOLD")) {
             if (!number(*text, config.silenceThreshold) || !std::isfinite(config.silenceThreshold) || config.silenceThreshold < 0) {
                 return std::unexpected{ConfigurationError("--silence-threshold", "Silence threshold must be a finite, nonnegative linear RMS value")};
+            }
+        }
+        for (const auto &[group, prefix] : {std::pair{"diffsinger-language", "DSSP_DIFFSINGER_LANGUAGE"}, std::pair{"diffsinger-synthesis", "DSSP_DIFFSINGER_SYNTHESIS"}}) {
+            auto &cache = config.inferenceCaches.at(group);
+            const auto capacityOption = "--" + std::string(group) + "-cache-capacity";
+            const auto capacityEnvironment = std::string(prefix) + "_CACHE_CAPACITY";
+            if (const auto text = value(capacityOption.c_str(), capacityEnvironment.c_str())) {
+                if (!number(*text, cache.capacity)) {
+                    return std::unexpected{ConfigurationError(capacityOption, "Cache capacity must be a nonnegative integer; zero disables the count limit")};
+                }
+            }
+            for (const auto &[suffix, environmentSuffix, duration, allowZero] : {
+                std::tuple{"-idle-timeout", "_IDLE_TIMEOUT", &cache.idleTimeout, true},
+                std::tuple{"-cleanup-interval", "_CLEANUP_INTERVAL", &cache.cleanupInterval, false}
+            }) {
+                const auto option = "--" + std::string(group) + suffix;
+                const auto environmentName = std::string(prefix) + environmentSuffix;
+                if (const auto text = value(option.c_str(), environmentName.c_str())) {
+                    std::int64_t seconds = 0;
+                    const auto maximumSeconds = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::duration::max() / 2).count();
+                    if (!number(*text, seconds) || seconds < (allowZero ? 0 : 1)) {
+                        return std::unexpected{ConfigurationError(option, allowZero ? "Idle timeout must be a nonnegative integer in seconds; zero disables expiry" : "Cleanup interval must be a positive integer in seconds")};
+                    }
+                    if (seconds > maximumSeconds) {
+                        return std::unexpected{ConfigurationError(option, "Cache duration exceeds the monotonic timer limit of " + std::to_string(maximumSeconds) + " seconds")};
+                    }
+                    *duration = std::chrono::milliseconds(seconds * 1000);
+                }
             }
         }
 #ifdef _WIN32
@@ -126,28 +161,12 @@ namespace dssp::runtime {
             return std::unexpected{ConfigurationError("application-directory", "Deployment paths require an absolute application directory")};
         }
         config.resourceDir = (applicationDir / DSSP_DATA_RELATIVE_DIR).lexically_normal();
-        if (const auto plugins = value("--plugin-dir", "DSSP_PLUGIN_DIR")) {
-            auto path = resolvePath("--plugin-dir", *plugins);
-            if (!path) {
-                return std::unexpected{std::move(path.error())};
-            }
-            config.pluginDir = std::move(*path);
-        } else {
-            config.pluginDir = (applicationDir / DSSP_PLUGIN_RELATIVE_DIR).lexically_normal();
+        config.pluginDir = (applicationDir / DSSP_PLUGIN_RELATIVE_DIR).lexically_normal();
+        auto runtimeDirectory = config.pluginDir / "dsinfer" / "inferencedrivers" / "onnx" / "runtime";
+        if (config.executionProvider == ExecutionProvider::CUDA) {
+            runtimeDirectory /= "cuda";
         }
-        if (const auto runtime = value("--runtime-path", "DSSP_RUNTIME_PATH")) {
-            auto path = resolvePath("--runtime-path", *runtime);
-            if (!path) {
-                return std::unexpected{std::move(path.error())};
-            }
-            config.runtimePath = std::move(*path);
-        } else {
-            auto runtimeDirectory = config.pluginDir / "dsinfer" / "inferencedrivers" / "onnx" / "runtime";
-            if (config.executionProvider == ExecutionProvider::CUDA) {
-                runtimeDirectory /= "cuda";
-            }
-            config.runtimePath = runtimeDirectory / runtimeFile;
-        }
+        config.runtimePath = runtimeDirectory / runtimeFile;
         // The inference environment checks provider/device availability and
         // deployed plugins. Configuration parsing never loads a runtime.
         return config;

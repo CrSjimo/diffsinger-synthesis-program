@@ -12,6 +12,7 @@ int main(int argc, char **argv) {
     using namespace dssp;
 
     installLogger();
+    setLogLevel(LogLevel::Info); // TODO
 
     // stdcorelib's command-line/system APIs form the outer library boundary.
     try {

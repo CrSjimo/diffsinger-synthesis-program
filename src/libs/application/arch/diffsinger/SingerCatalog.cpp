@@ -11,10 +11,12 @@
 #include <stdcorelib/support/logging.h>
 #include <synthrt/Core/ContribImportBinding.h>
 #include <wolf/Linguist/LinguistContrib.h>
+#include <wolf/Api/Linguists/Linguist/1/LinguistApiL1.h>
 
 #include <dssparchdiffsinger/Factory.h>
 #include <dssparchdiffsinger/SingerMetadata.h>
 #include <dsspinference/Display.h>
+#include <dsspinference/LanguageMetadata.h>
 #include <dsspinference/MediaPath.h>
 #include <dsspinference/ResourceIdentity.h>
 
@@ -27,7 +29,7 @@ namespace dssp::arch_diffsinger {
         namespace Ac = ds::Api::Acoustic::L1;
         namespace Vo = ds::Api::Vocoder::L1;
         namespace Ds = ds::Api::DiffSinger::L1;
-        using Depth = wolf::Api::Linguist::L1::Depth;
+        using Depth = inference::LanguageDepth;
 
         template <class Schema, class Configuration, class Options>
         std::expected<StageRecord, inference::ResourceError> readStage(const srt::SingerSpec &singer, std::string_view role, bool required) {
@@ -59,9 +61,14 @@ namespace dssp::arch_diffsinger {
                     for (const auto &[speaker, embedding] : configuration->speakers) {
                         if (embedding.size() == static_cast<std::size_t>(configuration->hiddenSize) && !embedding.empty() && std::ranges::all_of(embedding, [](float value) { return std::isfinite(value); })) {
                             result.embeddedSpeakers.insert(speaker);
+                        } else {
+                            log.stdcWarning("Singer %1 stage %2 excludes invalid embedding for speaker %3 (%4 values, expected %5 finite values)", inference::resourceReference(singer), role, speaker, embedding.size(), configuration->hiddenSize);
                         }
                     }
                 }
+            }
+            if (log.isLevelEnabled(stdc::Logger::Trace)) {
+                log.stdcTrace("Singer %1 stage %2 resolves to %3 (speaker embeddings=%4, valid embeddings=%5)", inference::resourceReference(singer), role, inference::resourceReference(target), result.usesSpeakers, result.embeddedSpeakers.size());
             }
             return result;
         }
@@ -94,7 +101,7 @@ namespace dssp::arch_diffsinger {
             }
         }
 
-        std::expected<std::pair<SingerRecord, arch::GroupMetadata>, inference::ResourceError> readSinger(const srt::SingerSpec &singer, inference::Environment &environment) {
+        std::expected<std::pair<SingerRecord, GroupRecord>, inference::ResourceError> readSinger(const srt::SingerSpec &singer) {
             if (!srt::ContribSpecExtension::findFromSpec<Ds::DiffSingerPipelineExecutive>(singer)) {
                 return std::unexpected{inference::ResourceError("The DiffSinger pipeline provider is unavailable")};
             }
@@ -115,8 +122,8 @@ namespace dssp::arch_diffsinger {
             SingerRecord record;
             record.package = singer.package();
             record.spec = &singer;
-            record.ref = {srt::ContribLocator(record.package.id(), "singer", singer.locator().contributionId()), record.package.version()};
-            record.info.id = inference::resourceId(singer);
+            record.reservedPhonemes = singer.reservedPhonemes().empty() ? std::vector<std::string>{"SP", "AP"} : singer.reservedPhonemes();
+            record.info.id = inference::resourceReference(singer);
             record.info.arch = Id;
             record.name = singer.name();
             const auto readMediaPath = [&singer](std::string_view field, const srt::DisplayText &resolved) -> std::expected<srt::DisplayText, inference::ResourceError> {
@@ -148,58 +155,51 @@ namespace dssp::arch_diffsinger {
             intersectPhonemes<Pi::PitchConfiguration>(*pitch, phonemes);
             intersectPhonemes<Va::VarianceConfiguration>(*variance, phonemes);
             intersectPhonemes<Ac::AcousticConfiguration>(*acoustic, phonemes);
-            if (phonemes) {
-                environment.languages().setSingerPhonemes(record.ref, std::vector<std::string>(phonemes->begin(), phonemes->end()));
-            }
-            arch::GroupMetadata group;
+            GroupRecord groupRecord;
+            auto &group = groupRecord.info;
             group.arch = Id;
-            bool pronunciation = false;
+            group.durationMode = duration->spec ? arch::DurationMode::Full : arch::DurationMode::Skip;
+            group.archSpecificInfo = Json::Value(Json::objectValue);
+            group.defaultArchExtra = Json::Value(Json::objectValue);
+            group.defaultArchExtra["steps"] = 20;
+            group.defaultArchExtra["depth"] = 1;
             bool completeLanguagePipeline = false;
-            Depth commonDepth = Depth::Onsets;
-            Json::Value capabilities(Json::objectValue);
-            const auto languageCatalog = environment.languages().catalog();
-            if (const auto *entry = languageCatalog->find(record.ref)) {
-                pronunciation = !entry->languages.empty();
-                completeLanguagePipeline = pronunciation;
-                for (const auto &language : entry->languages) {
-                    const auto status = environment.languages().probe(record.ref, language.handle);
-                    if (status.readiness == wolf::Readiness::Unavailable) {
-                        log.stdcWarning("Singer %1 language %2 is unavailable: %3", record.info.id, language.handle, status.reason);
-                        pronunciation = false;
-                        completeLanguagePipeline = false;
-                        continue;
-                    }
-                    const auto role = singer.languages().find(language.handle);
-                    const auto imported = role == singer.languages().end() ? std::optional<srt::ContribImport>{} : singer.findImport(role->second);
-                    if (!imported || !imported->binding()) {
-                        return std::unexpected{inference::ResourceError("The language catalogue has no resolved singer binding for " + language.handle)};
-                    }
-                    const auto &linguist = imported->binding()->target();
-                    const auto *languageSpec = dynamic_cast<const wolf::LinguistSpec *>(&linguist);
-                    if (!languageSpec) {
-                        return std::unexpected{inference::ResourceError("The singer language binding is not a Wolf linguist declaration for " + language.handle)};
-                    }
-                    const auto g2p = linguist.findImport("linguist/g2p");
-                    const bool hasG2p = g2p && g2p->binding();
-                    pronunciation = pronunciation && hasG2p;
-                    commonDepth = std::min(commonDepth, status.maxDepth);
-                    completeLanguagePipeline = completeLanguagePipeline && hasG2p && status.maxDepth == Depth::Onsets;
-                    record.languages.emplace(language.handle, LanguageRecord{inference::languageMetadata(*languageSpec), status.maxDepth});
-                    capabilities[language.handle]["maxDepth"] = depthName(status.maxDepth);
+            std::map<std::string, Depth> languageDepths;
+            completeLanguagePipeline = !singer.languages().empty();
+            for (const auto &[handle, role] : singer.languages()) {
+                auto route = inference::readLanguageRoute(singer, handle);
+                if (!route) {
+                    return std::unexpected{std::move(route.error())};
                 }
+                const auto *exports = dynamic_cast<const wolf::Api::Linguist::L1::LinguistExports *>(route->spec->exports());
+                if (!exports) {
+                    return std::unexpected{inference::ResourceError("Missing linguist exports for " + handle)};
+                }
+                // Preserve Wolf's complete-inventory zero-coverage verdict.
+                // Unknown and open inventories do not justify dropping a route.
+                if (phonemes && !exports->openSet && !exports->phonemes.empty() && std::ranges::none_of(exports->phonemes, [&](const auto &token) { return phonemes->contains(token); })) {
+                    log.stdcWarning("Singer %1 language %2 has no phonemes accepted by its synthesis stages", record.info.id, handle);
+                    completeLanguagePipeline = false;
+                    continue;
+                }
+                log.stdcTrace("Singer %1 language %2 supports depth %3", record.info.id, handle, depthName(route->depth));
+                completeLanguagePipeline = completeLanguagePipeline && route->depth == Depth::Onsets;
+                auto metadata = inference::languageMetadata(*route->spec);
+                const auto phonemeMode = route->depth == Depth::Onsets ? arch::PhonemeMode::Full : route->depth == Depth::Phonemes ? arch::PhonemeMode::TokenOnly : arch::PhonemeMode::Skip;
+                group.languages.emplace(handle, arch::GroupLanguageInfo{handle, std::move(metadata.defaultLyric), arch::PronunciationMode::Full, phonemeMode});
+                groupRecord.languageNames.emplace(handle, std::move(metadata.name));
+                languageDepths.emplace(handle, route->depth);
+                record.languages.emplace(handle, std::move(*route));
             }
-            if (record.languages.empty()) {
-                commonDepth = Depth::Pronunciation;
-                pronunciation = false;
+            if (group.languages.empty()) {
+                log.stdcDebug("Singer %1 has no usable language declarations; pronunciation and phoneme stages will be skipped", record.info.id);
                 completeLanguagePipeline = false;
-            } else {
-                if (!record.languages.contains(singer.defaultLanguage())) {
-                    log.stdcWarning("Singer %1 has an unavailable declared default language %2", record.info.id, singer.defaultLanguage());
+            } else if (!singer.defaultLanguage().empty()) {
+                if (!group.languages.contains(singer.defaultLanguage())) {
+                    return std::unexpected{inference::ResourceError("The declared default language is unavailable: " + singer.defaultLanguage())};
                 }
                 record.info.defaultLanguage = singer.defaultLanguage();
             }
-            group.pronunciationMode = pronunciation ? arch::PronunciationMode::Full : arch::PronunciationMode::Skip;
-            group.phonemeMode = commonDepth == Depth::Onsets ? arch::PhonemeMode::Full : commonDepth == Depth::Phonemes ? arch::PhonemeMode::TokenOnly : arch::PhonemeMode::Skip;
 
             const auto *acousticSchema = dynamic_cast<const Ac::AcousticSchema *>(acoustic->spec->exports());
             const auto *acousticConfiguration = dynamic_cast<const Ac::AcousticConfiguration *>(acoustic->spec->configuration());
@@ -213,7 +213,7 @@ namespace dssp::arch_diffsinger {
                 const auto *schema = dynamic_cast<const Pi::PitchSchema *>(pitch->spec->exports());
                 const auto *config = dynamic_cast<const Pi::PitchConfiguration *>(pitch->spec->configuration());
                 expressiveness = schema->allowExpressiveness && config->useExpressiveness;
-                group.parameterPipeline.emplace("pitch", arch::IndirectParameter{expressiveness ? std::vector<std::string>{"expressiveness"} : std::vector<std::string>{}});
+                group.parameterPipeline.emplace("pitch", arch::IndirectParameter{expressiveness ? std::vector<std::string>{"expressiveness"} : std::vector<std::string>{}, arch::ParameterRetakeMode::Range});
             } else {
                 group.parameterPipeline.emplace("pitch", arch::DirectParameter{});
             }
@@ -251,7 +251,7 @@ namespace dssp::arch_diffsinger {
                     if (vocoderConfiguration->pitchControllable) {
                         dependencies.push_back("tone_shift");
                     }
-                    group.parameterPipeline.emplace(parameter, arch::IndirectParameter{std::move(dependencies)});
+                    group.parameterPipeline.emplace(parameter, arch::IndirectParameter{std::move(dependencies), arch::ParameterRetakeMode::Range});
                 } else {
                     group.parameterPipeline.emplace(parameter, arch::DirectParameter{});
                 }
@@ -283,8 +283,8 @@ namespace dssp::arch_diffsinger {
             }
             identity["reservedPhonemes"] = std::move(reserved);
             srt::JsonObject languages;
-            for (const auto &[handle, language] : record.languages) {
-                languages.emplace(handle, depthName(language.depth));
+            for (const auto &[handle, depth] : languageDepths) {
+                languages.emplace(handle, depthName(depth));
             }
             identity["languages"] = std::move(languages);
             auto digest = inference::fingerprint(srt::JsonValue(std::move(identity)).toJson());
@@ -298,11 +298,10 @@ namespace dssp::arch_diffsinger {
             for (const auto &speaker : record.speakers) {
                 record.info.archSpecificInfo["speakers"].append(speaker);
             }
-            record.info.archSpecificInfo["hasDuration"] = duration->spec != nullptr;
-            record.info.archSpecificInfo["languageCapabilities"] = std::move(capabilities);
             record.info.defaultExtra = Json::Value(Json::objectValue);
             record.info.defaultExtra["speaker"] = record.speakers.empty() ? std::string{} : record.speakers.front();
-            return std::make_pair(std::move(record), std::move(group));
+            log.stdcDebug("Cached singer %1 in group %2 (%3 languages, %4 speakers, %5 parameters, technical mixing=%6, mixing permission=%7)", record.info.id, group.id, group.languages.size(), record.speakers.size(), group.parameterPipeline.size(), record.technicallyMixable, record.permitsMixing);
+            return std::make_pair(std::move(record), std::move(groupRecord));
         }
     }
 
@@ -342,12 +341,21 @@ namespace dssp::arch_diffsinger {
             return fail<arch::CatalogErrors>(arch::OperationError("Cannot localize singer name", name.error().clone()));
         }
         result.name = std::move(*name);
-        for (const auto &[handle, language] : record.languages) {
-            auto title = inference::localize(language.metadata.name, display.acceptLanguage, handle);
+        return result;
+    }
+
+    arch::CatalogResult<arch::GroupMetadata> groupInfo(const GroupRecord &record, const arch::CatalogOptions &display) {
+        auto result = record.info;
+        for (auto &[handle, language] : result.languages) {
+            const auto name = record.languageNames.find(handle);
+            if (name == record.languageNames.end()) {
+                return fail<arch::CatalogErrors>(arch::OperationError("The cached group has no language name for " + handle));
+            }
+            auto title = inference::localize(name->second, display.acceptLanguage, handle);
             if (!title) {
                 return fail<arch::CatalogErrors>(arch::OperationError("Cannot localize language name", title.error().clone()));
             }
-            result.languages.emplace(handle, arch::SingerLanguageInfo{std::move(*title), language.metadata.defaultLyric});
+            language.name = std::move(*title);
         }
         return result;
     }
@@ -358,31 +366,36 @@ namespace dssp::arch_diffsinger {
         }
         try {
             auto catalog = std::shared_ptr<SingerCatalog>(new SingerCatalog(std::move(environment)));
+            std::size_t skipped = 0;
             for (const auto &package : catalog->environment_->packages()) {
                 for (const auto *contribution : package.contributions("singer")) {
                     if (contribution->interface() != Ds::API_INTERFACE || contribution->variant() != Ds::API_VARIANT || contribution->level() != Ds::API_LEVEL) {
+                        log.stdcTrace("Ignoring singer contribution %1 in package %2 with a different architecture contract", contribution->locator().contributionId(), package.id());
                         continue;
                     }
                     const auto *singer = dynamic_cast<const srt::SingerSpec *>(contribution);
                     if (!singer) {
+                        ++skipped;
                         log.stdcWarning("Skipping an invalid singer category declaration in %1", package.id());
                         continue;
                     }
-                    auto found = readSinger(*singer, *catalog->environment_);
+                    auto found = readSinger(*singer);
                     if (!found) {
+                        ++skipped;
                         log.stdcWarning("Skipping DiffSinger singer %1 in %2@%3: %4", singer->locator().contributionId(), package.id(), package.version().toString(), found.error().formatChain());
                         continue;
                     }
                     auto [record, group] = std::move(*found);
-                    const auto [existing, inserted] = catalog->groups_.emplace(group.id, group);
+                    const bool mixable = group.info.mixable;
+                    const auto [existing, inserted] = catalog->groups_.try_emplace(record.info.group, std::move(group));
                     if (!inserted) {
-                        existing->second.mixable = existing->second.mixable && group.mixable;
+                        existing->second.info.mixable = existing->second.info.mixable && mixable;
                     }
                     const auto id = record.info.id;
                     catalog->singers_.emplace(id, std::move(record));
                 }
             }
-            log.stdcInfo("Discovered %1 DiffSinger singers in %2 groups", catalog->singers_.size(), catalog->groups_.size());
+            log.stdcInfo("DiffSinger singer catalogue ready: %1 singers, %2 groups, %3 rejected declarations", catalog->singers_.size(), catalog->groups_.size(), skipped);
             return std::shared_ptr<const SingerCatalog>(std::move(catalog));
         } catch (const std::exception &error) {
             return std::unexpected{inference::ResourceError("Cannot read the loaded singer declarations", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"synthrt/Wolf/dsinfer", "discover singers", "exception"}))};

@@ -119,6 +119,35 @@ namespace dssp::api_v1 {
         dto::GroupMetadata result;
         result.id = std::move(value.id);
         result.arch = std::move(value.arch);
+        result.languages = toDto(std::move(value.languages));
+        switch (value.durationMode) {
+            case arch::DurationMode::Full: result.durationMode = dto::DurationMode::Full; break;
+            case arch::DurationMode::Skip: result.durationMode = dto::DurationMode::Skip; break;
+        }
+        using Pipeline = std::variant<dto::DirectParameter, dto::IndirectParameter>;
+        const auto visitor = Overload{
+            [](arch::DirectParameter) -> Pipeline { return dto::DirectParameter{}; },
+            [](arch::IndirectParameter indirect) -> Pipeline {
+                dto::IndirectParameter result{std::move(indirect.dependsOn)};
+                switch (indirect.retakeMode) {
+                    case arch::ParameterRetakeMode::Full: result.retakeMode = dto::ParameterRetakeMode::Full; break;
+                    case arch::ParameterRetakeMode::Range: result.retakeMode = dto::ParameterRetakeMode::Range; break;
+                }
+                return result;
+            }};
+        for (auto &[key, pipeline] : value.parameterPipeline) {
+            result.parameterPipeline.emplace(key, std::visit(visitor, std::move(pipeline)));
+        }
+        result.audioDependencies = std::move(value.audioDependencies);
+        result.mixable = value.mixable;
+        result.archSpecificInfo = std::move(value.archSpecificInfo);
+        result.defaultArchExtra = std::move(value.defaultArchExtra);
+        return result;
+    }
+    dto::GroupLanguageInfo toDto(arch::GroupLanguageInfo value) {
+        dto::GroupLanguageInfo result;
+        result.name = std::move(value.name);
+        result.defaultLyric = std::move(value.defaultLyric);
         switch (value.pronunciationMode) {
             case arch::PronunciationMode::Full: result.pronunciationMode = dto::PronunciationMode::Full; break;
             case arch::PronunciationMode::Skip: result.pronunciationMode = dto::PronunciationMode::Skip; break;
@@ -128,20 +157,10 @@ namespace dssp::api_v1 {
             case arch::PhonemeMode::TokenOnly: result.phonemeMode = dto::PhonemeMode::TokenOnly; break;
             case arch::PhonemeMode::Skip: result.phonemeMode = dto::PhonemeMode::Skip; break;
         }
-        for (auto &[key, pipeline] : value.parameterPipeline) {
-            using Pipeline = std::variant<dto::DirectParameter, dto::IndirectParameter>;
-            auto mapped = std::visit(Overload{[](arch::DirectParameter) -> Pipeline { return dto::DirectParameter{}; }, [](arch::IndirectParameter indirect) -> Pipeline { return dto::IndirectParameter{std::move(indirect.dependsOn)}; }}, std::move(pipeline));
-            result.parameterPipeline.emplace(key, std::move(mapped));
-        }
-        result.audioDependencies = std::move(value.audioDependencies);
-        result.mixable = value.mixable;
         return result;
     }
-    dto::SingerLanguageInfo toDto(arch::SingerLanguageInfo value) {
-        return {std::move(value.name), std::move(value.defaultLyric)};
-    }
     dto::SingerInfo toDto(arch::SingerInfo value) {
-        return {std::move(value.id), std::move(value.name), std::move(value.arch), std::move(value.group), toDto(std::move(value.languages)), std::move(value.defaultLanguage), std::move(value.archSpecificInfo), std::move(value.defaultExtra)};
+        return {std::move(value.id), std::move(value.name), std::move(value.arch), std::move(value.group), std::move(value.defaultLanguage), std::move(value.archSpecificInfo), std::move(value.defaultExtra)};
     }
     dto::SingerDemoAudio toDto(arch::SingerDemoAudio value) {
         return {std::move(value.name), std::move(value.audioUrl)};

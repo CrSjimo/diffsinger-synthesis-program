@@ -28,6 +28,16 @@ namespace dssp::tests {
         const auto parameters = api_v1::toJson(api_v1::dto::ParameterResponse{});
         EXPECT_TRUE(parameters["output"]["parameters"].isObject());
         EXPECT_FALSE(parameters.isMember("state"));
+        const auto group = api_v1::toJson(api_v1::dto::GroupMetadata{});
+        EXPECT_TRUE(group["languages"].isObject());
+        EXPECT_TRUE(group["languages"].empty());
+        EXPECT_EQ(group["durationMode"].asString(), "skip");
+        EXPECT_TRUE(group["parameterPipeline"].isObject());
+        EXPECT_TRUE(group["audioDependencies"].isArray());
+        EXPECT_TRUE(group.isMember("archSpecificInfo"));
+        EXPECT_TRUE(group["archSpecificInfo"].isNull());
+        EXPECT_TRUE(group.isMember("defaultArchExtra"));
+        EXPECT_TRUE(group["defaultArchExtra"].isNull());
     }
 
     TEST(Response, ValidationProblemsContainReasonsAndPointers) {

@@ -7,6 +7,7 @@
 #include <map>
 #include <string>
 
+#include <dsspresource/CacheOptions.h>
 #include <dsspruntime/ConfigurationError.h>
 #include <dsspruntime/DeviceInfo.h>
 
@@ -16,9 +17,11 @@ namespace dssp::runtime {
         std::string host = "127.0.0.1";
         std::uint16_t port = 13711;
         std::filesystem::path packageDir;
-        ExecutionProvider executionProvider = ExecutionProvider::CPU;
+        ExecutionProvider executionProvider = DeviceInfo::defaultExecutionProvider();
         int deviceIndex = 0;
         double silenceThreshold = 0.02;
+        std::map<std::string, resource::CacheOptions> inferenceCaches{{"diffsinger-language", {}}, {"diffsinger-synthesis", {}}};
+        // Bundled deployment paths derived from the executable location.
         std::filesystem::path pluginDir;
         std::filesystem::path runtimePath;
         std::filesystem::path resourceDir;

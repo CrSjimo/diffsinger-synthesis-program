@@ -1,0 +1,79 @@
+#include "LanguageRoute.h"
+
+#include <exception>
+
+#include <synthrt/Core/ContribImportBinding.h>
+#include <wolf/Api/Inferences/G2P/1/G2PApiL1.h>
+#include <wolf/Api/Inferences/Onset/1/OnsetApiL1.h>
+#include <wolf/Api/Inferences/S2P/1/S2PApiL1.h>
+#include <wolf/Api/Linguists/Linguist/1/LinguistApiL1.h>
+
+namespace dssp::inference {
+    namespace {
+        template <class Exports, class Options>
+        std::expected<std::optional<srt::ContribImport>, ResourceError> stage(const srt::ContribSpec &linguist, std::string_view role, bool required) {
+            auto imported = linguist.findImport(role);
+            if (!imported) {
+                if (required) {
+                    return std::unexpected{ResourceError("Missing language stage " + std::string(role))};
+                }
+                return std::optional<srt::ContribImport>{};
+            }
+            const auto *binding = imported->binding();
+            if (!binding || binding->state() != srt::ContribImportBinding::Active) {
+                return std::unexpected{ResourceError("Unresolved language stage " + std::string(role))};
+            }
+            const auto &target = binding->target();
+            const auto *exports = dynamic_cast<const Exports *>(target.exports());
+            const auto *options = dynamic_cast<const Options *>(imported->options());
+            if (!exports || !options || target.locator().category() != "inference" || target.interface() != exports->interface() || target.variant() != exports->variant() || target.level() != exports->level()) {
+                return std::unexpected{ResourceError("Unsupported language stage contract for " + std::string(role))};
+            }
+            return imported;
+        }
+    }
+
+    std::expected<LanguageRoute, ResourceError> readLanguageRoute(const srt::SingerSpec &singer, std::string_view handle) {
+        namespace G2p = wolf::Api::G2P::L1;
+        namespace S2p = wolf::Api::S2P::L1;
+        namespace Onset = wolf::Api::Onset::L1;
+        namespace Linguist = wolf::Api::Linguist::L1;
+        try {
+            const auto role = singer.languages().find(std::string(handle));
+            if (role == singer.languages().end()) {
+                return std::unexpected{ResourceError("Singer does not declare language " + std::string(handle))};
+            }
+            const auto imported = singer.findImport(role->second);
+            if (!imported || !imported->binding() || imported->binding()->state() != srt::ContribImportBinding::Active) {
+                return std::unexpected{ResourceError("Singer language has no active binding: " + std::string(handle))};
+            }
+            const auto &target = imported->binding()->target();
+            const auto *spec = dynamic_cast<const wolf::LinguistSpec *>(&target);
+            if (!spec || target.interface() != Linguist::API_INTERFACE || target.variant() != Linguist::API_VARIANT || target.level() != Linguist::API_LEVEL) {
+                return std::unexpected{ResourceError("Unsupported linguist composition for " + std::string(handle))};
+            }
+            auto g2p = stage<G2p::G2PExports, G2p::G2PImportOptions>(target, "linguist/g2p", true);
+            auto s2p = stage<S2p::S2PExports, S2p::S2PImportOptions>(target, "linguist/s2p", false);
+            auto onset = stage<Onset::OnsetExports, Onset::OnsetImportOptions>(target, "linguist/onset", false);
+            if (!g2p) {
+                return std::unexpected{std::move(g2p.error())};
+            }
+            if (!s2p) {
+                return std::unexpected{std::move(s2p.error())};
+            }
+            if (!onset) {
+                return std::unexpected{std::move(onset.error())};
+            }
+            LanguageRoute result;
+            result.spec = spec;
+            result.binding = {spec->language(), spec->scheme()};
+            result.g2p = std::move(*g2p);
+            result.s2p = std::move(*s2p);
+            result.onset = std::move(*onset);
+            result.depth = result.s2p ? result.onset ? LanguageDepth::Onsets : LanguageDepth::Phonemes : LanguageDepth::Pronunciation;
+            return result;
+        } catch (const std::exception &error) {
+            return std::unexpected{ResourceError("Cannot inspect native language bindings", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"synthrt/Wolf", "inspect language imports", "exception"}))};
+        }
+    }
+}

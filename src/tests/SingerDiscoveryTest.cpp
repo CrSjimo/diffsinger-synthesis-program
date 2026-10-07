@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <atomic>
 #include <filesystem>
+#include <set>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -9,7 +10,6 @@
 #include <dsinfer/Inference/InferenceDriverPlugin.h>
 #include <gtest/gtest.h>
 #include <synthrt/Core/SynthUnit.h>
-#include <wolf/Session/LinguistSession.h>
 
 #include <dssparchdiffsinger/DiffSinger.h>
 #include <dssparchdiffsinger/Factory.h>
@@ -20,10 +20,11 @@ namespace dssp::tests {
     namespace {
         constexpr char gif[] = "GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b";
 
-        void writeSingerPackage(const TestFiles &files, std::string_view directory, std::string_view version) {
+        void writeSingerPackage(const TestFiles &files, std::string_view directory, std::string_view version, bool predictiveStages = false) {
             const std::filesystem::path root(directory);
+            const std::string stageDeclarations = predictiveStages ? R"(,{"id":"duration","path":"duration.json"},{"id":"pitch","path":"pitch.json"},{"id":"variance","path":"variance.json"})" : "";
             files.write(root / "desc.json", "{\"$version\":\"1.0\",\"id\":\"example/singers\",\"version\":\"" + std::string(version) + R"(","runtimeLevel":1,"contributions":{
-                "inference":[{"id":"acoustic","path":"acoustic.json"},{"id":"vocoder","path":"vocoder.json"},{"id":"g2p","path":"g2p.json"}],
+                "inference":[{"id":"acoustic","path":"acoustic.json"},{"id":"vocoder","path":"vocoder.json"},{"id":"g2p","path":"g2p.json"})" + stageDeclarations + R"(],
                 "linguist":[{"id":"eng","path":"eng.json"}],
                 "singer":[{"id":"first","path":"first.json"},{"id":"second","path":"second.json"}]}})");
             files.write(root / "acoustic.json", R"({"interface":"org.openvpi.dsinfer.inference.Acoustic","variant":"onnx","level":1,
@@ -32,6 +33,14 @@ namespace dssp::tests {
             files.write(root / "vocoder.json", R"({"interface":"org.openvpi.dsinfer.inference.Vocoder","variant":"onnx","level":1,
                 "exports":{},"configuration":{"model":"${root}/missing-vocoder.onnx","pitchControllable":true}})");
             files.write(root / "phonemes.json", R"({"a":0,"SP":1,"AP":2})");
+            if (predictiveStages) {
+                files.write(root / "duration.json", R"({"interface":"org.openvpi.dsinfer.inference.Duration","variant":"onnx","level":1,
+                    "exports":{},"configuration":{"encoder":"${root}/missing-duration-encoder.onnx","predictor":"${root}/missing-duration-predictor.onnx","frameWidth":0.01,"phonemes":"phonemes.json"}})");
+                files.write(root / "pitch.json", R"({"interface":"org.openvpi.dsinfer.inference.Pitch","variant":"onnx","level":1,
+                    "exports":{"allowExpressiveness":true},"configuration":{"encoder":"${root}/missing-pitch-encoder.onnx","predictor":"${root}/missing-pitch-predictor.onnx","frameWidth":0.01,"phonemes":"phonemes.json","useExpressiveness":true}})");
+                files.write(root / "variance.json", R"({"interface":"org.openvpi.dsinfer.inference.Variance","variant":"onnx","level":1,
+                    "exports":{"predictions":["energy"]},"configuration":{"encoder":"${root}/missing-variance-encoder.onnx","predictor":"${root}/missing-variance-predictor.onnx","frameWidth":0.01,"phonemes":"phonemes.json"}})");
+            }
             files.write(root / "g2p.json", R"({"interface":"org.openvpi.wolf.inference.G2P","variant":"pipe-chain","level":1,
                 "exports":{"languages":[{"language":"eng","scheme":"test"}],"symbols":["a"]},
                 "configuration":{"formatVersion":1,"steps":[{"step":"fallback","params":{}}]}})");
@@ -40,11 +49,15 @@ namespace dssp::tests {
                 "exports":{"phonemes":["a"]},"configuration":{},"imports":[{"role":"linguist/g2p","ref":":inference/g2p"}]})");
             for (const auto id : {"first", "second"}) {
                 const std::string languageRole = std::string_view(id) == "first" ? "language/eng" : "custom/english";
+                const std::string stageImports = predictiveStages ? R"(
+                        {"role":"singer/duration","ref":":inference/duration","options":{}},
+                        {"role":"singer/pitch","ref":":inference/pitch","options":{}},
+                        {"role":"singer/variance","ref":":inference/variance","options":{"predictions":["energy"]}},)" : "";
                 files.write(root / (std::string(id) + ".json"), R"({"interface":"org.openvpi.dsinfer.singer.DiffSinger","variant":"openvpi","level":1,
                     "name":{"_":"Singer","zh":"歌手"},"avatar":{"_":"pixel.bin","zh":"missing-image.bin"},"demoAudio":"", "configuration":{"dict":"unused-dictionary.txt"},
                     "languages":{"eng":")" + languageRole + R"("},"defaultLanguage":"eng","imports":[
                         {"role":"singer/acoustic","ref":":inference/acoustic","options":{}},
-                        {"role":"singer/vocoder","ref":":inference/vocoder","options":{}},
+                        {"role":"singer/vocoder","ref":":inference/vocoder","options":{}},)" + stageImports + R"(
                         {"role":")" + languageRole + R"(","ref":":linguist/eng","options":{}}]})");
             }
             files.write(root / "pixel.bin", std::string_view(gif, sizeof(gif) - 1));
@@ -86,28 +99,44 @@ namespace dssp::tests {
         EXPECT_TRUE(environment->unit().runtimeServices(ds::InferenceDriverPlugin::IID).empty());
         const auto *diffsinger = dynamic_cast<const arch_diffsinger::DiffSinger *>(implementation.get());
         ASSERT_NE(diffsinger, nullptr);
+        std::set<std::string> ids;
         for (const auto &singer : *singers) {
             SCOPED_TRACE(singer.id);
+            EXPECT_TRUE(ids.insert(singer.id).second);
             EXPECT_EQ(singer.arch, "diffsinger");
             EXPECT_EQ(singer.defaultLanguage, "eng");
-            ASSERT_EQ(singer.languages.size(), 1U);
-            EXPECT_EQ(singer.languages.at("eng").name, "English");
-            EXPECT_TRUE(singer.languages.at("eng").defaultLyric.empty());
-            EXPECT_FALSE(singer.archSpecificInfo["hasDuration"].asBool());
-            EXPECT_EQ(singer.archSpecificInfo["languageCapabilities"]["eng"]["maxDepth"].asString(), "pronunciation");
+            EXPECT_TRUE(singer.archSpecificInfo.isMember("speakers"));
+            EXPECT_FALSE(singer.archSpecificInfo.isMember("hasDuration"));
+            EXPECT_FALSE(singer.archSpecificInfo.isMember("languageCapabilities"));
+            const auto group = implementation->group({singer.group, {}});
+            ASSERT_TRUE(group);
+            ASSERT_TRUE(*group);
+            ASSERT_EQ((**group).languages.size(), 1U);
+            EXPECT_EQ((**group).languages.at("eng").name, "English");
+            EXPECT_TRUE((**group).languages.at("eng").defaultLyric.empty());
+            EXPECT_EQ((**group).durationMode, arch::DurationMode::Skip);
             const auto *record = diffsinger->catalog().find(singer.id);
             ASSERT_NE(record, nullptr);
-            EXPECT_EQ(environment->languages().probe(record->ref, "eng").readiness, wolf::Readiness::Cold);
+            EXPECT_EQ(record->package.id(), "example/singers");
+            EXPECT_EQ(record->spec->locator().category(), "singer");
+            EXPECT_FALSE(record->package.version().isEmpty());
+            ASSERT_TRUE(record->languages.contains("eng"));
+            EXPECT_EQ(record->languages.at("eng").depth, inference::LanguageDepth::Pronunciation);
+            const auto pool = environment->inferences("diffsinger-language");
+            ASSERT_TRUE(pool);
+            EXPECT_EQ((*pool)->residentCount(), 0U);
             EXPECT_FALSE(std::filesystem::exists(record->package.path() / "missing-acoustic.onnx"));
             const auto single = implementation->singer({singer.id, {"zh-CN"}});
             ASSERT_TRUE(single);
             ASSERT_TRUE(*single);
+            EXPECT_EQ((**single).id, singer.id);
             EXPECT_EQ((**single).name, "歌手");
-            const auto japanese = implementation->singer({singer.id, {"ja-JP"}});
+            const auto japanese = implementation->group({singer.group, {"ja-JP"}});
             ASSERT_TRUE(japanese);
             ASSERT_TRUE(*japanese);
             EXPECT_EQ((**japanese).languages.at("eng").name, "英語");
         }
+        EXPECT_EQ(ids, (std::set<std::string>{"example/singers=1.0:singer/first", "example/singers=1.0:singer/second", "example/singers=2.0:singer/first", "example/singers=2.0:singer/second"}));
         const auto repeated = arch_diffsinger::SingerCatalog::discover(environment);
         ASSERT_TRUE(repeated);
         EXPECT_EQ((*repeated)->singers().size(), singers->size());
@@ -123,8 +152,14 @@ namespace dssp::tests {
         ASSERT_EQ(groups->size(), 2U);
         for (const auto &group : *groups) {
             EXPECT_FALSE(group.mixable);
-            EXPECT_EQ(group.pronunciationMode, arch::PronunciationMode::Full);
-            EXPECT_EQ(group.phonemeMode, arch::PhonemeMode::Skip);
+            ASSERT_EQ(group.languages.size(), 1U);
+            EXPECT_EQ(group.languages.at("eng").pronunciationMode, arch::PronunciationMode::Full);
+            EXPECT_EQ(group.languages.at("eng").phonemeMode, arch::PhonemeMode::Skip);
+            EXPECT_EQ(group.durationMode, arch::DurationMode::Skip);
+            EXPECT_TRUE(group.archSpecificInfo.isObject());
+            EXPECT_TRUE(group.archSpecificInfo.empty());
+            EXPECT_EQ(group.defaultArchExtra["steps"].asInt(), 20);
+            EXPECT_EQ(group.defaultArchExtra["depth"].asDouble(), 1);
             EXPECT_TRUE(std::holds_alternative<arch::DirectParameter>(group.parameterPipeline.at("pitch")));
             EXPECT_TRUE(group.parameterPipeline.contains("gender"));
             EXPECT_TRUE(group.parameterPipeline.contains("velocity"));
@@ -141,6 +176,49 @@ namespace dssp::tests {
             ASSERT_TRUE(single);
             ASSERT_TRUE(*single);
             EXPECT_EQ((**single).id, group.id);
+        }
+    }
+
+    TEST_F(SingerDiscoveryTest, PredictiveStageDeclarationsExposeDurationAndRangeRetakesWithoutLoadingModels) {
+        TestFiles predictive;
+        writeSingerPackage(predictive, "predictive", "1", true);
+        inference::EnvironmentOptions options;
+        options.packageRoots = {predictive.path()};
+        const std::filesystem::path plugins(DSSP_TEST_PLUGIN_DIR);
+        options.pluginPaths = arch_diffsinger::pluginPaths(plugins);
+        options.pluginPaths.push_back({"inference", plugins / "dsinfer" / "inferenceinterpreters"});
+        options.pluginPaths.push_back({"inference", plugins / "wolf" / "inferenceinterpreters"});
+        options.pluginPaths.push_back({"linguist", plugins / "wolf" / "linguistproviders"});
+        const auto host = inference::Environment::create(options);
+        ASSERT_TRUE(host) << (host ? "" : host.error().formatChain());
+        ASSERT_TRUE((*host)->problems().empty()) << ((*host)->problems().empty() ? "" : (*host)->problems().front().error.formatChain());
+        const auto catalog = arch_diffsinger::SingerCatalog::discover(*host);
+        ASSERT_TRUE(catalog) << (catalog ? "" : catalog.error().formatChain());
+        ASSERT_EQ((*catalog)->singers().size(), 2U);
+        ASSERT_EQ((*catalog)->groups().size(), 1U);
+        const auto &group = (*catalog)->groups().begin()->second.info;
+        EXPECT_EQ(group.durationMode, arch::DurationMode::Full);
+        ASSERT_TRUE(std::holds_alternative<arch::IndirectParameter>(group.parameterPipeline.at("pitch")));
+        const auto &pitch = std::get<arch::IndirectParameter>(group.parameterPipeline.at("pitch"));
+        EXPECT_EQ(pitch.retakeMode, arch::ParameterRetakeMode::Range);
+        EXPECT_EQ(pitch.dependsOn, (std::vector<std::string>{"expressiveness"}));
+        ASSERT_TRUE(std::holds_alternative<arch::IndirectParameter>(group.parameterPipeline.at("energy")));
+        const auto &energy = std::get<arch::IndirectParameter>(group.parameterPipeline.at("energy"));
+        EXPECT_EQ(energy.retakeMode, arch::ParameterRetakeMode::Range);
+        EXPECT_EQ(energy.dependsOn, (std::vector<std::string>{"pitch", "tone_shift"}));
+        EXPECT_TRUE(std::holds_alternative<arch::DirectParameter>(group.parameterPipeline.at("expressiveness")));
+        EXPECT_TRUE((*host)->unit().runtimeServices(ds::InferenceDriverPlugin::IID).empty());
+        for (const auto &[id, singer] : (*catalog)->singers()) {
+            SCOPED_TRACE(id);
+            ASSERT_TRUE(singer.languages.contains("eng"));
+            const auto pool = (*host)->inferences("diffsinger-language");
+            ASSERT_TRUE(pool);
+            EXPECT_EQ((*pool)->residentCount(), 0U);
+            EXPECT_EQ(singer.info.defaultLanguage, "eng");
+            for (const auto stage : {"duration", "pitch", "variance"}) {
+                EXPECT_FALSE(std::filesystem::exists(singer.package.path() / (std::string("missing-") + stage + "-encoder.onnx")));
+                EXPECT_FALSE(std::filesystem::exists(singer.package.path() / (std::string("missing-") + stage + "-predictor.onnx")));
+            }
         }
     }
 
@@ -187,6 +265,17 @@ namespace dssp::tests {
                     const auto singers = implementation->singers({j % 2 ? "zh" : "ja"});
                     if (!singers || singers->size() != 4U) {
                         ++failures;
+                    }
+                    const auto groups = implementation->groups({j % 2 ? "en" : "ja"});
+                    if (!groups || groups->size() != 2U) {
+                        ++failures;
+                        continue;
+                    }
+                    for (const auto &group : *groups) {
+                        const auto language = group.languages.find("eng");
+                        if (language == group.languages.end() || language->second.name != (j % 2 ? "English" : "英語")) {
+                            ++failures;
+                        }
                     }
                 }
             });

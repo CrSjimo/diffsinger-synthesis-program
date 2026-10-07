@@ -5,6 +5,7 @@
 #include <memory>
 
 #include <stdcorelib/path.h>
+#include <stdcorelib/str.h>
 #include <stdcorelib/support/logging.h>
 #include <unicode/unistr.h>
 #include <unicode/ures.h>
@@ -50,6 +51,9 @@ namespace dssp::localization {
 
     std::expected<std::shared_ptr<const Catalog>, LocalizationError> Catalog::load(const std::filesystem::path &directory, std::string_view fallbackLocale) {
         try {
+            if (log.isLevelEnabled(stdc::Logger::Debug)) {
+                log.stdcDebug("Loading translation directory %1 with preferred fallback %2", stdc::path::to_utf8(directory), fallbackLocale);
+            }
             auto result = std::shared_ptr<Catalog>(new Catalog);
             result->fallbackLocale_ = fallbackLocale;
             std::error_code error;
@@ -80,7 +84,12 @@ namespace dssp::localization {
                 result->locales_.push_back(locale);
                 result->translations_.push_back(std::move(*strings));
             }
-            log.stdcInfo("Loaded %1 translation bundles", locales.size());
+            if (locales.empty()) {
+                log.stdcDebug("No translation bundles available; display values will use resource keys");
+            } else if (std::ranges::find(locales, result->fallbackLocale_) == locales.end()) {
+                log.stdcDebug("Preferred fallback bundle %1 is absent; using available translations", fallbackLocale);
+            }
+            log.stdcDebug("Translation locales available: %1; directory=%2", stdc::str::join(locales, ", "), stdc::path::to_utf8(directory));
             return std::shared_ptr<const Catalog>(std::move(result));
         } catch (const std::exception &error) {
             return std::unexpected{LocalizationError("Translation resource library failed", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"ICU/filesystem", "load translation resources", "exception"}))};

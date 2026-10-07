@@ -20,7 +20,8 @@ namespace dssp::inference {
                     return selected;
                 }
             }
-            return text.text().empty() ? std::string(fallback) : text.text();
+            const auto &defaultText = text.text();
+            return defaultText.empty() ? std::string(fallback) : defaultText;
         } catch (const std::exception &error) {
             return std::unexpected{localization::LocalizationError("Cannot read multilingual declaration", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"synthrt", "DisplayText", "exception"}))};
         }

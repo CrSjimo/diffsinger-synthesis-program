@@ -62,12 +62,8 @@ namespace dssp::api_v1 {
         Json::Value result;
         result["id"] = value.id;
         result["arch"] = value.arch;
-        result["pronunciationMode"] = value.pronunciationMode == dto::PronunciationMode::Full ? "full" : "skip";
-        switch (value.phonemeMode) {
-            case dto::PhonemeMode::Full: result["phonemeMode"] = "full"; break;
-            case dto::PhonemeMode::TokenOnly: result["phonemeMode"] = "token_only"; break;
-            case dto::PhonemeMode::Skip: result["phonemeMode"] = "skip"; break;
-        }
+        result["languages"] = toJson(value.languages);
+        result["durationMode"] = value.durationMode == dto::DurationMode::Full ? "full" : "skip";
         result["parameterPipeline"] = Json::Value(Json::objectValue);
         const auto visitor = Overload{
             [](const dto::DirectParameter &) {
@@ -79,6 +75,7 @@ namespace dssp::api_v1 {
                 Json::Value result;
                 result["type"] = "indirect";
                 result["dependsOn"] = toJson(parameter.dependsOn);
+                result["retakeMode"] = parameter.retakeMode == dto::ParameterRetakeMode::Range ? "range" : "full";
                 return result;
             }};
         for (const auto &[key, parameter] : value.parameterPipeline) {
@@ -86,12 +83,20 @@ namespace dssp::api_v1 {
         }
         result["audioDependencies"] = toJson(value.audioDependencies);
         result["mixable"] = value.mixable;
+        result["archSpecificInfo"] = value.archSpecificInfo;
+        result["defaultArchExtra"] = value.defaultArchExtra;
         return result;
     }
-    Json::Value toJson(const dto::SingerLanguageInfo &value) {
+    Json::Value toJson(const dto::GroupLanguageInfo &value) {
         Json::Value result;
         result["name"] = value.name;
         result["defaultLyric"] = value.defaultLyric;
+        result["pronunciationMode"] = value.pronunciationMode == dto::PronunciationMode::Full ? "full" : "skip";
+        switch (value.phonemeMode) {
+            case dto::PhonemeMode::Full: result["phonemeMode"] = "full"; break;
+            case dto::PhonemeMode::TokenOnly: result["phonemeMode"] = "token_only"; break;
+            case dto::PhonemeMode::Skip: result["phonemeMode"] = "skip"; break;
+        }
         return result;
     }
     Json::Value toJson(const dto::SingerInfo &value) {
@@ -100,7 +105,6 @@ namespace dssp::api_v1 {
         result["name"] = value.name;
         result["arch"] = value.arch;
         result["group"] = value.group;
-        result["languages"] = toJson(value.languages);
         result["defaultLanguage"] = value.defaultLanguage;
         result["archSpecificInfo"] = value.archSpecificInfo;
         result["defaultExtra"] = value.defaultExtra;
