@@ -1,0 +1,261 @@
+#include <chrono>
+#include <future>
+
+#include <gtest/gtest.h>
+
+#include <dssparchdiffsinger/DiffSinger.h>
+#include <dssparchdiffsinger/Factory.h>
+#include <dssparchdiffsinger/SynthesisInferences.h>
+#include <dssparchdiffsinger/SynthesisScore.h>
+#include <dssptests/TestLanguagePackage.h>
+
+namespace dssp::tests {
+    using namespace std::chrono_literals;
+    class SynthesisTest : public ::testing::Test {
+    protected:
+        void SetUp() override {
+            LanguagePackageOptions package;
+            package.singer = true;
+            writeLanguagePackage(files, "package", package);
+            inference::EnvironmentOptions options;
+            options.packageRoots = {files.path()};
+            const std::filesystem::path plugins(DSSP_TEST_PLUGIN_DIR);
+            options.pluginPaths = arch_diffsinger::pluginPaths(plugins);
+            options.pluginPaths.push_back({"inference", plugins / "dsinfer" / "inferenceinterpreters"});
+            options.pluginPaths.push_back({"inference", plugins / "wolf" / "inferenceinterpreters"});
+            options.pluginPaths.push_back({"linguist", plugins / "wolf" / "linguistproviders"});
+            const auto host = inference::Environment::create(options);
+            ASSERT_TRUE(host);
+            environment = *host;
+            ASSERT_TRUE(environment->problems().empty());
+            const auto resources = media::Resources::create(std::filesystem::path(DSSP_TEST_RESOURCE_DIR) / "media" / "magic.mgc");
+            ASSERT_TRUE(resources);
+            const auto created = arch_diffsinger::create({environment, *resources, std::filesystem::path(DSSP_TEST_RESOURCE_DIR) / "localization"});
+            ASSERT_TRUE(created);
+            implementation = *created;
+            const auto singers = implementation->singers({});
+            ASSERT_TRUE(singers);
+            ASSERT_EQ(singers->size(), 1U);
+            context = {Json::Value(Json::objectValue), {{singers->front().id, Json::Value(Json::objectValue)}}};
+        }
+        void TearDown() override { if (environment) environment->shutdown(); }
+        template <class Output, class Function>
+        arch::SynthesisResult<Output> await(Function submit) {
+            const auto promise = std::make_shared<std::promise<arch::SynthesisResult<Output>>>();
+            auto future = promise->get_future();
+            submit([promise](auto result) { promise->set_value(std::move(result)); });
+            if (future.wait_for(5s) != std::future_status::ready) {
+                ADD_FAILURE() << "Synthesis callback did not finish";
+                return fail<arch::SynthesisErrors>(arch::OperationError("Test callback timed out"));
+            }
+            return future.get();
+        }
+        arch::AudioInput audioInput() const {
+            arch::AudioInput input;
+            input.context = context;
+            input.piece.pieceDuration = 0.1;
+            input.piece.mixSampleRate = 100;
+            for (const auto id : {"pitch", "energy", "gender", "velocity", "tone_shift"}) {
+                input.parameters.emplace(id, arch::AudioParameter{100, std::nullopt});
+            }
+            return input;
+        }
+        TestFiles files;
+        std::shared_ptr<inference::Environment> environment;
+        arch::ArchitecturePtr implementation;
+        arch::MultiSingerContext context;
+    };
+
+    TEST_F(SynthesisTest, AbsentRetakesAndZeroRetakesNeverLoadInferenceModels) {
+        arch::ParameterInput input;
+        input.context = context;
+        input.piece.pieceDuration = 1;
+        input.parameters.emplace("energy", arch::Parameter{{}, 100, std::nullopt});
+        const auto conditionOnly = await<arch::ParameterOutput>([&](auto callback) { implementation->parameter(input, {}, std::move(callback)); });
+        ASSERT_TRUE(conditionOnly);
+        EXPECT_TRUE(conditionOnly->parameters.empty());
+        input.parameters.at("energy").retake = arch::ParameterRetake{0, 0};
+        const auto noChange = await<arch::ParameterOutput>([&](auto callback) { implementation->parameter(input, {}, std::move(callback)); });
+        ASSERT_TRUE(noChange);
+        ASSERT_EQ(noChange->parameters.size(), 1U);
+        EXPECT_EQ(noChange->parameters.at("energy").values, std::vector<double>{1});
+        for (const auto stage : {arch_diffsinger::SynthesisStage::Duration, arch_diffsinger::SynthesisStage::Pitch, arch_diffsinger::SynthesisStage::Variance, arch_diffsinger::SynthesisStage::Acoustic, arch_diffsinger::SynthesisStage::Vocoder}) {
+            const auto pool = environment->inferences(arch_diffsinger::synthesisCacheGroup(stage));
+            ASSERT_TRUE(pool);
+            EXPECT_EQ((*pool)->residentCount(), 0U);
+        }
+    }
+
+    TEST_F(SynthesisTest, SilentAndZeroLengthPiecesReturnWavWithoutLoadingModels) {
+        auto input = audioInput();
+        const auto silent = await<arch::AudioOutput>([&](auto callback) { implementation->audio(input, {}, std::move(callback)); });
+        ASSERT_TRUE(silent) << (silent ? "" : silent.error().asError().formatChain());
+        EXPECT_TRUE(silent->audioUrl.starts_with("data:audio/wav;base64,"));
+        input.piece.pieceDuration = 0;
+        const auto empty = await<arch::AudioOutput>([&](auto callback) { implementation->audio(input, {}, std::move(callback)); });
+        ASSERT_TRUE(empty);
+        EXPECT_TRUE(empty->audioUrl.starts_with("data:audio/wav;base64,"));
+        for (const auto stage : {arch_diffsinger::SynthesisStage::Duration, arch_diffsinger::SynthesisStage::Pitch, arch_diffsinger::SynthesisStage::Variance, arch_diffsinger::SynthesisStage::Acoustic, arch_diffsinger::SynthesisStage::Vocoder}) {
+            const auto pool = environment->inferences(arch_diffsinger::synthesisCacheGroup(stage));
+            ASSERT_TRUE(pool);
+            EXPECT_EQ((*pool)->residentCount(), 0U);
+        }
+    }
+
+    TEST_F(SynthesisTest, DependenciesAndNegotiationFailBeforeLoadingAndNeverIgnoreClientPreferences) {
+        auto input = audioInput();
+        input.parameters.erase("pitch");
+        auto result = await<arch::AudioOutput>([&](auto callback) { implementation->audio(input, {}, std::move(callback)); });
+        ASSERT_FALSE(result);
+        EXPECT_NE(result.error().get_if<arch::InvalidInputError>(), nullptr);
+        input = audioInput();
+        input.media.acceptableSchemes = {"https"};
+        result = await<arch::AudioOutput>([&](auto callback) { implementation->audio(input, {}, std::move(callback)); });
+        ASSERT_FALSE(result);
+        EXPECT_NE(result.error().get_if<arch::InvalidInputError>(), nullptr);
+        input.media.acceptableSchemes = {"data"};
+        input.media.acceptableFormats = {"audio/flac"};
+        result = await<arch::AudioOutput>([&](auto callback) { implementation->audio(input, {}, std::move(callback)); });
+        ASSERT_FALSE(result);
+        EXPECT_NE(result.error().get_if<arch::InvalidInputError>(), nullptr);
+    }
+
+    TEST_F(SynthesisTest, CancelledRequestsFinishBeforeLoadingOrPreparingSynthesis) {
+        std::stop_source stop;
+        stop.request_stop();
+        const auto input = audioInput();
+        const auto audio = await<arch::AudioOutput>([&](auto callback) { implementation->audio(input, stop.get_token(), std::move(callback)); });
+        ASSERT_FALSE(audio);
+        EXPECT_NE(audio.error().get_if<arch::CancelledError>(), nullptr);
+        const auto duration = await<arch::DurationOutput>([&](auto callback) { implementation->duration({context, {}}, stop.get_token(), std::move(callback)); });
+        ASSERT_FALSE(duration);
+        EXPECT_NE(duration.error().get_if<arch::CancelledError>(), nullptr);
+        const auto parameter = await<arch::ParameterOutput>([&](auto callback) { implementation->parameter({context, {}}, stop.get_token(), std::move(callback)); });
+        ASSERT_FALSE(parameter);
+        EXPECT_NE(parameter.error().get_if<arch::CancelledError>(), nullptr);
+        for (const auto stage : {arch_diffsinger::SynthesisStage::Duration, arch_diffsinger::SynthesisStage::Pitch, arch_diffsinger::SynthesisStage::Variance, arch_diffsinger::SynthesisStage::Acoustic, arch_diffsinger::SynthesisStage::Vocoder}) {
+            const auto pool = environment->inferences(arch_diffsinger::synthesisCacheGroup(stage));
+            ASSERT_TRUE(pool);
+            EXPECT_EQ((*pool)->residentCount(), 0U);
+        }
+    }
+
+    TEST_F(SynthesisTest, UnsupportedTokensAndDirectParameterRetakesFailBeforeLoading) {
+        auto input = audioInput();
+        arch::ParameterNote note;
+        note.position.duration = 0.1;
+        note.pronunciation = "unknown";
+        note.language = "eng";
+        note.phonemes.push_back({{"unknown", true, "eng"}, 0});
+        input.piece.notes.push_back(note);
+        const auto audio = await<arch::AudioOutput>([&](auto callback) { implementation->audio(input, {}, std::move(callback)); });
+        ASSERT_FALSE(audio);
+        EXPECT_NE(audio.error().get_if<arch::InvalidInputError>(), nullptr);
+        arch::ParameterInput parameters;
+        parameters.context = context;
+        parameters.piece.pieceDuration = 1;
+        parameters.parameters.emplace("gender", arch::Parameter{{0.5}, 100, arch::ParameterRetake{0, 100}});
+        const auto parameter = await<arch::ParameterOutput>([&](auto callback) { implementation->parameter(parameters, {}, std::move(callback)); });
+        ASSERT_FALSE(parameter);
+        EXPECT_NE(parameter.error().get_if<arch::InvalidInputError>(), nullptr);
+        for (const auto stage : {arch_diffsinger::SynthesisStage::Duration, arch_diffsinger::SynthesisStage::Pitch, arch_diffsinger::SynthesisStage::Variance, arch_diffsinger::SynthesisStage::Acoustic, arch_diffsinger::SynthesisStage::Vocoder}) {
+            const auto pool = environment->inferences(arch_diffsinger::synthesisCacheGroup(stage));
+            ASSERT_TRUE(pool);
+            EXPECT_EQ((*pool)->residentCount(), 0U);
+        }
+    }
+
+    TEST_F(SynthesisTest, UnsupportedDurationIsAnInputErrorAndRealModelFailuresCarrySingerAndStageContext) {
+        const auto duration = await<arch::DurationOutput>([&](auto callback) { implementation->duration({context, {}}, {}, std::move(callback)); });
+        ASSERT_FALSE(duration);
+        EXPECT_NE(duration.error().get_if<arch::InvalidInputError>(), nullptr);
+        auto input = audioInput();
+        arch::ParameterNote note;
+        note.position.duration = 0.1;
+        note.cent = 6900;
+        note.pronunciation = "a";
+        note.language = "eng";
+        note.phonemes.push_back({{"a", true, "eng"}, 0});
+        input.piece.notes.push_back(note);
+        const auto result = await<arch::AudioOutput>([&](auto callback) { implementation->audio(input, {}, std::move(callback)); });
+        ASSERT_FALSE(result);
+        const auto *error = result.error().get_if<arch::OperationError>();
+        ASSERT_NE(error, nullptr);
+        EXPECT_NE(error->message().find("acoustic"), std::string::npos);
+        EXPECT_NE(error->message().find(context.singers[0].id), std::string::npos);
+        EXPECT_NE(error->cause(), nullptr);
+    }
+
+    TEST_F(SynthesisTest, MappingPreservesSourceOrderAndMergesOnlyAfterStageSpecificMapping) {
+        const auto *architecture = dynamic_cast<const arch_diffsinger::DiffSinger *>(implementation.get());
+        ASSERT_NE(architecture, nullptr);
+        const auto *prototype = architecture->catalog().find(context.singers[0].id);
+        ASSERT_NE(prototype, nullptr);
+        auto first = *prototype;
+        auto second = *prototype;
+        for (auto *record : {&first, &second}) {
+            auto &stage = record->stages.at("acoustic");
+            stage.usesSpeakers = true;
+            stage.speakers = {"model-a", "model-b"};
+            stage.embeddedSpeakers = {"model-a", "model-b"};
+        }
+        first.stages.at("acoustic").speakerMapping = {{"main", "model-a"}};
+        second.stages.at("acoustic").speakerMapping = {{"main", "model-b"}};
+        arch_diffsinger::SynthesisContext resolved;
+        resolved.sources = {{&first, "main"}, {&second, "main"}};
+        arch::Piece<arch::ParameterNote> piece;
+        piece.pieceDuration = 1;
+        arch::ParameterNote note;
+        note.position.duration = 1;
+        note.pronunciation = "a";
+        note.phonemes.push_back({{"a", true, "eng"}, 0.5});
+        piece.notes.push_back(note);
+        const auto score = arch_diffsinger::synthesisScore(first, piece);
+        ASSERT_TRUE(score);
+        const std::vector<std::vector<double>> mix{{0.2}, {0.8}};
+        const auto separate = arch_diffsinger::stageScore(*score, resolved, "acoustic", mix, 1);
+        ASSERT_TRUE(separate);
+        ASSERT_EQ(separate->speakers.size(), 2U);
+        EXPECT_EQ(separate->speakers[0].proportions, (std::vector<double>{0.2, 0.8}));
+        EXPECT_NEAR(separate->words[0].phones[0].speakers[0].proportion, 0.5, 1e-12);
+        EXPECT_NEAR(separate->words[0].phones[0].speakers[1].proportion, 0.5, 1e-12);
+        second.stages.at("acoustic").speakerMapping["main"] = "model-a";
+        const auto merged = arch_diffsinger::stageScore(*score, resolved, "acoustic", mix, 1);
+        ASSERT_TRUE(merged);
+        ASSERT_EQ(merged->speakers.size(), 1U);
+        EXPECT_EQ(merged->speakers[0].proportions, (std::vector<double>{1, 1}));
+        EXPECT_EQ(merged->words[0].phones[0].speakers.size(), 1U);
+        EXPECT_DOUBLE_EQ(merged->words[0].phones[0].speakers[0].proportion, 1);
+    }
+
+    TEST_F(SynthesisTest, EnvironmentTagsNormalizeDefaultsIncludeEffectiveOptionsAndDoNotLoadModels) {
+        const auto tag = implementation->envTag(context);
+        ASSERT_TRUE(tag);
+        EXPECT_TRUE(tag->starts_with("ds1."));
+        auto explicitDefaults = context;
+        explicitDefaults.archExtra["steps"] = 20;
+        explicitDefaults.archExtra["depth"] = 1;
+        explicitDefaults.singers[0].extra["speaker"] = "";
+        const auto same = implementation->envTag(explicitDefaults);
+        ASSERT_TRUE(same);
+        EXPECT_EQ(*tag, *same);
+        explicitDefaults.archExtra["steps"] = 21;
+        const auto changed = implementation->envTag(explicitDefaults);
+        ASSERT_TRUE(changed);
+        EXPECT_NE(*tag, *changed);
+        auto unknown = context;
+        unknown.singers[0].id = "missing";
+        EXPECT_FALSE(implementation->envTag(unknown));
+        // Current contract deliberately trusts package ID/version until the
+        // package manager supplies hashes; no model file content is scanned.
+        files.write("package/missing-acoustic.onnx", "changed bytes, same package version");
+        const auto unchanged = implementation->envTag(context);
+        ASSERT_TRUE(unchanged);
+        EXPECT_EQ(*tag, *unchanged);
+        for (const auto stage : {arch_diffsinger::SynthesisStage::Duration, arch_diffsinger::SynthesisStage::Pitch, arch_diffsinger::SynthesisStage::Variance, arch_diffsinger::SynthesisStage::Acoustic, arch_diffsinger::SynthesisStage::Vocoder}) {
+            const auto pool = environment->inferences(arch_diffsinger::synthesisCacheGroup(stage));
+            ASSERT_TRUE(pool);
+            EXPECT_EQ((*pool)->residentCount(), 0U);
+        }
+    }
+}

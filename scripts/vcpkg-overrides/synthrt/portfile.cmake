@@ -1,13 +1,10 @@
-# synthrt, main line, overriding the shared overlay's synthrt port, which pins the refactor line.
-# ds-editor-lite builds against the main line together with wolf and otter, which are layered on it.
-
-# The onnxruntime-builds-uptake branch carries the ONNX Runtime package uptake and the singer
-# category fields the editor and wolf read (languages, defaultLanguage, reservedPhonemes). A fetch
-# by commit needs no archive hash.
+# synthrt main line, overriding the shared overlay's refactor-line port.
+# Keep the fixed commit aligned with the spec2.4-uptake versions of wolf and otter.
+# A fetch by commit needs no archive hash.
 vcpkg_from_git(
     OUT_SOURCE_PATH SOURCE_PATH
     URL https://github.com/diffscope/synthrt.git
-    REF ba5f1779ad05a4c63e3ade36aeb8c57636a67ac6
+    REF 63bef253607649dcface0b37abc68f051cc45c8b
     HEAD_REF onnxruntime-builds-uptake
 )
 

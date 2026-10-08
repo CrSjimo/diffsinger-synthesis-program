@@ -1,14 +1,10 @@
-# wolf, pinned to the commit this editor was built and tested against.
-#
-# Depending on wolf is the only way a consumer gets its contribution category registered: linking
-# the library is what runs the registration before main, so vendoring headers would not do.
-
+# wolf, pinned to the spec2.4-uptake branch tip selected for DSSP.
 # A fetch by commit needs no archive hash.
 vcpkg_from_git(
     OUT_SOURCE_PATH SOURCE_PATH
     URL https://github.com/diffscope/wolf.git
-    REF d96e14355485c5202159a6195668d50a0b0446cf
-    HEAD_REF linguistic-level-1
+    REF eda2b4880da39dee9d9e9cfd7e04caaf951993e7
+    HEAD_REF spec2.4-uptake
 )
 
 vcpkg_cmake_configure(

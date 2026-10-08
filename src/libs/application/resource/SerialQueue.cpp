@@ -1,5 +1,6 @@
 #include "SerialQueue.h"
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <iterator>
@@ -14,7 +15,7 @@ namespace dssp::resource {
         stdc::LogCategory log("dssp.resource.SerialQueue");
     }
 
-    struct SerialQueue::State {
+    struct SerialQueue::State : std::enable_shared_from_this<SerialQueue::State> {
         enum class Phase {
             Preparing,
             Queued,
@@ -81,21 +82,36 @@ namespace dssp::resource {
                     running = item;
                 }
                 log.stdcTrace("Queue %1 starting task %2", name, item->sequence);
+                if (!item->stop.stop_requested() && item->task.runAsync) {
+                    auto start = item->task.runAsync;
+                    const auto finished = std::make_shared<std::atomic_flag>();
+                    start(item->stop.get_token(), [state = shared_from_this(), item, finished] {
+                        if (finished->test_and_set(std::memory_order_acq_rel)) return;
+                        state->finish(item);
+                        // Suspension leaves scheduled set, so no second drain
+                        // can start this resource while its task is outstanding.
+                        state->dispatch([state] { state->drain(); });
+                    });
+                    return;
+                }
                 if (!item->stop.stop_requested()) {
                     item->task.run(item->stop.get_token());
                 }
-                // Do not let a late request cancellation reach the next task.
-                item->cancellation.reset();
-                item->task.complete(item->stop.stop_requested());
-                item->task = {};
-                {
-                    const std::lock_guard lock(mutex);
-                    item->phase = Phase::Done;
-                    running.reset();
-                    idle.notify_all();
-                }
-                log.stdcTrace("Queue %1 finished task %2 (cancelled=%3)", name, item->sequence, item->stop.stop_requested());
+                finish(item);
             }
+        }
+        void finish(const std::shared_ptr<Item> &item) {
+            // Do not let a late request cancellation reach the next task.
+            item->cancellation.reset();
+            item->task.complete(item->stop.stop_requested());
+            item->task = {};
+            {
+                const std::lock_guard lock(mutex);
+                item->phase = Phase::Done;
+                running.reset();
+                idle.notify_all();
+            }
+            log.stdcTrace("Queue %1 finished task %2 (cancelled=%3)", name, item->sequence, item->stop.stop_requested());
         }
     };
 

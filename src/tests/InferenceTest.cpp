@@ -8,13 +8,13 @@
 #include <dssptests/TestFiles.h>
 
 namespace dssp::tests {
-    TEST(Inference, SharedHostRegistersWolfAndOtterWithoutADiffSingerLibrary) {
+    TEST(Inference, SharedHostProvidesWolfAndBuiltinInferenceWithoutAnArchitectureLibrary) {
         const auto host = inference::Environment::create({});
         ASSERT_TRUE(host);
         EXPECT_NE((*host)->unit().category("linguist"), nullptr);
-        EXPECT_NE((*host)->unit().category("analysis"), nullptr);
+        EXPECT_NE((*host)->unit().category("inference"), nullptr);
         EXPECT_TRUE((*host)->packages().empty());
-        const auto language = (*host)->inferences("diffsinger-language");
+        const auto language = (*host)->inferences("diffsinger-pronunciation");
         ASSERT_TRUE(language);
         EXPECT_EQ((*language)->residentCount(), 0U);
     }

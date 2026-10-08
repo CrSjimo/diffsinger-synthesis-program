@@ -1,6 +1,7 @@
 #ifndef DSSP_SERVERCONFIG_H
 #define DSSP_SERVERCONFIG_H
 
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <filesystem>
@@ -10,17 +11,19 @@
 #include <dsspresource/CacheOptions.h>
 #include <dsspruntime/ConfigurationError.h>
 #include <dsspruntime/DeviceInfo.h>
+#include <dsspruntime/InferenceCaches.h>
 
 namespace dssp::runtime {
 
     struct ServerConfig {
         std::string host = "127.0.0.1";
         std::uint16_t port = 13711;
+        std::size_t maxRequestBodySize = 1024U * 1024U * 1024U;
         std::filesystem::path packageDir;
         ExecutionProvider executionProvider = DeviceInfo::defaultExecutionProvider();
         int deviceIndex = 0;
         double silenceThreshold = 0.02;
-        std::map<std::string, resource::CacheOptions> inferenceCaches{{"diffsinger-language", {}}, {"diffsinger-synthesis", {}}};
+        std::map<std::string, resource::CacheOptions> inferenceCaches = defaultInferenceCaches();
         // Bundled deployment paths derived from the executable location.
         std::filesystem::path pluginDir;
         std::filesystem::path runtimePath;

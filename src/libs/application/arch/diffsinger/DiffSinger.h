@@ -5,12 +5,13 @@
 #include <dssparchdiffsinger/SingerCatalog.h>
 #include <dssplocalization/Catalog.h>
 #include <dsspmedia/Resources.h>
+#include <dsspresource/TaskExecutor.h>
 
 namespace dssp::arch_diffsinger {
 
     class DiffSinger final : public arch::Architecture {
     public:
-        DiffSinger(std::shared_ptr<const SingerCatalog> catalog, std::shared_ptr<media::Resources> media, std::shared_ptr<const localization::Catalog> translations) : catalog_(std::move(catalog)), media_(std::move(media)), translations_(std::move(translations)) {}
+        DiffSinger(std::shared_ptr<const SingerCatalog> catalog, std::shared_ptr<media::Resources> media, std::shared_ptr<const localization::Catalog> translations, std::shared_ptr<resource::TaskExecutor> tasks) : catalog_(std::move(catalog)), media_(std::move(media)), translations_(std::move(translations)), tasks_(std::move(tasks)) {}
         const SingerCatalog &catalog() const noexcept { return *catalog_; }
         std::string_view id() const noexcept override;
         arch::CatalogResult<arch::ArchitectureMetadata> metadata(const arch::CatalogOptions &) const override;
@@ -33,6 +34,7 @@ namespace dssp::arch_diffsinger {
         std::shared_ptr<const SingerCatalog> catalog_;
         std::shared_ptr<media::Resources> media_;
         std::shared_ptr<const localization::Catalog> translations_;
+        std::shared_ptr<resource::TaskExecutor> tasks_;
     };
 
 }

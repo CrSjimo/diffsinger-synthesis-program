@@ -122,7 +122,7 @@ namespace dssp::arch_diffsinger {
             SingerRecord record;
             record.package = singer.package();
             record.spec = &singer;
-            record.reservedPhonemes = singer.reservedPhonemes().empty() ? std::vector<std::string>{"SP", "AP"} : singer.reservedPhonemes();
+            record.reservedPhonemes = singer.reservedPhonemes();
             record.info.id = inference::resourceReference(singer);
             record.info.arch = Id;
             record.name = singer.name();

@@ -12,6 +12,7 @@
 #include <dsspapiv1/ArchitectureDispatch.h>
 #include <dssptests/LogCapture.h>
 #include <dssptests/TestArchitecture.h>
+#include <dssptests/TestCoroutine.h>
 
 namespace dssp::tests {
     namespace {
@@ -28,11 +29,11 @@ namespace dssp::tests {
         auto lifetime = std::make_shared<http::RequestLifetimeRegistry>();
         arch::Completion<arch::PronunciationOutput> pending;
         drogon::HttpResponsePtr response;
-        api_v1::detail::process<api_v1::dto::PronunciationRequest, api_v1::dto::PronunciationResponse, arch::PronunciationOutput>(
+        startCoroutine(api_v1::detail::process<api_v1::dto::PronunciationRequest, api_v1::dto::PronunciationResponse, arch::PronunciationOutput>(
             pronunciationRequest(),
             [&](const auto &r) { response = r; },
             lifetime,
-            *testCatalog(),
+            testCatalog(),
             [&](const arch::Architecture &implementation, arch::PronunciationInput input, std::stop_token stop, arch::Completion<arch::PronunciationOutput> completion) {
                 EXPECT_EQ(implementation.id(), "diffsinger");
                 EXPECT_EQ(input.context.singer.id, "singer-A");
@@ -42,7 +43,7 @@ namespace dssp::tests {
                 EXPECT_EQ(input.notes[0].language, "eng");
                 EXPECT_FALSE(stop.stop_requested());
                 pending = std::move(completion);
-            });
+            }));
         ASSERT_TRUE(pending);
         EXPECT_EQ(response, nullptr);
         std::jthread worker([pending] { pending(arch::PronunciationOutput{{{"la", {"la", "lah"}}}}); });
@@ -57,15 +58,15 @@ namespace dssp::tests {
         arch::Completion<arch::PronunciationOutput> pending;
         std::stop_token cancellation;
         bool replied = false;
-        api_v1::detail::process<api_v1::dto::PronunciationRequest, api_v1::dto::PronunciationResponse, arch::PronunciationOutput>(
+        startCoroutine(api_v1::detail::process<api_v1::dto::PronunciationRequest, api_v1::dto::PronunciationResponse, arch::PronunciationOutput>(
             pronunciationRequest(),
             [&](const auto &) { replied = true; },
             lifetime,
-            *testCatalog(),
+            testCatalog(),
             [&](const arch::Architecture &, arch::PronunciationInput, std::stop_token stop, arch::Completion<arch::PronunciationOutput> completion) {
                 cancellation = stop;
                 pending = std::move(completion);
-            });
+            }));
         ASSERT_TRUE(pending);
         EXPECT_FALSE(cancellation.stop_requested());
         lifetime->cancelAll();
@@ -78,15 +79,15 @@ namespace dssp::tests {
         auto lifetime = std::make_shared<http::RequestLifetimeRegistry>();
         arch::Completion<arch::PronunciationOutput> pending;
         std::stop_token stop;
-        api_v1::detail::process<api_v1::dto::PronunciationRequest, api_v1::dto::PronunciationResponse, arch::PronunciationOutput>(
+        startCoroutine(api_v1::detail::process<api_v1::dto::PronunciationRequest, api_v1::dto::PronunciationResponse, arch::PronunciationOutput>(
             pronunciationRequest(),
             [](const auto &) {},
             lifetime,
-            *testCatalog(),
+            testCatalog(),
             [&](const arch::Architecture &, arch::PronunciationInput, std::stop_token token, arch::Completion<arch::PronunciationOutput> completion) {
                 stop = token;
                 pending = std::move(completion);
-            });
+            }));
         ASSERT_TRUE(pending);
         pending(arch::PronunciationOutput{});
         pending = {};
@@ -155,7 +156,7 @@ namespace dssp::tests {
         EXPECT_NO_THROW(complete(arch::PronunciationOutput{}));
         complete(arch::PronunciationOutput{});
         EXPECT_EQ(attempts, 1U);
-        const auto errors = logs.records("dssp.api_v1.ArchitectureDispatch", stdc::Logger::Critical);
+        const auto errors = logs.records("dssp.api_v1.AsyncReply", stdc::Logger::Critical);
         ASSERT_EQ(errors.size(), 1U);
         EXPECT_NE(errors.front().message.find("simulated HTTP callback failure"), std::string::npos);
     }

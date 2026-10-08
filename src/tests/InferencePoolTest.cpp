@@ -92,6 +92,15 @@ namespace dssp::tests {
         }
     }
 
+    TEST(InferenceWorkers, RepeatedShutdownWakesIdleWorkers) {
+        for (unsigned iteration = 0; iteration < 32; ++iteration) {
+            SCOPED_TRACE(iteration);
+            const auto created = inference::InferencePool::create("test-shutdown", {1, 0ms, 60s});
+            ASSERT_TRUE(created) << (created ? "" : created.error().formatChain());
+            (*created)->shutdown();
+        }
+    }
+
     class InferencePoolTest : public ::testing::Test {
     protected:
         void SetUp() override {
@@ -101,13 +110,13 @@ namespace dssp::tests {
             options.packageRoots = {files.path()};
             const std::filesystem::path plugins(DSSP_TEST_PLUGIN_DIR);
             options.pluginPaths = {{"inference", plugins / "wolf" / "inferenceinterpreters"}, {"linguist", plugins / "wolf" / "linguistproviders"}};
-            options.cacheGroups = {{"diffsinger-language", {1, 0ms, 60s}}, {"diffsinger-synthesis", {2, 0ms, 60s}}};
+            options.cacheGroups = {{"diffsinger-pronunciation", {1, 0ms, 60s}}, {"diffsinger-acoustic", {2, 0ms, 60s}}};
             const auto created = inference::Environment::create(options);
             ASSERT_TRUE(created) << (created ? "" : created.error().formatChain());
             host = *created;
             ASSERT_TRUE(host->problems().empty()) << (host->problems().empty() ? "" : host->problems().front().error.formatChain());
             ASSERT_EQ(host->packages().size(), 2U);
-            const auto group = host->inferences("diffsinger-language");
+            const auto group = host->inferences("diffsinger-pronunciation");
             ASSERT_TRUE(group);
             pool = *group;
             spec = dynamic_cast<srt::InferenceSpec *>(host->packages().front().contribution("inference", "g2p"));
@@ -118,10 +127,11 @@ namespace dssp::tests {
                 host->shutdown();
             }
         }
-        inference::InferenceHandle controlled(std::string key, const std::shared_ptr<ExecutionControl> &control, inference::InferencePool *group = nullptr) {
+        inference::InferenceHandle controlled(std::string key, const std::shared_ptr<ExecutionControl> &control, inference::InferencePool *group = nullptr, bool parallelSafe = false) {
             auto definition = inference::InferenceDefinition{key, key, {spec->package()}, [spec = spec, control]() -> std::expected<std::unique_ptr<srt::InferenceExecutive>, inference::ExecutionError> {
                 return std::make_unique<ControlledExecutive>(*spec, control);
             }};
+            definition.parallelSafe = parallelSafe;
             const auto handle = (group ? group : pool)->bind(std::move(definition));
             EXPECT_TRUE(handle);
             return handle ? *handle : inference::InferenceHandle{};
@@ -192,7 +202,7 @@ namespace dssp::tests {
     }
 
     TEST_F(InferencePoolTest, CacheGroupsApplyIndependentCapacitiesAndRejectForeignHandles) {
-        const auto synthesis = host->inferences("diffsinger-synthesis");
+        const auto synthesis = host->inferences("diffsinger-acoustic");
         ASSERT_TRUE(synthesis);
         const auto control = std::make_shared<ExecutionControl>();
         const auto one = controlled("one", control);
@@ -258,7 +268,57 @@ namespace dssp::tests {
         EXPECT_FALSE(awaitResult(std::move(first)));
         EXPECT_FALSE(awaitResult(std::move(queued)));
         EXPECT_FALSE(awaitResult(submit(handle, "after-shutdown")));
-        EXPECT_FALSE(host->inferences("diffsinger-language"));
+        EXPECT_FALSE(host->inferences("diffsinger-pronunciation"));
         EXPECT_EQ(pool->residentCount(), 0U);
+    }
+
+    TEST_F(InferencePoolTest, SharedAdmissionCoversGroupsWithoutBlockingWorkersAndAllowsWhitelistedTasks) {
+        const auto createdGate = resource::ExecutionGate::create("test-shared-admission");
+        ASSERT_TRUE(createdGate);
+        const auto gate = *createdGate;
+        auto firstGroup = inference::InferencePool::create("test-neural-one", {2, 0ms, 60s}, gate);
+        auto secondGroup = inference::InferencePool::create("test-neural-two", {2, 0ms, 60s}, gate);
+        ASSERT_TRUE(firstGroup);
+        ASSERT_TRUE(secondGroup);
+        const auto heldPromise = std::make_shared<std::promise<resource::PermitResult>>();
+        auto admitted = heldPromise->get_future();
+        drogon::async_run([gate, heldPromise]() -> drogon::Task<> { heldPromise->set_value(co_await gate->acquire()); });
+        ASSERT_EQ(admitted.wait_for(1s), std::future_status::ready);
+        std::optional<resource::PermitResult> held(admitted.get());
+        ASSERT_TRUE(*held);
+
+        const auto control = std::make_shared<ExecutionControl>();
+        std::vector<std::future<G2pResult>> pending;
+        std::vector<std::future<void>> loaded;
+        std::stop_source stop;
+        for (unsigned i = 0; i < 6; ++i) {
+            auto *group = i < 5 ? firstGroup->get() : secondGroup->get();
+            const auto created = std::make_shared<std::promise<void>>();
+            loaded.push_back(created->get_future());
+            const auto key = "gated-" + std::to_string(i);
+            inference::InferenceDefinition definition{key, key, {spec->package()}, [spec = spec, control, created]() -> std::expected<std::unique_ptr<srt::InferenceExecutive>, inference::ExecutionError> {
+                auto executive = std::make_unique<ControlledExecutive>(*spec, control);
+                created->set_value();
+                return executive;
+            }};
+            const auto resource = group->bind(std::move(definition));
+            ASSERT_TRUE(resource);
+            pending.push_back(submit(*resource, key, i == 0 ? stop.get_token() : std::stop_token{}, group));
+        }
+        // There are only four workers in the first group. All five resources
+        // must nevertheless initialize while their executions await admission.
+        for (auto &initialized : loaded) EXPECT_EQ(initialized.wait_for(1s), std::future_status::ready);
+        for (auto &result : pending) EXPECT_EQ(result.wait_for(0ms), std::future_status::timeout);
+        stop.request_stop();
+        EXPECT_FALSE(awaitResult(std::move(pending.front())));
+        const auto safe = controlled("whitelisted", control, firstGroup->get(), true);
+        EXPECT_TRUE(awaitResult(submit(safe, "whitelisted", {}, firstGroup->get())));
+        held.reset();
+        for (std::size_t i = 1; i < pending.size(); ++i) EXPECT_TRUE(awaitResult(std::move(pending[i])));
+        EXPECT_EQ(control->maximumActive, 1U);
+        EXPECT_EQ(control->starts.size(), 6U);
+        firstGroup->get()->shutdown();
+        secondGroup->get()->shutdown();
+        gate->shutdown();
     }
 }

@@ -74,9 +74,11 @@ namespace dssp::tests {
     TEST_F(LanguagePredictionTest, RealG2pPreservesOrderCandidatesFallbackAndLiteralEditorCharacters) {
         initialize();
         ASSERT_NE(implementation, nullptr);
-        const auto pool = environment->inferences("diffsinger-language");
-        ASSERT_TRUE(pool);
-        EXPECT_EQ((*pool)->residentCount(), 0U);
+        for (const auto group : {"diffsinger-pronunciation", "diffsinger-phoneme", "diffsinger-onset"}) {
+            const auto pool = environment->inferences(group);
+            ASSERT_TRUE(pool);
+            EXPECT_EQ((*pool)->residentCount(), 0U);
+        }
         const auto result = pronunciation({{"read", ""}, {"unknown", "eng"}, {"foreign", "jpn"}, {"", "eng"}, {"SP", "eng"}, {"a+", "eng"}, {"-", "eng"}});
         ASSERT_TRUE(result) << (result ? "" : result.error().asError().formatChain());
         ASSERT_EQ(result->notes.size(), 7U);
@@ -90,7 +92,14 @@ namespace dssp::tests {
         EXPECT_EQ(result->notes[4].candidates, (std::vector<std::string>{"SP"}));
         EXPECT_EQ(result->notes[5].pronunciation, "a+");
         EXPECT_EQ(result->notes[6].pronunciation, "-");
-        EXPECT_EQ((*pool)->residentCount(), 1U);
+        const auto pronunciationPool = environment->inferences("diffsinger-pronunciation");
+        ASSERT_TRUE(pronunciationPool);
+        EXPECT_EQ((*pronunciationPool)->residentCount(), 1U);
+        for (const auto group : {"diffsinger-phoneme", "diffsinger-onset"}) {
+            const auto pool = environment->inferences(group);
+            ASSERT_TRUE(pool);
+            EXPECT_EQ((*pool)->residentCount(), 0U);
+        }
     }
 
     TEST_F(LanguagePredictionTest, RealS2pAndOnsetConvertFullInputsBeforeSlicingAndDoNotInvokeG2p) {
@@ -117,9 +126,15 @@ namespace dssp::tests {
         EXPECT_TRUE(result->notes[5].phonemes[0].onset);
         EXPECT_TRUE(result->notes[6].phonemes.empty());
         EXPECT_TRUE(result->notes[7].phonemes.empty());
-        const auto pool = environment->inferences("diffsinger-language");
+        const auto pool = environment->inferences("diffsinger-phoneme");
         ASSERT_TRUE(pool);
-        EXPECT_EQ((*pool)->residentCount(), 2U);
+        EXPECT_EQ((*pool)->residentCount(), 1U);
+        const auto onset = environment->inferences("diffsinger-onset");
+        const auto pronunciation = environment->inferences("diffsinger-pronunciation");
+        ASSERT_TRUE(onset);
+        ASSERT_TRUE(pronunciation);
+        EXPECT_EQ((*onset)->residentCount(), 1U);
+        EXPECT_EQ((*pronunciation)->residentCount(), 0U);
     }
 
     TEST_F(LanguagePredictionTest, TokenOnlyAndMissingDictionaryEntriesAreNormalResults) {
@@ -173,9 +188,11 @@ namespace dssp::tests {
         const auto cancelled = await<arch::PhonemeOutput>([&](auto callback) { implementation->phoneme({context, {{"b a", "eng", {}, {}}}}, stop.get_token(), std::move(callback)); });
         ASSERT_FALSE(cancelled);
         EXPECT_NE(cancelled.error().get_if<arch::CancelledError>(), nullptr);
-        const auto pool = environment->inferences("diffsinger-language");
-        ASSERT_TRUE(pool);
-        EXPECT_EQ((*pool)->residentCount(), 0U);
+        for (const auto group : {"diffsinger-pronunciation", "diffsinger-phoneme", "diffsinger-onset"}) {
+            const auto pool = environment->inferences(group);
+            ASSERT_TRUE(pool);
+            EXPECT_EQ((*pool)->residentCount(), 0U);
+        }
     }
 
     TEST_F(LanguagePredictionTest, SingerWithoutLanguagesFallsBackWithoutLoadingExecutives) {
@@ -203,12 +220,14 @@ namespace dssp::tests {
         ASSERT_EQ(phones->notes.size(), 2U);
         EXPECT_TRUE(phones->notes[0].phonemes.empty());
         EXPECT_TRUE(phones->notes[1].phonemes.empty());
-        const auto pool = environment->inferences("diffsinger-language");
-        ASSERT_TRUE(pool);
-        EXPECT_EQ((*pool)->residentCount(), 0U);
+        for (const auto group : {"diffsinger-pronunciation", "diffsinger-phoneme", "diffsinger-onset"}) {
+            const auto pool = environment->inferences(group);
+            ASSERT_TRUE(pool);
+            EXPECT_EQ((*pool)->residentCount(), 0U);
+        }
     }
 
-    TEST_F(LanguagePredictionTest, CustomReservedTokensOverrideSpApDefaults) {
+    TEST_F(LanguagePredictionTest, CustomReservedTokensAreNotExtendedWithSpAp) {
         initialize({.customReserved = true});
         ASSERT_NE(implementation, nullptr);
         const auto result = pronunciation({{"read", ""}, {"REST", ""}, {"read", "eng"}});
@@ -224,6 +243,21 @@ namespace dssp::tests {
         EXPECT_TRUE(phones->notes[0].phonemes[0].onset);
         ASSERT_EQ(phones->notes[1].phonemes.size(), 1U);
         EXPECT_FALSE(phones->notes[1].phonemes[0].onset);
+    }
+
+    TEST_F(LanguagePredictionTest, UndeclaredReservedTokensDoNotBypassInference) {
+        initialize({.noReserved = true});
+        ASSERT_NE(implementation, nullptr);
+        const auto result = phoneme({{"SP", "eng", {}, {}}, {"AP", "eng", {}, {}}});
+        ASSERT_TRUE(result);
+        ASSERT_EQ(result->notes.size(), 2U);
+        for (const auto &note : result->notes) {
+            ASSERT_EQ(note.phonemes.size(), 1U);
+            EXPECT_FALSE(note.phonemes.front().onset);
+        }
+        const auto pool = environment->inferences("diffsinger-phoneme");
+        ASSERT_TRUE(pool);
+        EXPECT_EQ((*pool)->residentCount(), 1U);
     }
 
     TEST_F(LanguagePredictionTest, MissingDeclaredDictionaryRejectsThePackageWithADiagnostic) {
@@ -242,15 +276,17 @@ namespace dssp::tests {
         ASSERT_NE(native, nullptr);
         EXPECT_EQ(native->diagnostic().domain, srt::Error::category().name());
         EXPECT_EQ(native->diagnostic().code, srt::Error::FileNotFound);
-        const auto pool = environment->inferences("diffsinger-language");
-        ASSERT_TRUE(pool);
-        EXPECT_EQ((*pool)->residentCount(), 0U);
+        for (const auto group : {"diffsinger-pronunciation", "diffsinger-phoneme", "diffsinger-onset"}) {
+            const auto pool = environment->inferences(group);
+            ASSERT_TRUE(pool);
+            EXPECT_EQ((*pool)->residentCount(), 0U);
+        }
     }
 
     TEST_F(LanguagePredictionTest, UnavailableInferencePoolIsAnUnexpectedErrorAndContextValidationPrecedesBinding) {
         initialize({.dictionaryS2p = true});
         ASSERT_NE(implementation, nullptr);
-        const auto pool = environment->inferences("diffsinger-language");
+        const auto pool = environment->inferences("diffsinger-phoneme");
         ASSERT_TRUE(pool);
         EXPECT_EQ((*pool)->residentCount(), 0U);
         (*pool)->shutdown();

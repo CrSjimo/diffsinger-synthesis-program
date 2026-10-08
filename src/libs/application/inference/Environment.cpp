@@ -18,7 +18,6 @@
 
 #include <dsinfer/Api/Drivers/Onnx/OnnxDriverApi.h>
 #include <dsinfer/Inference/InferenceDriverFactory.h>
-#include <otter/Analysis/AnalysisContrib.h>
 #include <stdcorelib/path.h>
 #include <stdcorelib/scope_guard.h>
 #include <stdcorelib/support/logging.h>
@@ -236,6 +235,8 @@ namespace dssp::inference {
         std::vector<srt::PackageHandle> packages;
         std::vector<PackageProblem> problems;
         std::map<std::string, resource::CacheOptions> cacheOptions;
+        // All architectures and cache groups in this environment share admission.
+        std::shared_ptr<resource::ExecutionGate> serialExecution;
         std::map<std::string, std::unique_ptr<InferencePool>> pools;
         std::mutex poolsMutex;
         std::once_flag shutdownOnce;
@@ -248,7 +249,6 @@ namespace dssp::inference {
         try {
             log.stdcDebug("Initializing shared inference environment (%1 package roots, %2 plugin paths, ONNX configured=%3)", options.packageRoots.size(), options.pluginPaths.size(), options.onnx.has_value());
             wolf::linkLinguistCategory();
-            otter::linkAnalysisCategory();
             auto impl = std::make_unique<Impl>();
             impl->cacheOptions = options.cacheGroups;
             std::map<std::string, std::vector<std::filesystem::path>> pluginPaths;
@@ -390,8 +390,14 @@ namespace dssp::inference {
             // Keep dependencies that were committed even if they were not direct roots.
             impl->packages = impl->unit.loadedPackages();
             std::ranges::sort(impl->packages, [](const auto &left, const auto &right) { return std::make_pair(left.id(), left.version()) < std::make_pair(right.id(), right.version()); });
+            if (options.onnx && options.onnx->executionProvider == runtime::ExecutionProvider::DirectML) {
+                auto gate = resource::ExecutionGate::create("dssp-inference/directml");
+                if (!gate) return std::unexpected{InitializationError("Cannot create DirectML execution admission", gate.error().clone())};
+                impl->serialExecution = std::move(*gate);
+                log.stdcInfo("DirectML inference execution is serialized; whitelisted backend-free tasks may run concurrently");
+            }
             for (const auto &[group, cache] : impl->cacheOptions) {
-                auto pool = InferencePool::create(group, cache);
+                auto pool = InferencePool::create(group, cache, impl->serialExecution);
                 if (!pool) {
                     return std::unexpected{std::move(pool.error())};
                 }
@@ -416,7 +422,7 @@ namespace dssp::inference {
         if (found != impl_->pools.end()) {
             return found->second.get();
         }
-        auto pool = InferencePool::create(std::string(group));
+        auto pool = InferencePool::create(std::string(group), {}, impl_->serialExecution);
         if (!pool) {
             return std::unexpected{std::move(pool.error())};
         }
@@ -430,9 +436,11 @@ namespace dssp::inference {
                 const std::lock_guard lock(impl_->poolsMutex);
                 impl_->stopped = true;
             }
+            if (impl_->serialExecution) impl_->serialExecution->close();
             for (const auto &[group, pool] : impl_->pools) {
                 pool->shutdown();
             }
+            if (impl_->serialExecution) impl_->serialExecution->shutdown();
         });
     }
     const std::vector<srt::PackageHandle> &Environment::packages() const noexcept { return impl_->packages; }

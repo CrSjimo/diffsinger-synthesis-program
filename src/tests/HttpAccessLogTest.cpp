@@ -15,7 +15,9 @@
 #include <drogon/drogon.h>
 #include <drogon/utils/Utilities.h>
 #include <gtest/gtest.h>
+#include <json/json.h>
 #include <stdcorelib/path.h>
+#include <stdcorelib/scope_guard.h>
 #include <trantor/net/EventLoopThread.h>
 #include <trantor/net/TcpClient.h>
 
@@ -24,6 +26,7 @@
 #include <dssptests/LogCapture.h>
 #include <dssptests/TestArchitecture.h>
 #include <dssptests/TestFiles.h>
+#include <dssptests/TestAnalysisPackage.h>
 
 namespace dssp::tests {
     namespace {
@@ -139,7 +142,19 @@ namespace dssp::tests {
                 next();
             }
         });
-        api_v1::registerControllers(app, lifetime, testCatalog({implementation}));
+        writeAnalysisPackage(files, "analysis-package");
+        inference::EnvironmentOptions extractionOptions;
+        extractionOptions.packageRoots = {files.path()};
+        extractionOptions.pluginPaths = {{"inference", std::filesystem::path(DSSP_TEST_PLUGIN_DIR) / "otter" / "inferenceinterpreters"}};
+        const auto extractionEnvironment = inference::Environment::create(extractionOptions);
+        ASSERT_TRUE(extractionEnvironment);
+        const auto extractionService = extraction::Service::create(*extractionEnvironment);
+        ASSERT_TRUE(extractionService);
+        const auto releaseExtraction = stdc::make_scope_guard([&] {
+            (*extractionService)->shutdown();
+            (*extractionEnvironment)->shutdown();
+        });
+        api_v1::registerControllers(app, lifetime, testCatalog({implementation}), *extractionService);
         app.setConnectionCallback([access, lifetime](const trantor::TcpConnectionPtr &connection) {
             access->connectionChanged(connection);
             lifetime->connectionChanged(connection);
@@ -171,6 +186,12 @@ namespace dssp::tests {
         auto client = drogon::HttpClient::newHttpClient("127.0.0.1", port, false, clientLoop.getLoop());
         const std::string successBody = R"({"context":{"arch":"diffsinger","archExtra":null,"singer":{"id":"ok","extra":null}},"input":{"notes":[{"lyric":"private-lyric","language":"eng"}]}})";
         const std::string failureBody = R"({"context":{"arch":"diffsinger","archExtra":null,"singer":{"id":"failure","extra":null}},"input":{"notes":[{"lyric":"private-lyric","language":"eng"}]}})";
+        const auto noteExtractorPath = "/v1/extractor/note/" + drogon::utils::urlEncodeComponent(analysisNoteId);
+        const auto pitchExtractorPath = "/v1/extractor/pitch/" + drogon::utils::urlEncodeComponent(analysisPitchId);
+        Json::Value unsupportedAudio;
+        unsupportedAudio["extractor"] = analysisNoteId;
+        unsupportedAudio["input"]["audioUrl"] = "https://example.invalid/a.wav";
+        const auto unsupportedAudioBody = Json::writeString(Json::StreamWriterBuilder{}, unsupportedAudio);
         struct Case {
             drogon::HttpMethod method;
             std::string path;
@@ -192,6 +213,15 @@ namespace dssp::tests {
             {drogon::Get, "/v1/arch/diffsinger/group", {}, 200, "application/json", "id", "group", true, {}, true, "ja-JP"},
             {drogon::Get, "/v1/arch/diffsinger/group/group", {}, 200, "application/json", "id", "group", false, {}, true, "ja-JP"},
             {drogon::Get, "/v1/arch/diffsinger/group/missing", {}, 404},
+            {drogon::Get, "/v1/extractor", {}, 200},
+            {drogon::Get, noteExtractorPath, {}, 200, "application/json", "id", analysisNoteId},
+            {drogon::Get, pitchExtractorPath, {}, 200, "application/json", "id", analysisPitchId},
+            {drogon::Get, "/v1/extractor/pitch/" + drogon::utils::urlEncodeComponent(analysisNoteId), {}, 404},
+            {drogon::Get, "/v1/extractor/note/" + drogon::utils::urlEncodeComponent(drogon::utils::urlEncodeComponent(analysisNoteId)), {}, 404},
+            {drogon::Post, "/v1/extract/note", "{", 400},
+            {drogon::Post, "/v1/extract/note", unsupportedAudioBody, 422},
+            {drogon::Post, "/v1/extract/tempo", "{}", 422},
+            {drogon::Post, "/v1/extract/separation", "{}", 422},
             {drogon::Get, "/v1/arch/unsupported", {}, 404},
             {drogon::Get, "/v1/missing", {}, 404},
             {drogon::Get, "/v1/synth/pronunciation", {}, 405},
@@ -275,6 +305,20 @@ namespace dssp::tests {
                 } else if (item.jsonField == "id" && item.path.find("/singer/") != std::string::npos) {
                     EXPECT_FALSE(object.isMember("languages"));
                     EXPECT_EQ(object["defaultLanguage"].asString(), "eng");
+                }
+            }
+            if (item.status == 200 && item.path.starts_with("/v1/extractor")) {
+                const auto json = response->getJsonObject();
+                ASSERT_NE(json, nullptr);
+                if (item.path == "/v1/extractor") {
+                    EXPECT_TRUE((*json)["tempo"].empty());
+                    EXPECT_TRUE((*json)["separation"].empty());
+                    EXPECT_EQ((*json)["note"].size(), 1U);
+                    EXPECT_EQ((*json)["pitch"].size(), 1U);
+                } else {
+                    EXPECT_EQ((*json)["acceptableFormats"][0].asString(), "audio/wav");
+                    EXPECT_EQ((*json)["acceptableSchemes"][0].asString(), "data");
+                    EXPECT_EQ((*json)["acceptableAudioSampleRates"][0], (*json)["preferredAudioSampleRate"]);
                 }
             }
             const auto records = capture.accessRecords();

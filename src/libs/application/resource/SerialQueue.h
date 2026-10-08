@@ -18,6 +18,9 @@ namespace dssp::resource {
             // Exactly once, outside queue locks. A queued cancellation completes
             // immediately; a running cancellation completes after run() returns.
             std::function<void(bool cancelled)> complete;
+            // An asynchronous task holds its FIFO position until finish is
+            // called. It must call finish exactly once, even after cancellation.
+            std::function<void(std::stop_token, std::function<void()> finish)> runAsync;
         };
 
         explicit SerialQueue(Dispatch, std::string name = {});

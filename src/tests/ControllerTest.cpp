@@ -2,15 +2,16 @@
 #include <stop_token>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <utility>
 
 #include <gtest/gtest.h>
 
 #include <dsspapiv1/Controllers.h>
 #include <dssptests/TestArchitecture.h>
+#include <dssptests/TestCoroutine.h>
 
 namespace dssp::tests {
-
     drogon::HttpRequestPtr jsonRequest(std::string body) {
         auto request = drogon::HttpRequest::newHttpRequest();
         request->setMethod(drogon::Post);
@@ -92,7 +93,7 @@ namespace dssp::tests {
         synthesis.envTag(jsonRequest(R"({"context":{"arch":"future","archExtra":null,"singers":[{"id":"unknown","extra":null}]}})"), [&](const auto &r) { response = r; });
         EXPECT_EQ(response->statusCode(), drogon::k422UnprocessableEntity);
         EXPECT_EQ((*response->getJsonObject())["errors"][0]["pointer"].asString(), "/context/arch");
-        synthesis.pronunciation(jsonRequest(R"({"context":{"arch":"future","archExtra":null,"singer":{"id":"unknown","extra":null}},"input":{"notes":[]}})"), [&](const auto &r) { response = r; });
+        startCoroutine(synthesis.pronunciation(jsonRequest(R"({"context":{"arch":"future","archExtra":null,"singer":{"id":"unknown","extra":null}},"input":{"notes":[]}})"), [&](const auto &r) { response = r; }));
         EXPECT_EQ(response->statusCode(), drogon::k422UnprocessableEntity);
         EXPECT_EQ((*response->getJsonObject())["errors"][0]["pointer"].asString(), "/context/arch");
         EXPECT_NE((*response->getJsonObject())["errors"][0]["detail"].asString().find("future"), std::string::npos);
@@ -131,7 +132,7 @@ namespace dssp::tests {
                 pending = std::move(completion);
             };
             api_v1::SynthesisController controller(lifetime, testCatalog({implementation}));
-            controller.pronunciation(jsonRequest(R"({"context":{"arch":"injected","archExtra":null,"singer":{"id":"singer-A","extra":null}},"input":{"notes":[]}})"), [&](const auto &value) { response = value; });
+            startCoroutine(controller.pronunciation(jsonRequest(R"({"context":{"arch":"injected","archExtra":null,"singer":{"id":"singer-A","extra":null}},"input":{"notes":[]}})"), [&](const auto &value) { response = value; }));
         }
         ASSERT_TRUE(pending);
         EXPECT_EQ(response, nullptr);
@@ -150,7 +151,7 @@ namespace dssp::tests {
         lifetime->cancelAll();
         for (const auto handler : {&api_v1::SynthesisController::pronunciation, &api_v1::SynthesisController::phoneme, &api_v1::SynthesisController::duration, &api_v1::SynthesisController::parameter, &api_v1::SynthesisController::audio}) {
             bool replied = false;
-            (controller.*handler)(jsonRequest("{}"), [&](const auto &) { replied = true; });
+            startCoroutine((controller.*handler)(jsonRequest("{}"), [&](const auto &) { replied = true; }));
             EXPECT_FALSE(replied);
         }
     }
@@ -187,7 +188,7 @@ namespace dssp::tests {
         api_v1::SynthesisController controller(lifetime, testCatalog());
         auto status = [&](const drogon::HttpRequestPtr &request) {
             drogon::HttpResponsePtr response;
-            controller.audio(request, [&](const auto &r) { response = r; });
+            startCoroutine(controller.audio(request, [&](const auto &r) { response = r; }));
             return response->statusCode();
         };
         EXPECT_EQ(status(jsonRequest("{")), drogon::k400BadRequest);
@@ -209,35 +210,51 @@ namespace dssp::tests {
         EXPECT_EQ(status(parameters), drogon::k415UnsupportedMediaType);
     }
 
-    TEST(Controller, ExtractionDoesNotDecodeOrNegotiateTheMedia) {
+    TEST(Controller, ExtractionDispatchesUnknownIdsAndUnsupportedKindsAs422) {
         auto lifetime = std::make_shared<http::RequestLifetimeRegistry>();
-        api_v1::ExtractionController controller(lifetime);
+        const auto environment = inference::Environment::create({});
+        ASSERT_TRUE(environment);
+        const auto service = extraction::Service::create(*environment);
+        ASSERT_TRUE(service);
+        api_v1::ExtractionController controller(lifetime, *service);
         auto request = jsonRequest(R"({"extractor":"unknown","input":{"audioUrl":"https://example.com/a.flac"}})");
         drogon::HttpResponsePtr response;
-        controller.note(request, [&](const auto &r) { response = r; });
+        startCoroutine(controller.note(request, [&](const auto &r) { response = r; }));
         ASSERT_NE(response, nullptr);
+        EXPECT_EQ(response->statusCode(), drogon::k422UnprocessableEntity);
+        EXPECT_FALSE(response->getJsonObject()->isMember("errors"));
+        startCoroutine(controller.tempo(request, [&](const auto &r) { response = r; }));
+        EXPECT_EQ(response->statusCode(), drogon::k422UnprocessableEntity);
+        startCoroutine(controller.separation(request, [&](const auto &r) { response = r; }));
+        EXPECT_EQ(response->statusCode(), drogon::k422UnprocessableEntity);
+        controller.extractors(request, [&](const auto &r) { response = r; });
         EXPECT_EQ(response->statusCode(), drogon::k200OK);
-        EXPECT_TRUE((*response->getJsonObject())["output"]["notes"].isArray());
-        controller.tempo(request, [&](const auto &r) { response = r; });
-        EXPECT_EQ(response->statusCode(), drogon::k200OK);
+        for (const auto key : {"note", "pitch", "tempo", "separation"}) EXPECT_TRUE((*response->getJsonObject())[key].empty());
+        controller.noteExtractor(request, [&](const auto &r) { response = r; }, "unknown");
+        EXPECT_EQ(response->statusCode(), drogon::k404NotFound);
+        (*service)->shutdown();
+        (*environment)->shutdown();
     }
 
     TEST(Controller, ValidSynthesisRequestsReturnEmptyStageOutputs) {
         auto lifetime = std::make_shared<http::RequestLifetimeRegistry>();
         api_v1::SynthesisController controller(lifetime, testCatalog());
-        using Handler = void (api_v1::SynthesisController::*)(const drogon::HttpRequestPtr &, http::Callback &&) const;
         const auto single = R"({"arch":"diffsinger","archExtra":null,"singer":{"id":"unknown","extra":null}})";
         const auto multi = R"({"arch":"diffsinger","archExtra":null,"singers":[{"id":"unknown","extra":null}]})";
         const auto notes = R"({"notes":[]})";
         const auto piece = R"({"pieceDuration":0,"notes":[],"mix":[],"mixSampleRate":100,"parameters":{}})";
-        auto call = [&](Handler handler, const char *context, const char *input) {
+        auto call = [&](auto handler, const char *context, const char *input) {
             std::string body = std::string(R"({"context":)") + context;
             if (input) {
                 body += std::string(R"(,"input":)") + input;
             }
             body += '}';
             drogon::HttpResponsePtr response;
-            (controller.*handler)(jsonRequest(std::move(body)), [&](const auto &value) { response = value; });
+            if constexpr (std::is_void_v<std::invoke_result_t<decltype(handler), const api_v1::SynthesisController &, drogon::HttpRequestPtr, http::Callback>>) {
+                (controller.*handler)(jsonRequest(std::move(body)), [&](const auto &value) { response = value; });
+            } else {
+                startCoroutine((controller.*handler)(jsonRequest(std::move(body)), [&](const auto &value) { response = value; }));
+            }
             EXPECT_NE(response, nullptr);
             return response;
         };

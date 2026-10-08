@@ -1,7 +1,7 @@
 #include "Controllers.h"
 
 #include <dsspapiv1/ArchitectureDispatch.h>
-#include <dsspapiv1/ControllerSupport.h>
+#include <dsspapiv1/ExtractionDispatch.h>
 
 namespace dssp::api_v1 {
     namespace {
@@ -79,56 +79,58 @@ namespace dssp::api_v1 {
         }
         detail::respond(selected->envTag(toArchitecture(std::move(*input))), callback, [](std::string tag) { return dto::EnvTagResponse{std::move(tag)}; }, http::requestLog(*request));
     }
-    void SynthesisController::pronunciation(const drogon::HttpRequestPtr &request, http::Callback &&callback) const {
-        detail::process<dto::PronunciationRequest, dto::PronunciationResponse, arch::PronunciationOutput>(request, std::move(callback), lifetime_, *architectures_, &arch::Architecture::pronunciation, "pronunciation");
+    drogon::Task<> SynthesisController::pronunciation(drogon::HttpRequestPtr request, http::Callback callback) const {
+        co_await detail::process<dto::PronunciationRequest, dto::PronunciationResponse, arch::PronunciationOutput>(request, std::move(callback), lifetime_, architectures_, &arch::Architecture::pronunciation, "pronunciation");
     }
-    void SynthesisController::phoneme(const drogon::HttpRequestPtr &request, http::Callback &&callback) const {
-        detail::process<dto::PhonemeRequest, dto::PhonemeResponse, arch::PhonemeOutput>(request, std::move(callback), lifetime_, *architectures_, &arch::Architecture::phoneme, "phoneme");
+    drogon::Task<> SynthesisController::phoneme(drogon::HttpRequestPtr request, http::Callback callback) const {
+        co_await detail::process<dto::PhonemeRequest, dto::PhonemeResponse, arch::PhonemeOutput>(request, std::move(callback), lifetime_, architectures_, &arch::Architecture::phoneme, "phoneme");
     }
-    void SynthesisController::duration(const drogon::HttpRequestPtr &request, http::Callback &&callback) const {
-        detail::process<dto::DurationRequest, dto::DurationResponse, arch::DurationOutput>(request, std::move(callback), lifetime_, *architectures_, &arch::Architecture::duration, "duration");
+    drogon::Task<> SynthesisController::duration(drogon::HttpRequestPtr request, http::Callback callback) const {
+        co_await detail::process<dto::DurationRequest, dto::DurationResponse, arch::DurationOutput>(request, std::move(callback), lifetime_, architectures_, &arch::Architecture::duration, "duration");
     }
-    void SynthesisController::parameter(const drogon::HttpRequestPtr &request, http::Callback &&callback) const {
-        detail::process<dto::ParameterRequest, dto::ParameterResponse, arch::ParameterOutput>(request, std::move(callback), lifetime_, *architectures_, &arch::Architecture::parameter, "parameter");
+    drogon::Task<> SynthesisController::parameter(drogon::HttpRequestPtr request, http::Callback callback) const {
+        co_await detail::process<dto::ParameterRequest, dto::ParameterResponse, arch::ParameterOutput>(request, std::move(callback), lifetime_, architectures_, &arch::Architecture::parameter, "parameter");
     }
-    void SynthesisController::audio(const drogon::HttpRequestPtr &request, http::Callback &&callback) const {
-        detail::process<dto::AudioRequest, dto::AudioResponse, arch::AudioOutput>(request, std::move(callback), lifetime_, *architectures_, &arch::Architecture::audio, "audio");
+    drogon::Task<> SynthesisController::audio(drogon::HttpRequestPtr request, http::Callback callback) const {
+        co_await detail::process<dto::AudioRequest, dto::AudioResponse, arch::AudioOutput>(request, std::move(callback), lifetime_, architectures_, &arch::Architecture::audio, "audio");
     }
 
     void ExtractionController::extractors(const drogon::HttpRequestPtr &req, http::Callback &&cb) const {
-        detail::placeholder<dto::ExtractorList>(req, cb, lifetime_);
+        detail::extractionCatalog(service_->extractors(req->getHeader("accept-language")), cb, http::requestLog(*req));
     }
-    void ExtractionController::noteExtractor(const drogon::HttpRequestPtr &request, http::Callback &&callback, std::string) const {
-        detail::placeholder<std::optional<dto::ExtractorInfo>>(request, callback, lifetime_);
+    void ExtractionController::noteExtractor(const drogon::HttpRequestPtr &request, http::Callback &&callback, std::string id) const {
+        detail::extractionCatalog(service_->extractor(extraction::Kind::Note, id, request->getHeader("accept-language")), callback, http::requestLog(*request));
     }
-    void ExtractionController::tempoExtractor(const drogon::HttpRequestPtr &request, http::Callback &&callback, std::string) const {
-        detail::placeholder<std::optional<dto::ExtractorInfo>>(request, callback, lifetime_);
+    void ExtractionController::tempoExtractor(const drogon::HttpRequestPtr &request, http::Callback &&callback, std::string id) const {
+        detail::extractionCatalog(service_->extractor(extraction::Kind::Tempo, id, request->getHeader("accept-language")), callback, http::requestLog(*request));
     }
-    void ExtractionController::pitchExtractor(const drogon::HttpRequestPtr &request, http::Callback &&callback, std::string) const {
-        detail::placeholder<std::optional<dto::ExtractorInfo>>(request, callback, lifetime_);
+    void ExtractionController::pitchExtractor(const drogon::HttpRequestPtr &request, http::Callback &&callback, std::string id) const {
+        detail::extractionCatalog(service_->extractor(extraction::Kind::Pitch, id, request->getHeader("accept-language")), callback, http::requestLog(*request));
     }
-    void ExtractionController::separationExtractor(const drogon::HttpRequestPtr &request, http::Callback &&callback, std::string) const {
-        detail::placeholder<std::optional<dto::ExtractorInfo>>(request, callback, lifetime_);
-    }
-
-    void ExtractionController::note(const drogon::HttpRequestPtr &request, http::Callback &&callback) const {
-        detail::processPlaceholder<dto::ExtractionRequest, dto::NoteExtractionResponse>(request, callback, lifetime_);
-    }
-    void ExtractionController::tempo(const drogon::HttpRequestPtr &request, http::Callback &&callback) const {
-        detail::processPlaceholder<dto::ExtractionRequest, dto::TempoExtractionResponse>(request, callback, lifetime_);
-    }
-    void ExtractionController::pitch(const drogon::HttpRequestPtr &request, http::Callback &&callback) const {
-        detail::processPlaceholder<dto::ExtractionRequest, dto::PitchExtractionResponse>(request, callback, lifetime_);
-    }
-    void ExtractionController::separation(const drogon::HttpRequestPtr &request, http::Callback &&callback) const {
-        detail::processPlaceholder<dto::ExtractionRequest, dto::SeparationExtractionResponse>(request, callback, lifetime_);
+    void ExtractionController::separationExtractor(const drogon::HttpRequestPtr &request, http::Callback &&callback, std::string id) const {
+        detail::extractionCatalog(service_->extractor(extraction::Kind::Separation, id, request->getHeader("accept-language")), callback, http::requestLog(*request));
     }
 
-    void registerControllers(drogon::HttpAppFramework &app, const std::shared_ptr<http::RequestLifetimeRegistry> &lifetime, const std::shared_ptr<const arch::ArchitectureCatalog> &architectures) {
+    drogon::Task<> ExtractionController::note(drogon::HttpRequestPtr request, http::Callback callback) const {
+        co_await detail::extract<dto::NoteExtractionResponse, extraction::NoteOutput>(request, std::move(callback), lifetime_, service_, &extraction::Service::note, "note extraction");
+    }
+    drogon::Task<> ExtractionController::pitch(drogon::HttpRequestPtr request, http::Callback callback) const {
+        co_await detail::extract<dto::PitchExtractionResponse, extraction::PitchOutput>(request, std::move(callback), lifetime_, service_, &extraction::Service::pitch, "pitch extraction");
+    }
+    drogon::Task<> ExtractionController::tempo(drogon::HttpRequestPtr request, http::Callback callback) const {
+        callback(extractionProblemResponse(extraction::ExtractionErrors{extraction::InvalidInputError("No tempo extractor is available")}, http::requestLog(*request)));
+        co_return;
+    }
+    drogon::Task<> ExtractionController::separation(drogon::HttpRequestPtr request, http::Callback callback) const {
+        callback(extractionProblemResponse(extraction::ExtractionErrors{extraction::InvalidInputError("No separation extractor is available")}, http::requestLog(*request)));
+        co_return;
+    }
+
+    void registerControllers(drogon::HttpAppFramework &app, const std::shared_ptr<http::RequestLifetimeRegistry> &lifetime, const std::shared_ptr<const arch::ArchitectureCatalog> &architectures, const std::shared_ptr<extraction::Service> &extraction) {
         app.registerController(std::make_shared<ApplicationController>());
         app.registerController(std::make_shared<CatalogController>(architectures));
         app.registerController(std::make_shared<SynthesisController>(lifetime, architectures));
-        app.registerController(std::make_shared<ExtractionController>(lifetime));
+        app.registerController(std::make_shared<ExtractionController>(lifetime, extraction));
     }
 
 }

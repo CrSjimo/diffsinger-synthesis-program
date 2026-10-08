@@ -1,4 +1,6 @@
 #include <atomic>
+#include <chrono>
+#include <future>
 #include <memory>
 #include <stop_token>
 #include <thread>
@@ -9,6 +11,7 @@
 #include <dsspapp/ArchComposition.h>
 #include <dssparchdiffsinger/Factory.h>
 #include <dssparchdiffsinger/SingerCatalog.h>
+#include <dssparchdiffsinger/SynthesisParameters.h>
 #include <dsspmedia/Resources.h>
 #include <dssptests/TestFiles.h>
 
@@ -56,6 +59,9 @@ namespace dssp::tests {
         EXPECT_EQ(metadata->parameters.size(), 10U);
         for (const auto id : {"pitch", "expressiveness", "energy", "breathiness", "voicing", "tension", "mouth_opening", "gender", "velocity", "tone_shift"}) {
             EXPECT_TRUE(metadata->parameters.contains(id));
+            const auto *definition = arch_diffsinger::parameterDefinition(id);
+            ASSERT_NE(definition, nullptr);
+            EXPECT_DOUBLE_EQ(metadata->parameters.at(id).defaultValue, definition->defaultValue);
         }
         const auto singers = implementation->singers({});
         ASSERT_TRUE(singers);
@@ -82,8 +88,8 @@ namespace dssp::tests {
         ASSERT_FALSE(demoAudio);
         EXPECT_NE(demoAudio.error().get_if<arch::ResourceNotFoundError>(), nullptr);
         const auto tag = implementation->envTag({});
-        ASSERT_TRUE(tag);
-        EXPECT_TRUE(tag->empty());
+        ASSERT_FALSE(tag);
+        EXPECT_NE(tag.error().get_if<arch::InvalidInputError>(), nullptr);
     }
 
     TEST_F(DiffSingerTest, MissingTranslationFilesDoNotPreventArchitectureMetadata) {
@@ -104,34 +110,22 @@ namespace dssp::tests {
         }
     }
 
-    TEST_F(DiffSingerTest, UnimplementedSynthesisStagesCompleteWithDefaultOutputsAndLanguageStagesValidateSinger) {
-        unsigned completed = 0;
-        implementation->pronunciation({}, {}, [&](auto result) {
-            ASSERT_FALSE(result);
-            EXPECT_NE(result.error().template get_if<arch::InvalidInputError>(), nullptr);
-            ++completed;
-        });
-        implementation->phoneme({}, {}, [&](auto result) {
-            ASSERT_FALSE(result);
-            EXPECT_NE(result.error().template get_if<arch::InvalidInputError>(), nullptr);
-            ++completed;
-        });
-        implementation->duration({}, {}, [&](auto result) {
-            ASSERT_TRUE(result);
-            EXPECT_TRUE(result->notes.empty());
-            ++completed;
-        });
-        implementation->parameter({}, {}, [&](auto result) {
-            ASSERT_TRUE(result);
-            EXPECT_TRUE(result->parameters.empty());
-            ++completed;
-        });
-        implementation->audio({}, {}, [&](auto result) {
-            ASSERT_TRUE(result);
-            EXPECT_TRUE(result->audioUrl.empty());
-            ++completed;
-        });
-        EXPECT_EQ(completed, 5U);
+    TEST_F(DiffSingerTest, AllSynthesisStagesValidateSingerContext) {
+        const auto check = [&](auto submit) {
+            const auto promise = std::make_shared<std::promise<void>>();
+            auto done = promise->get_future();
+            submit([promise](auto result) {
+                EXPECT_FALSE(result);
+                if (!result) EXPECT_NE(result.error().template get_if<arch::InvalidInputError>(), nullptr);
+                promise->set_value();
+            });
+            EXPECT_EQ(done.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+        };
+        check([&](auto callback) { implementation->pronunciation({}, {}, std::move(callback)); });
+        check([&](auto callback) { implementation->phoneme({}, {}, std::move(callback)); });
+        check([&](auto callback) { implementation->duration({}, {}, std::move(callback)); });
+        check([&](auto callback) { implementation->parameter({}, {}, std::move(callback)); });
+        check([&](auto callback) { implementation->audio({}, {}, std::move(callback)); });
     }
 
     TEST_F(DiffSingerTest, CancelledRequestDoesNotCancelConcurrentRequests) {

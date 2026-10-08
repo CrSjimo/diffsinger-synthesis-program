@@ -6,9 +6,11 @@
 #include <stdcorelib/path.h>
 #include <stdcorelib/str.h>
 
+#include <dssparchdiffsinger/EnvironmentTag.h>
 #include <dssparchdiffsinger/Factory.h>
 #include <dssparchdiffsinger/LanguagePrediction.h>
 #include <dssparchdiffsinger/Metadata.h>
+#include <dssparchdiffsinger/Synthesis.h>
 #include <dsspinference/Display.h>
 #include <dsspmedia/Resources.h>
 
@@ -46,13 +48,9 @@ namespace dssp::arch_diffsinger {
             }
             return std::move(resource->dataUrl);
         }
-        template <class Output>
-        void completeEmpty(std::stop_token stop, arch::Completion<Output> completion) {
-            if (stop.stop_requested()) {
-                completion(fail<arch::SynthesisErrors>(arch::CancelledError("Synthesis request was cancelled")));
-                return;
-            }
-            completion(Output{});
+        template <class Input, class Output, class Function>
+        void synthesize(const std::shared_ptr<const SingerCatalog> &catalog, resource::TaskExecutor &tasks, Input input, std::stop_token stop, arch::Completion<Output> completion, Function function) {
+            function(catalog, tasks, std::move(input), stop, std::move(completion));
         }
     }
 
@@ -173,8 +171,8 @@ namespace dssp::arch_diffsinger {
             return result;
         });
     }
-    std::expected<std::string, arch::EnvironmentErrors> DiffSinger::envTag(arch::MultiSingerContext) const {
-        return std::string{};
+    std::expected<std::string, arch::EnvironmentErrors> DiffSinger::envTag(arch::MultiSingerContext context) const {
+        return synthesisEnvironmentTag(*catalog_, context);
     }
     void DiffSinger::pronunciation(arch::PronunciationInput input, std::stop_token stop, arch::Completion<arch::PronunciationOutput> cb) const {
         predictPronunciation(catalog_, std::move(input), stop, std::move(cb));
@@ -182,14 +180,14 @@ namespace dssp::arch_diffsinger {
     void DiffSinger::phoneme(arch::PhonemeInput input, std::stop_token stop, arch::Completion<arch::PhonemeOutput> cb) const {
         predictPhoneme(catalog_, std::move(input), stop, std::move(cb));
     }
-    void DiffSinger::duration(arch::DurationInput, std::stop_token stop, arch::Completion<arch::DurationOutput> cb) const {
-        completeEmpty(stop, std::move(cb));
+    void DiffSinger::duration(arch::DurationInput input, std::stop_token stop, arch::Completion<arch::DurationOutput> cb) const {
+        synthesize(catalog_, *tasks_, std::move(input), stop, std::move(cb), synthesizeDuration);
     }
-    void DiffSinger::parameter(arch::ParameterInput, std::stop_token stop, arch::Completion<arch::ParameterOutput> cb) const {
-        completeEmpty(stop, std::move(cb));
+    void DiffSinger::parameter(arch::ParameterInput input, std::stop_token stop, arch::Completion<arch::ParameterOutput> cb) const {
+        synthesize(catalog_, *tasks_, std::move(input), stop, std::move(cb), synthesizeParameters);
     }
-    void DiffSinger::audio(arch::AudioInput, std::stop_token stop, arch::Completion<arch::AudioOutput> cb) const {
-        completeEmpty(stop, std::move(cb));
+    void DiffSinger::audio(arch::AudioInput input, std::stop_token stop, arch::Completion<arch::AudioOutput> cb) const {
+        synthesize(catalog_, *tasks_, std::move(input), stop, std::move(cb), synthesizeAudio);
     }
 
 }

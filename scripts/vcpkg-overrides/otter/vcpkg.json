@@ -3,7 +3,7 @@
   "name": "otter",
   "version": "0.1.0.0",
   "description": [
-    "Orchestratable Transcription, Timing and Expression Runtime: the analysis contribution category layered on synthrt."
+    "Orchestratable Transcription, Timing and Expression Runtime: analysis contracts and interpreters for synthrt inference modules."
   ],
   "homepage": "https://github.com/diffscope/otter",
   "license": "Apache-2.0",

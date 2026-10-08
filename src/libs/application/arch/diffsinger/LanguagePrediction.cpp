@@ -1,7 +1,6 @@
 #include "LanguagePrediction.h"
 
 #include <algorithm>
-#include <cmath>
 #include <exception>
 #include <functional>
 #include <map>
@@ -14,6 +13,7 @@
 #include <wolf/Api/Inferences/S2P/1/S2PApiL1.h>
 
 #include <dssparchdiffsinger/LanguageResults.h>
+#include <dssparchdiffsinger/SynthesisContext.h>
 
 namespace dssp::arch_diffsinger {
     namespace {
@@ -29,32 +29,15 @@ namespace dssp::arch_diffsinger {
             return arch::SynthesisErrors{arch::OperationError("Language inference failed", error.asError().clone())};
         }
         arch::SynthesisResult<const SingerRecord *> contextSinger(const SingerCatalog &catalog, const arch::SingleSingerContext &context) {
-            const auto *singer = catalog.find(context.singer.id);
-            if (!singer) {
-                return fail<arch::SynthesisErrors>(arch::InvalidInputError("Singer does not exist: " + context.singer.id));
+            auto options = synthesisOptions(context.archExtra);
+            if (!options) {
+                return std::unexpected{std::move(options.error())};
             }
-            if (!context.archExtra.isObject() || !context.singer.extra.isObject()) {
-                return fail<arch::SynthesisErrors>(arch::InvalidInputError("DiffSinger archExtra and singer.extra must be objects"));
+            auto source = singerSource(catalog, context.singer);
+            if (!source) {
+                return std::unexpected{std::move(source.error())};
             }
-            if (context.archExtra.isMember("steps") && (!context.archExtra["steps"].isIntegral() || context.archExtra["steps"].asDouble() <= 0)) {
-                return fail<arch::SynthesisErrors>(arch::InvalidInputError("DiffSinger steps must be a positive integer"));
-            }
-            if (context.archExtra.isMember("depth")) {
-                const auto &depth = context.archExtra["depth"];
-                if (!depth.isNumeric() || !std::isfinite(depth.asDouble()) || depth.asDouble() < 0 || depth.asDouble() > 1) {
-                    return fail<arch::SynthesisErrors>(arch::InvalidInputError("DiffSinger depth must be finite and between 0 and 1"));
-                }
-            }
-            if (context.singer.extra.isMember("speaker")) {
-                const auto &speaker = context.singer.extra["speaker"];
-                if (!speaker.isString() || (!speaker.asString().empty() && std::ranges::find(singer->speakers, speaker.asString()) == singer->speakers.end())) {
-                    return fail<arch::SynthesisErrors>(arch::InvalidInputError("DiffSinger speaker must identify a declared logical speaker"));
-                }
-                if (speaker.asString().empty() && !singer->speakers.empty()) {
-                    return fail<arch::SynthesisErrors>(arch::InvalidInputError("This singer requires a nonempty speaker selection"));
-                }
-            }
-            return singer;
+            return source->singer;
         }
         bool reserved(const SingerRecord &singer, const std::string &word) {
             return std::ranges::find(singer.reservedPhonemes, word) != singer.reservedPhonemes.end();
@@ -150,24 +133,23 @@ namespace dssp::arch_diffsinger {
             }
             request->finish<arch::PhonemeNote>({task.index}, std::vector<arch::PhonemeNote>{{slicePhonemes(std::move(phones), task.note)}});
         }
-        void predictOnset(inference::InferencePool &pool, const std::shared_ptr<PhonemeRequest> &request, PhonemeTask task, std::vector<std::string> tokens) {
+        drogon::Task<> predictOnset(inference::InferencePool &pool, std::shared_ptr<PhonemeRequest> request, PhonemeTask task, std::vector<std::string> tokens) {
             if (tokens.empty() || !task.onset) {
                 auto onsets = std::vector<bool>(tokens.size(), false);
                 finishPhoneme(request, task, std::move(tokens), std::move(onsets));
-                return;
+                co_return;
             }
             auto input = std::make_shared<Onset::OnsetStartInput>();
             input->phonemes.push_back(std::move(tokens));
             const auto handle = task.onset;
-            pool.run<Onset::OnsetExecutive>(handle, request->stop.get_token(), [input](auto &executive) { return executive.start(*input); }, [request, task = std::move(task), input](auto result) mutable {
-                if (!result) {
-                    request->finish<arch::PhonemeNote>({task.index}, std::unexpected{executionError(result.error())});
-                } else if (!*result || (*result)->onsets.size() != 1 || (*result)->onsets[0].size() != input->phonemes[0].size()) {
-                    request->finish<arch::PhonemeNote>({task.index}, fail<arch::SynthesisErrors>(arch::OperationError("Onset inference returned an incomplete result")));
-                } else {
-                    finishPhoneme(request, task, std::move(input->phonemes[0]), std::move((*result)->onsets[0]));
-                }
-            });
+            auto result = co_await pool.runCoro<Onset::OnsetExecutive>(handle, request->stop.get_token(), [input](auto &executive) { return executive.start(*input); });
+            if (!result) {
+                request->finish<arch::PhonemeNote>({task.index}, std::unexpected{executionError(result.error())});
+            } else if (!*result || (*result)->onsets.size() != 1 || (*result)->onsets[0].size() != input->phonemes[0].size()) {
+                request->finish<arch::PhonemeNote>({task.index}, fail<arch::SynthesisErrors>(arch::OperationError("Onset inference returned an incomplete result")));
+            } else {
+                finishPhoneme(request, task, std::move(input->phonemes[0]), std::move((*result)->onsets[0]));
+            }
         }
     }
 
@@ -181,7 +163,7 @@ namespace dssp::arch_diffsinger {
             complete(std::unexpected{singer.error()});
             return;
         }
-        const auto pool = catalog->environment()->inferences("diffsinger-language");
+        const auto pool = catalog->environment()->inferences("diffsinger-pronunciation");
         if (!pool) {
             complete(fail<arch::SynthesisErrors>(arch::OperationError("Language cache group is unavailable", pool.error().clone())));
             return;
@@ -228,14 +210,15 @@ namespace dssp::arch_diffsinger {
         for (auto &batch : batches) {
             const auto nativeInput = batch.input;
             const auto handle = batch.handle;
-            (*pool)->run<G2P::G2PExecutive>(handle, request->stop.get_token(), [nativeInput](auto &executive) { return executive.start(*nativeInput); }, [request, batch = std::move(batch)](auto result) {
+            drogon::async_run([pool = *pool, request, batch = std::move(batch), nativeInput, handle]() -> drogon::Task<> {
+                auto result = co_await pool->runCoro<G2P::G2PExecutive>(handle, request->stop.get_token(), [nativeInput](auto &executive) { return executive.start(*nativeInput); });
                 if (!result) {
                     request->finish<arch::Pronunciation>(batch.indices, std::unexpected{executionError(result.error())});
-                    return;
+                    co_return;
                 }
                 if (!*result || (*result)->words.size() != batch.indices.size()) {
                     request->finish<arch::Pronunciation>(batch.indices, fail<arch::SynthesisErrors>(arch::OperationError("Pronunciation inference returned an incomplete result")));
-                    return;
+                    co_return;
                 }
                 std::vector<arch::Pronunciation> notes;
                 notes.reserve(batch.indices.size());
@@ -245,7 +228,7 @@ namespace dssp::arch_diffsinger {
                     auto converted = translatePronunciation(word, batch.input->lyrics[i]);
                     if (!converted) {
                         request->finish<arch::Pronunciation>(batch.indices, std::unexpected{std::move(converted.error())});
-                        return;
+                        co_return;
                     }
                     fallbackCount += word.error != G2P::Error::None;
                     notes.push_back(std::move(*converted));
@@ -265,12 +248,17 @@ namespace dssp::arch_diffsinger {
             complete(std::unexpected{singer.error()});
             return;
         }
-        const auto pool = catalog->environment()->inferences("diffsinger-language");
+        const auto pool = catalog->environment()->inferences("diffsinger-phoneme");
         if (!pool) {
             complete(fail<arch::SynthesisErrors>(arch::OperationError("Language cache group is unavailable", pool.error().clone())));
             return;
         }
         arch::PhonemeOutput output;
+        const auto onsetPool = catalog->environment()->inferences("diffsinger-onset");
+        if (!onsetPool) {
+            complete(fail<arch::SynthesisErrors>(arch::OperationError("Onset cache group is unavailable", onsetPool.error().clone())));
+            return;
+        }
         output.notes.resize(input.notes.size());
         std::vector<PhonemeTask> tasks;
         std::size_t fallbackCount = 0;
@@ -295,7 +283,7 @@ namespace dssp::arch_diffsinger {
             }
             inference::InferenceHandle onset;
             if (route->onset) {
-                auto handle = bind<Onset::OnsetExecutive, Onset::OnsetInitArgs, Onset::OnsetRuntimeOptions>(**pool, *route->onset, *route);
+                auto handle = bind<Onset::OnsetExecutive, Onset::OnsetInitArgs, Onset::OnsetRuntimeOptions>(**onsetPool, *route->onset, *route);
                 if (!handle) {
                     complete(fail<arch::SynthesisErrors>(arch::OperationError("Cannot bind onset inference", handle.error().clone())));
                     return;
@@ -314,7 +302,8 @@ namespace dssp::arch_diffsinger {
             auto nativeInput = std::make_shared<S2P::S2PStartInput>();
             nativeInput->pronunciations.push_back(task.note.pronunciation);
             const auto handle = task.s2p;
-            (*pool)->run<S2P::S2PExecutive>(handle, request->stop.get_token(), [nativeInput](auto &executive) { return executive.start(*nativeInput); }, [pool = *pool, request, task = std::move(task)](auto result) mutable {
+            drogon::async_run([pool = *pool, onsetPool = *onsetPool, request, task = std::move(task), nativeInput, handle]() mutable -> drogon::Task<> {
+                auto result = co_await pool->runCoro<S2P::S2PExecutive>(handle, request->stop.get_token(), [nativeInput](auto &executive) { return executive.start(*nativeInput); });
                 if (!result) {
                     request->finish<arch::PhonemeNote>({task.index}, std::unexpected{executionError(result.error())});
                 } else if (!*result || (*result)->phonemes.size() != 1) {
@@ -323,7 +312,7 @@ namespace dssp::arch_diffsinger {
                     if ((*result)->phonemes[0].empty()) {
                         log.stdcTrace("Phoneme language=%1 conversion returned an empty sequence", task.route->binding.language);
                     }
-                    predictOnset(*pool, request, std::move(task), std::move((*result)->phonemes[0]));
+                    co_await predictOnset(*onsetPool, request, std::move(task), std::move((*result)->phonemes[0]));
                 }
             });
         }

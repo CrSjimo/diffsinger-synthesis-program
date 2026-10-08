@@ -82,6 +82,11 @@ namespace dssp::runtime {
             }
             config.port = static_cast<std::uint16_t>(port);
         }
+        if (const auto text = value("--max-request-body-size", "DSSP_MAX_REQUEST_BODY_SIZE")) {
+            if (!number(*text, config.maxRequestBodySize) || config.maxRequestBodySize == 0) {
+                return std::unexpected{ConfigurationError("--max-request-body-size", "Maximum request body size must be a positive integer in bytes representable by size_t")};
+            }
+        }
         const auto packages = value("--package-dir", "DSSP_PACKAGE_DIR");
         auto packagePath = packages ? resolvePath("--package-dir", *packages) : defaultPackageDir();
         if (!packagePath) {
@@ -122,8 +127,10 @@ namespace dssp::runtime {
                 return std::unexpected{ConfigurationError("--silence-threshold", "Silence threshold must be a finite, nonnegative linear RMS value")};
             }
         }
-        for (const auto &[group, prefix] : {std::pair{"diffsinger-language", "DSSP_DIFFSINGER_LANGUAGE"}, std::pair{"diffsinger-synthesis", "DSSP_DIFFSINGER_SYNTHESIS"}}) {
-            auto &cache = config.inferenceCaches.at(group);
+        for (const auto &descriptor : InferenceCacheGroups) {
+            const auto group = descriptor.id;
+            const auto prefix = descriptor.environmentPrefix;
+            auto &cache = config.inferenceCaches.at(std::string(group));
             const auto capacityOption = "--" + std::string(group) + "-cache-capacity";
             const auto capacityEnvironment = std::string(prefix) + "_CACHE_CAPACITY";
             if (const auto text = value(capacityOption.c_str(), capacityEnvironment.c_str())) {

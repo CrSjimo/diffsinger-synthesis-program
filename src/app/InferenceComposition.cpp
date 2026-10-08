@@ -35,7 +35,7 @@ namespace dssp {
             {"inference", config.pluginDir / "dsinfer" / "inferenceinterpreters"},
             {"inference", config.pluginDir / "wolf" / "inferenceinterpreters"},
             {"linguist", config.pluginDir / "wolf" / "linguistproviders"},
-            {"analysis", config.pluginDir / "otter" / "analysisproviders"}
+            {"inference", config.pluginDir / "otter" / "inferenceinterpreters"}
         };
         for (auto &path : architecturePaths) {
             options.pluginPaths.push_back(std::move(path));

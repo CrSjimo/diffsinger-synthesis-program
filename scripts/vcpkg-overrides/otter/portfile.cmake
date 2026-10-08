@@ -1,14 +1,10 @@
-# otter, pinned to the commit this editor was built and tested against.
-#
-# Depending on otter is the only way a consumer gets its contribution category registered: linking
-# the library is what runs the registration before main, so vendoring headers would not do.
-
+# otter, pinned to the spec2.4-uptake branch tip selected for DSSP.
 # A fetch by commit needs no archive hash.
 vcpkg_from_git(
     OUT_SOURCE_PATH SOURCE_PATH
     URL https://github.com/diffscope/otter.git
-    REF f143ed7028f928e223d69bec5381c1ec6c81399f
-    HEAD_REF analysis-level-1
+    REF e770ab94ac0a27a31c6cec502aeac765c9db70ef
+    HEAD_REF spec2.4-uptake
 )
 
 vcpkg_cmake_configure(

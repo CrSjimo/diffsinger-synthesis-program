@@ -14,12 +14,15 @@ namespace dssp::tests {
         bool missingS2pDictionary = false;
         bool singerLanguages = true;
         bool customReserved = false;
+        bool synthesisStages = false;
+        bool noReserved = false;
     };
     // Real Wolf modules with deterministic, local resources. Singer model
     // declarations deliberately point to missing files: discovery must stay cold.
     inline void writeLanguagePackage(const TestFiles &files, const std::filesystem::path &root, const LanguagePackageOptions &options = {}) {
         const std::string onsetDeclaration = options.onsets ? R"(,{"id":"onset","path":"onset.json"})" : "";
-        const std::string singerInferences = options.singer ? R"(,{"id":"acoustic","path":"acoustic.json"},{"id":"vocoder","path":"vocoder.json"})" : "";
+        const std::string predictedInferences = options.synthesisStages ? R"(,{"id":"duration","path":"duration.json"},{"id":"pitch","path":"pitch.json"},{"id":"variance","path":"variance.json"})" : "";
+        const std::string singerInferences = options.singer ? R"(,{"id":"acoustic","path":"acoustic.json"},{"id":"vocoder","path":"vocoder.json"})" + predictedInferences : "";
         const std::string singerDeclaration = options.singer ? R"(,"singer":[{"id":"main","path":"singer.json"}])" : "";
         files.write(root / "desc.json", R"({"$version":"1.0","id":"example/language","version":")" + options.version + R"(","runtimeLevel":1,"contributions":{
             "inference":[{"id":"g2p","path":"g2p.json"},{"id":"s2p","path":"s2p.json"})" + onsetDeclaration + singerInferences + R"(],
@@ -51,13 +54,22 @@ namespace dssp::tests {
         files.write(root / "vocoder.json", R"({"interface":"org.openvpi.dsinfer.inference.Vocoder","variant":"onnx","level":1,
             "exports":{},"configuration":{"model":"${root}/missing-vocoder.onnx","pitchControllable":true}})");
         files.write(root / "phonemes.json", R"({"b":0,"a":1,"i":2,"SP":3,"AP":4,"REST":5})");
+        if (options.synthesisStages) {
+            files.write(root / "duration.json", R"({"interface":"org.openvpi.dsinfer.inference.Duration","variant":"onnx","level":1,
+                "exports":{},"configuration":{"encoder":"${root}/missing-duration-encoder.onnx","predictor":"${root}/missing-duration-predictor.onnx","frameWidth":0.01,"phonemes":"phonemes.json"}})");
+            files.write(root / "pitch.json", R"({"interface":"org.openvpi.dsinfer.inference.Pitch","variant":"onnx","level":1,
+                "exports":{"allowExpressiveness":true},"configuration":{"encoder":"${root}/missing-pitch-encoder.onnx","predictor":"${root}/missing-pitch-predictor.onnx","frameWidth":0.01,"phonemes":"phonemes.json","useExpressiveness":true}})");
+            files.write(root / "variance.json", R"({"interface":"org.openvpi.dsinfer.inference.Variance","variant":"onnx","level":1,
+                "exports":{"predictions":["energy"]},"configuration":{"encoder":"${root}/missing-variance-encoder.onnx","predictor":"${root}/missing-variance-predictor.onnx","frameWidth":0.01,"phonemes":"phonemes.json"}})");
+        }
         // synthrt requires a default language whenever a singer declares languages.
         const std::string languages = options.singerLanguages ? R"(,"languages":{"eng":"language/eng"},"defaultLanguage":"eng")" : "";
         const std::string languageImport = options.singerLanguages ? R"(,{"role":"language/eng","ref":":linguist/eng","options":{}})" : "";
-        const std::string reserved = options.customReserved ? R"(,"reservedPhonemes":["REST"] )" : "";
+        const std::string reserved = options.noReserved ? "" : options.customReserved ? R"(,"reservedPhonemes":["REST"])" : R"(,"reservedPhonemes":["SP","AP"])";
+        const std::string predictedImports = options.synthesisStages ? R"(,{"role":"singer/duration","ref":":inference/duration","options":{}},{"role":"singer/pitch","ref":":inference/pitch","options":{}},{"role":"singer/variance","ref":":inference/variance","options":{"predictions":["energy"]}})" : "";
         files.write(root / "singer.json", R"({"interface":"org.openvpi.dsinfer.singer.DiffSinger","variant":"openvpi","level":1,
             "name":"Test singer","configuration":{"dict":"unused-dictionary.txt"})" + languages + reserved + R"(,"imports":[
-            {"role":"singer/acoustic","ref":":inference/acoustic","options":{}},{"role":"singer/vocoder","ref":":inference/vocoder","options":{}})" + languageImport + "]}");
+            {"role":"singer/acoustic","ref":":inference/acoustic","options":{}},{"role":"singer/vocoder","ref":":inference/vocoder","options":{}})" + languageImport + predictedImports + "]}");
     }
 }
 

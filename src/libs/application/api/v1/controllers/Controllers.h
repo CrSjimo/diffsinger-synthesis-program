@@ -5,8 +5,10 @@
 #include <utility>
 
 #include <drogon/HttpController.h>
+#include <drogon/utils/coroutine.h>
 
 #include <dssparch/ArchitectureCatalog.h>
+#include <dsspextraction/Service.h>
 #include <dssphttp/RequestLifetime.h>
 #include <dssphttp/Response.h>
 
@@ -75,11 +77,11 @@ namespace dssp::api_v1 {
             ADD_METHOD_TO(SynthesisController::audio, "/v1/synth/audio", drogon::Post);
         METHOD_LIST_END
         void envTag(const drogon::HttpRequestPtr &, http::Callback &&) const;
-        void pronunciation(const drogon::HttpRequestPtr &, http::Callback &&) const;
-        void phoneme(const drogon::HttpRequestPtr &, http::Callback &&) const;
-        void duration(const drogon::HttpRequestPtr &, http::Callback &&) const;
-        void parameter(const drogon::HttpRequestPtr &, http::Callback &&) const;
-        void audio(const drogon::HttpRequestPtr &, http::Callback &&) const;
+        drogon::Task<> pronunciation(drogon::HttpRequestPtr, http::Callback) const;
+        drogon::Task<> phoneme(drogon::HttpRequestPtr, http::Callback) const;
+        drogon::Task<> duration(drogon::HttpRequestPtr, http::Callback) const;
+        drogon::Task<> parameter(drogon::HttpRequestPtr, http::Callback) const;
+        drogon::Task<> audio(drogon::HttpRequestPtr, http::Callback) const;
 
     private:
         const std::shared_ptr<const arch::ArchitectureCatalog> architectures_;
@@ -87,13 +89,13 @@ namespace dssp::api_v1 {
 
     class ExtractionController final : public drogon::HttpController<ExtractionController, false>, public ControllerSupport {
     public:
-        using ControllerSupport::ControllerSupport;
+        ExtractionController(std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::shared_ptr<extraction::Service> service) : ControllerSupport(std::move(lifetime)), service_(std::move(service)) {}
         METHOD_LIST_BEGIN
             ADD_METHOD_TO(ExtractionController::extractors, "/v1/extractor", drogon::Get);
-            ADD_METHOD_TO(ExtractionController::noteExtractor, "/v1/extractor/note/{1}", drogon::Get);
-            ADD_METHOD_TO(ExtractionController::tempoExtractor, "/v1/extractor/tempo/{1}", drogon::Get);
-            ADD_METHOD_TO(ExtractionController::pitchExtractor, "/v1/extractor/pitch/{1}", drogon::Get);
-            ADD_METHOD_TO(ExtractionController::separationExtractor, "/v1/extractor/separation/{1}", drogon::Get);
+            ADD_METHOD_VIA_REGEX(ExtractionController::noteExtractor, R"(/v1/extractor/note/([^:]+:[^/]+/[^/]+))", drogon::Get);
+            ADD_METHOD_VIA_REGEX(ExtractionController::tempoExtractor, R"(/v1/extractor/tempo/([^:]+:[^/]+/[^/]+))", drogon::Get);
+            ADD_METHOD_VIA_REGEX(ExtractionController::pitchExtractor, R"(/v1/extractor/pitch/([^:]+:[^/]+/[^/]+))", drogon::Get);
+            ADD_METHOD_VIA_REGEX(ExtractionController::separationExtractor, R"(/v1/extractor/separation/([^:]+:[^/]+/[^/]+))", drogon::Get);
             ADD_METHOD_TO(ExtractionController::note, "/v1/extract/note", drogon::Post);
             ADD_METHOD_TO(ExtractionController::tempo, "/v1/extract/tempo", drogon::Post);
             ADD_METHOD_TO(ExtractionController::pitch, "/v1/extract/pitch", drogon::Post);
@@ -104,13 +106,16 @@ namespace dssp::api_v1 {
         void tempoExtractor(const drogon::HttpRequestPtr &, http::Callback &&, std::string id) const;
         void pitchExtractor(const drogon::HttpRequestPtr &, http::Callback &&, std::string id) const;
         void separationExtractor(const drogon::HttpRequestPtr &, http::Callback &&, std::string id) const;
-        void note(const drogon::HttpRequestPtr &, http::Callback &&) const;
-        void tempo(const drogon::HttpRequestPtr &, http::Callback &&) const;
-        void pitch(const drogon::HttpRequestPtr &, http::Callback &&) const;
-        void separation(const drogon::HttpRequestPtr &, http::Callback &&) const;
+        drogon::Task<> note(drogon::HttpRequestPtr, http::Callback) const;
+        drogon::Task<> tempo(drogon::HttpRequestPtr, http::Callback) const;
+        drogon::Task<> pitch(drogon::HttpRequestPtr, http::Callback) const;
+        drogon::Task<> separation(drogon::HttpRequestPtr, http::Callback) const;
+
+    private:
+        const std::shared_ptr<extraction::Service> service_;
     };
 
-    void registerControllers(drogon::HttpAppFramework &app, const std::shared_ptr<http::RequestLifetimeRegistry> &lifetime, const std::shared_ptr<const arch::ArchitectureCatalog> &architectures);
+    void registerControllers(drogon::HttpAppFramework &app, const std::shared_ptr<http::RequestLifetimeRegistry> &lifetime, const std::shared_ptr<const arch::ArchitectureCatalog> &architectures, const std::shared_ptr<extraction::Service> &extraction);
 
 }
 

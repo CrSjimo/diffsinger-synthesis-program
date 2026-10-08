@@ -1,4 +1,5 @@
 #include <chrono>
+#include <limits>
 #include <map>
 #include <vector>
 
@@ -32,29 +33,69 @@ namespace dssp::tests {
         EXPECT_TRUE(result->runtimePath.is_absolute());
     }
 
-    TEST(ServerConfig, DiffSingerCacheGroupsHaveIndependentDefaultsAndCliOverridesEnvironmentPerField) {
+    TEST(ServerConfig, InferenceCacheGroupsHaveIndependentDefaultsAndCliOverridesEnvironmentPerField) {
         const auto root = std::filesystem::current_path();
         const auto defaults = resolveCpuConfig({{"--package-dir", root.string()}}, {}, root);
         ASSERT_TRUE(defaults);
-        for (const auto group : {"diffsinger-language", "diffsinger-synthesis"}) {
+        for (const auto &descriptor : runtime::InferenceCacheGroups) {
+            const auto group = std::string(descriptor.id);
             const auto &cache = defaults->inferenceCaches.at(group);
             EXPECT_EQ(cache.capacity, 16U);
             EXPECT_EQ(cache.idleTimeout, std::chrono::seconds(600));
             EXPECT_EQ(cache.cleanupInterval, std::chrono::seconds(60));
         }
-        const auto configured = resolveCpuConfig({{"--package-dir", root.string()}, {"--diffsinger-language-cache-capacity", "3"}, {"--diffsinger-synthesis-idle-timeout", "0"}}, {{"DSSP_DIFFSINGER_LANGUAGE_CACHE_CAPACITY", "bad"}, {"DSSP_DIFFSINGER_LANGUAGE_IDLE_TIMEOUT", "12"}, {"DSSP_DIFFSINGER_SYNTHESIS_CACHE_CAPACITY", "0"}, {"DSSP_DIFFSINGER_SYNTHESIS_CLEANUP_INTERVAL", "7"}}, root);
+        const auto configured = resolveCpuConfig({{"--package-dir", root.string()}, {"--diffsinger-pronunciation-cache-capacity", "3"}, {"--diffsinger-acoustic-idle-timeout", "0"}}, {{"DSSP_DIFFSINGER_PRONUNCIATION_CACHE_CAPACITY", "bad"}, {"DSSP_DIFFSINGER_PRONUNCIATION_IDLE_TIMEOUT", "12"}, {"DSSP_DIFFSINGER_ACOUSTIC_CACHE_CAPACITY", "0"}, {"DSSP_DIFFSINGER_ACOUSTIC_CLEANUP_INTERVAL", "7"}}, root);
         ASSERT_TRUE(configured);
-        EXPECT_EQ(configured->inferenceCaches.at("diffsinger-language").capacity, 3U);
-        EXPECT_EQ(configured->inferenceCaches.at("diffsinger-language").idleTimeout, std::chrono::seconds(12));
-        EXPECT_EQ(configured->inferenceCaches.at("diffsinger-language").cleanupInterval, std::chrono::seconds(60));
-        EXPECT_EQ(configured->inferenceCaches.at("diffsinger-synthesis").capacity, 0U);
-        EXPECT_EQ(configured->inferenceCaches.at("diffsinger-synthesis").idleTimeout, std::chrono::seconds(0));
-        EXPECT_EQ(configured->inferenceCaches.at("diffsinger-synthesis").cleanupInterval, std::chrono::seconds(7));
+        EXPECT_EQ(configured->inferenceCaches.at("diffsinger-pronunciation").capacity, 3U);
+        EXPECT_EQ(configured->inferenceCaches.at("diffsinger-pronunciation").idleTimeout, std::chrono::seconds(12));
+        EXPECT_EQ(configured->inferenceCaches.at("diffsinger-pronunciation").cleanupInterval, std::chrono::seconds(60));
+        EXPECT_EQ(configured->inferenceCaches.at("diffsinger-acoustic").capacity, 0U);
+        EXPECT_EQ(configured->inferenceCaches.at("diffsinger-acoustic").idleTimeout, std::chrono::seconds(0));
+        EXPECT_EQ(configured->inferenceCaches.at("diffsinger-acoustic").cleanupInterval, std::chrono::seconds(7));
+        const auto extraction = resolveCpuConfig({{"--package-dir", root.string()}, {"--extraction-note-cache-capacity", "2"}, {"--extraction-pitch-idle-timeout", "9"}}, {}, root);
+        ASSERT_TRUE(extraction);
+        EXPECT_EQ(extraction->inferenceCaches.at("extraction-note").capacity, 2U);
+        EXPECT_EQ(extraction->inferenceCaches.at("extraction-pitch").capacity, 16U);
+        EXPECT_EQ(extraction->inferenceCaches.at("extraction-note").idleTimeout, std::chrono::seconds(600));
+        EXPECT_EQ(extraction->inferenceCaches.at("extraction-pitch").idleTimeout, std::chrono::seconds(9));
     }
 
-    TEST(ServerConfig, DiffSingerCacheParametersRejectNegativeFractionalOverflowAndZeroScanIntervals) {
+    TEST(ServerConfig, RequestBodyLimitDefaultsToOneGiBAndCliOverridesEnvironment) {
         const auto root = std::filesystem::current_path();
-        for (const auto group : {"diffsinger-language", "diffsinger-synthesis"}) {
+        const runtime::ConfigValues packages{{"--package-dir", root.string()}};
+        const auto defaults = resolveCpuConfig(packages, {}, root);
+        ASSERT_TRUE(defaults);
+        EXPECT_EQ(defaults->maxRequestBodySize, 1073741824U);
+
+        const auto environment = resolveCpuConfig(packages, {{"DSSP_MAX_REQUEST_BODY_SIZE", "2097152"}}, root);
+        ASSERT_TRUE(environment);
+        EXPECT_EQ(environment->maxRequestBodySize, 2097152U);
+
+        const auto commandLine = resolveCpuConfig({{"--package-dir", root.string()}, {"--max-request-body-size", "2147483648"}}, {{"DSSP_MAX_REQUEST_BODY_SIZE", "invalid"}}, root);
+        ASSERT_TRUE(commandLine);
+        EXPECT_EQ(commandLine->maxRequestBodySize, 2147483648ULL);
+
+        const auto maximum = resolveCpuConfig({{"--package-dir", root.string()}, {"--max-request-body-size", std::to_string(std::numeric_limits<std::size_t>::max())}}, {}, root);
+        ASSERT_TRUE(maximum);
+        EXPECT_EQ(maximum->maxRequestBodySize, std::numeric_limits<std::size_t>::max());
+    }
+
+    TEST(ServerConfig, RequestBodyLimitRejectsInvalidValuesFromCliAndEnvironment) {
+        const auto root = std::filesystem::current_path();
+        for (const auto value : {"", "0", "-1", "1.5", "1GiB", "1024suffix", " 1024", "999999999999999999999999"}) {
+            const auto commandLine = resolveCpuConfig({{"--package-dir", root.string()}, {"--max-request-body-size", value}}, {}, root);
+            ASSERT_FALSE(commandLine) << value;
+            EXPECT_EQ(commandLine.error().option(), "--max-request-body-size");
+            const auto environment = resolveCpuConfig({{"--package-dir", root.string()}}, {{"DSSP_MAX_REQUEST_BODY_SIZE", value}}, root);
+            ASSERT_FALSE(environment) << value;
+            EXPECT_EQ(environment.error().option(), "--max-request-body-size");
+        }
+    }
+
+    TEST(ServerConfig, InferenceCacheParametersRejectNegativeFractionalOverflowAndZeroScanIntervals) {
+        const auto root = std::filesystem::current_path();
+        for (const auto &descriptor : runtime::InferenceCacheGroups) {
+            const auto group = std::string(descriptor.id);
             for (const auto &[suffix, invalidValues] : std::map<std::string, std::vector<std::string>>{
                 {"-cache-capacity", {"-1", "1.5", "999999999999999999999"}},
                 {"-idle-timeout", {"-1", "1.5", "9223372036854775807"}},

@@ -1,0 +1,9 @@
+find_package(otter CONFIG REQUIRED)
+
+file(GLOB _src CONFIGURE_DEPENDS *.cpp *.h)
+add_library(dssp_extraction STATIC ${_src})
+target_compile_features(dssp_extraction PUBLIC cxx_std_23)
+target_include_directories(dssp_extraction PUBLIC "$<BUILD_INTERFACE:${DSSP_BUILD_INCLUDE_DIR}>")
+target_link_libraries(dssp_extraction PUBLIC dssp_inference dssp_media otter::otter)
+target_link_libraries(dssp_extraction PRIVATE stdcorelib::stdcorelib)
+dssp_sync_include(dssp_extraction PREFIX dsspextraction FORCE)

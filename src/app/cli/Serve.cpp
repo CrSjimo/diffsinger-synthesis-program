@@ -14,6 +14,7 @@
 #include <dsspapiv1/Controllers.h>
 #include <dsspapp/ArchComposition.h>
 #include <dsspapp/InferenceComposition.h>
+#include <dsspextraction/Service.h>
 #include <dssphttp/AccessLog.h>
 #include <dssphttp/Response.h>
 #include <dsspruntime/ServerConfig.h>
@@ -56,12 +57,16 @@ namespace dssp {
                 applicationDir = stdc::system::application_directory();
                 temporaryDir = stdc::system::SystemPaths::writableDirectory(stdc::system::SystemPaths::TempDirectory);
                 for (const auto name : {
-                    "--host", "--port", "--package-dir", "--execution-provider", "--device-index", "--silence-threshold",
-                    "--diffsinger-language-cache-capacity", "--diffsinger-language-idle-timeout", "--diffsinger-language-cleanup-interval",
-                    "--diffsinger-synthesis-cache-capacity", "--diffsinger-synthesis-idle-timeout", "--diffsinger-synthesis-cleanup-interval"
+                    "--host", "--port", "--max-request-body-size", "--package-dir", "--execution-provider", "--device-index", "--silence-threshold"
                 }) {
                     if (const auto value = result.valueForOption<std::string>(name)) {
                         options.emplace(name, *value);
+                    }
+                }
+                for (const auto &group : runtime::InferenceCacheGroups) {
+                    for (const auto suffix : {"-cache-capacity", "-idle-timeout", "-cleanup-interval"}) {
+                        const auto name = "--" + std::string(group.id) + suffix;
+                        if (const auto value = result.valueForOption<std::string>(name)) options.emplace(name, *value);
                     }
                 }
             } catch (const std::exception &error) {
@@ -100,6 +105,11 @@ namespace dssp {
                 log.stdcCritical("Architecture initialization failed: %1", architectures.error().formatChain());
                 return 1;
             }
+            auto extractionService = extraction::Service::create(*inference, config->silenceThreshold);
+            if (!extractionService) {
+                log.stdcCritical("Extraction initialization failed: %1", extractionService.error().formatChain());
+                return 1;
+            }
             const auto lifetime = std::make_shared<http::RequestLifetimeRegistry>();
             const auto accessLog = std::make_shared<http::AccessLog>();
             auto &app = drogon::app();
@@ -110,6 +120,8 @@ namespace dssp {
                 app.quit();
             };
             try {
+                app.setClientMaxBodySize(config->maxRequestBodySize);
+                log.stdcInfo("HTTP request body limit: %1 bytes", config->maxRequestBodySize);
                 // Drogon also uses this path to cache large JSON request bodies.
                 app.setUploadPath(stdc::path::to_utf8(*temporaryDir / "dssp" / "uploads"));
                 if (log.isLevelEnabled(stdc::Logger::Debug)) {
@@ -123,7 +135,7 @@ namespace dssp {
                     const http::RequestErrors failure{http::HttpBoundaryError("Unhandled error at the HTTP library boundary", std::make_shared<ExternalError>(error.what(), NativeDiagnostic{"Drogon", "handle request", "exception"}))};
                     callback(http::problemResponse(failure, http::requestLog(*request)));
                 });
-                api_v1::registerControllers(app, lifetime, *architectures);
+                api_v1::registerControllers(app, lifetime, *architectures, *extractionService);
                 app.setConnectionCallback([lifetime, accessLog](const trantor::TcpConnectionPtr &connection) {
                     accessLog->connectionChanged(connection);
                     lifetime->connectionChanged(connection);
@@ -142,12 +154,14 @@ namespace dssp {
             } catch (const std::exception &error) {
                 accessLog->shutdown();
                 lifetime->cancelAll();
+                (*extractionService)->shutdown();
                 (*inference)->shutdown();
                 log.stdcCritical("Drogon startup/run failed: %1", error.what());
                 return 1;
             }
             accessLog->shutdown();
             lifetime->cancelAll();
+            (*extractionService)->shutdown();
             (*inference)->shutdown();
             log.stdcInfo("Server stopped");
             return 0;
@@ -155,20 +169,26 @@ namespace dssp {
 
     }
 
-    stdc::cli::Command serveCommand = stdc::cli::Command{"serve", "Start the server"}
-        .addHelpOption()
-        .addOption(stdc::cli::Option({"--host"}, "Host to listen on (DSSP_HOST)").arg("host"))
-        .addOption(stdc::cli::Option({"--port"}, "Nonzero listening port (DSSP_PORT)").arg("port"))
-        .addOption(stdc::cli::Option({"--package-dir"}, "Installed package root, default user data/OpenVPI/DiffScope_packages (DSSP_PACKAGE_DIR)").arg("dir"))
-        .addOption(stdc::cli::Option({"--execution-provider"}, "cpu, cuda, directml or coreml; default DirectML on Windows, CPU elsewhere (DSSP_EXECUTION_PROVIDER)").arg("provider"))
-        .addOption(stdc::cli::Option({"--device-index"}, "Native backend device index; automatically recommended when omitted (DSSP_DEVICE_INDEX)").arg("index"))
-        .addOption(stdc::cli::Option({"--silence-threshold"}, "Linear RMS threshold, default 0.02 (DSSP_SILENCE_THRESHOLD)").arg("threshold"))
-        .addOption(stdc::cli::Option({"--diffsinger-language-cache-capacity"}, "Resident DiffSinger language inference limit, default 16; 0 disables the limit (DSSP_DIFFSINGER_LANGUAGE_CACHE_CAPACITY)").arg("count"))
-        .addOption(stdc::cli::Option({"--diffsinger-language-idle-timeout"}, "DiffSinger language inference idle expiry in seconds, default 600; 0 disables expiry (DSSP_DIFFSINGER_LANGUAGE_IDLE_TIMEOUT)").arg("seconds"))
-        .addOption(stdc::cli::Option({"--diffsinger-language-cleanup-interval"}, "DiffSinger language inference cleanup interval in seconds, default 60 (DSSP_DIFFSINGER_LANGUAGE_CLEANUP_INTERVAL)").arg("seconds"))
-        .addOption(stdc::cli::Option({"--diffsinger-synthesis-cache-capacity"}, "Resident DiffSinger synthesis inference limit, default 16; 0 disables the limit (DSSP_DIFFSINGER_SYNTHESIS_CACHE_CAPACITY)").arg("count"))
-        .addOption(stdc::cli::Option({"--diffsinger-synthesis-idle-timeout"}, "DiffSinger synthesis inference idle expiry in seconds, default 600; 0 disables expiry (DSSP_DIFFSINGER_SYNTHESIS_IDLE_TIMEOUT)").arg("seconds"))
-        .addOption(stdc::cli::Option({"--diffsinger-synthesis-cleanup-interval"}, "DiffSinger synthesis inference cleanup interval in seconds, default 60 (DSSP_DIFFSINGER_SYNTHESIS_CLEANUP_INTERVAL)").arg("seconds"))
-        .setHandler(runServe);
+    stdc::cli::Command serveCommand = [] {
+        auto command = stdc::cli::Command{"serve", "Start the server"}
+            .addHelpOption()
+            .addOption(stdc::cli::Option({"--host"}, "Host to listen on (DSSP_HOST)").arg("host"))
+            .addOption(stdc::cli::Option({"--port"}, "Nonzero listening port (DSSP_PORT)").arg("port"))
+            .addOption(stdc::cli::Option({"--max-request-body-size"}, "Maximum HTTP request body in bytes, default 1073741824 (1 GiB; DSSP_MAX_REQUEST_BODY_SIZE)").arg("bytes"))
+            .addOption(stdc::cli::Option({"--package-dir"}, "Installed package root, default user data/OpenVPI/DiffScope_packages (DSSP_PACKAGE_DIR)").arg("dir"))
+            .addOption(stdc::cli::Option({"--execution-provider"}, "cpu, cuda, directml or coreml; default DirectML on Windows, CPU elsewhere (DSSP_EXECUTION_PROVIDER)").arg("provider"))
+            .addOption(stdc::cli::Option({"--device-index"}, "Native backend device index; automatically recommended when omitted (DSSP_DEVICE_INDEX)").arg("index"))
+            .addOption(stdc::cli::Option({"--silence-threshold"}, "Linear RMS threshold, default 0.02 (DSSP_SILENCE_THRESHOLD)").arg("threshold"))
+            .setHandler(runServe);
+        for (const auto &group : runtime::InferenceCacheGroups) {
+            const auto option = "--" + std::string(group.id);
+            const auto description = std::string(group.description);
+            const auto prefix = std::string(group.environmentPrefix);
+            command.addOption(stdc::cli::Option({option + "-cache-capacity"}, description + " resident resource limit, default 16; 0 disables the limit (" + prefix + "_CACHE_CAPACITY)").arg("count"));
+            command.addOption(stdc::cli::Option({option + "-idle-timeout"}, description + " idle expiry in seconds, default 600; 0 disables expiry (" + prefix + "_IDLE_TIMEOUT)").arg("seconds"));
+            command.addOption(stdc::cli::Option({option + "-cleanup-interval"}, description + " cleanup interval in seconds, default 60 (" + prefix + "_CLEANUP_INTERVAL)").arg("seconds"));
+        }
+        return command;
+    }();
 
 }

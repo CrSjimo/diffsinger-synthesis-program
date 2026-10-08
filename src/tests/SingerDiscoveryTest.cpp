@@ -13,6 +13,7 @@
 
 #include <dssparchdiffsinger/DiffSinger.h>
 #include <dssparchdiffsinger/Factory.h>
+#include <dsspruntime/InferenceCaches.h>
 #include <dsspcodecutil/codecutil.h>
 #include <dssptests/TestFiles.h>
 
@@ -117,14 +118,18 @@ namespace dssp::tests {
             EXPECT_EQ((**group).durationMode, arch::DurationMode::Skip);
             const auto *record = diffsinger->catalog().find(singer.id);
             ASSERT_NE(record, nullptr);
+            EXPECT_TRUE(record->reservedPhonemes.empty());
             EXPECT_EQ(record->package.id(), "example/singers");
             EXPECT_EQ(record->spec->locator().category(), "singer");
             EXPECT_FALSE(record->package.version().isEmpty());
             ASSERT_TRUE(record->languages.contains("eng"));
             EXPECT_EQ(record->languages.at("eng").depth, inference::LanguageDepth::Pronunciation);
-            const auto pool = environment->inferences("diffsinger-language");
-            ASSERT_TRUE(pool);
-            EXPECT_EQ((*pool)->residentCount(), 0U);
+            for (const auto &group : runtime::InferenceCacheGroups) {
+                if (!group.id.starts_with("diffsinger-")) continue;
+                const auto pool = environment->inferences(group.id);
+                ASSERT_TRUE(pool);
+                EXPECT_EQ((*pool)->residentCount(), 0U);
+            }
             EXPECT_FALSE(std::filesystem::exists(record->package.path() / "missing-acoustic.onnx"));
             const auto single = implementation->singer({singer.id, {"zh-CN"}});
             ASSERT_TRUE(single);
@@ -211,9 +216,12 @@ namespace dssp::tests {
         for (const auto &[id, singer] : (*catalog)->singers()) {
             SCOPED_TRACE(id);
             ASSERT_TRUE(singer.languages.contains("eng"));
-            const auto pool = (*host)->inferences("diffsinger-language");
-            ASSERT_TRUE(pool);
-            EXPECT_EQ((*pool)->residentCount(), 0U);
+            for (const auto &group : runtime::InferenceCacheGroups) {
+                if (!group.id.starts_with("diffsinger-")) continue;
+                const auto pool = (*host)->inferences(group.id);
+                ASSERT_TRUE(pool);
+                EXPECT_EQ((*pool)->residentCount(), 0U);
+            }
             EXPECT_EQ(singer.info.defaultLanguage, "eng");
             for (const auto stage : {"duration", "pitch", "variance"}) {
                 EXPECT_FALSE(std::filesystem::exists(singer.package.path() / (std::string("missing-") + stage + "-encoder.onnx")));
