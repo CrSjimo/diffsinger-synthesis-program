@@ -1,11 +1,11 @@
 # synthrt main line, overriding the shared overlay's refactor-line port.
-# Keep the fixed commit aligned with the spec2.4-uptake versions of wolf and otter.
+# Keep the fixed commit aligned with ds-editor-lite PR #192 and the spec2.4-uptake versions of wolf and otter.
 # A fetch by commit needs no archive hash.
 vcpkg_from_git(
     OUT_SOURCE_PATH SOURCE_PATH
     URL https://github.com/diffscope/synthrt.git
-    REF 63bef253607649dcface0b37abc68f051cc45c8b
-    HEAD_REF onnxruntime-builds-uptake
+    REF 0e9766235b97c7af65b2030d33fe922abaa73c4f
+    HEAD_REF spec2.4-uptake
 )
 
 vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS

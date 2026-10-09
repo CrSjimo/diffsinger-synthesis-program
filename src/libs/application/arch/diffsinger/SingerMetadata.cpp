@@ -6,7 +6,7 @@ namespace dssp::arch_diffsinger {
 
     SingerMetadata singerMetadata(const ds::Api::DiffSinger::L1::DiffSingerConfiguration &) {
         // TODO: read the mixing permission when dsinfer exposes singer metadata.
-        // Checked against Synthrt/dsinfer 63bef253607649dcface0b37abc68f051cc45c8b:
+        // Checked against Synthrt/dsinfer 0e9766235b97c7af65b2030d33fe922abaa73c4f:
         // no permission field exists. Retain the agreed default of allowing it.
         return {};
     }

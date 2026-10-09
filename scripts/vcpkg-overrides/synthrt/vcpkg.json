@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "synthrt",
-  "version-string": "onnxruntime-builds-uptake",
+  "version-string": "spec2.4-uptake",
   "description": [
     "SVS Synthesis Runtime Library, main line.",
     "Overrides the shared overlay's synthrt port, which pins the refactor line."
