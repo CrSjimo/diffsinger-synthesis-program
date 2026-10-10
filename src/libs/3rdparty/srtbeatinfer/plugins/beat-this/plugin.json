@@ -1,0 +1,6 @@
+{
+  "name": "srtbeatinferbeatthis",
+  "interpreters": [
+    {"interface": "org.openvpi.srtbeatinfer.inference.Beat", "level": 1, "variant": "beat-this"}
+  ]
+}

@@ -7,6 +7,8 @@
 #include <cmath>
 #include <limits>
 
+#include <stdcorelib/str.h>
+
 #include <dsspcodecutil/codecutil.h>
 #include <dsspmedia/Wave.h>
 
@@ -68,11 +70,19 @@ namespace dssp::extraction {
             return "data:audio/wav;base64," + std::string(encoded.begin(), encoded.end());
         }
     }
-    void extractSeparation(std::shared_ptr<const ExtractorCatalog> catalog, const ExtractorRecord &record, std::shared_ptr<resource::TaskExecutor> tasks, Input input, std::stop_token stop, Completion<SeparationOutput> complete) {
+    void extractSeparation(std::shared_ptr<const ExtractorCatalog> catalog, const ExtractorRecord &record, std::shared_ptr<resource::TaskExecutor> tasks, SeparationInput input, std::stop_token stop, Completion<SeparationOutput> complete) {
         auto request = std::make_shared<Request>(std::move(catalog), record, std::move(tasks), stop, std::move(complete));
         drogon::async_run([request, input = std::move(input)]() mutable -> drogon::Task<> {
             if (!(co_await background(request)))
                 co_return;
+            if (!input.acceptableSchemes.empty() && std::ranges::none_of(input.acceptableSchemes, [](const auto &value) { return stdc::str::equals_insensitive(value, "data"); })) {
+                request->finish(fail<ExtractionErrors>(InvalidInputError("acceptableSchemes does not accept the separated audio scheme data")));
+                co_return;
+            }
+            if (!input.acceptableFormats.empty() && std::ranges::none_of(input.acceptableFormats, [](const auto &value) { return stdc::str::equals_insensitive(value, "audio/wav"); })) {
+                request->finish(fail<ExtractionErrors>(InvalidInputError("acceptableFormats does not accept the separated audio format audio/wav")));
+                co_return;
+            }
             auto audio = media::readWaveDataUrl(input.audioUrl, request->stop.get_token());
             input.audioUrl.clear();
             if (request->stop.stop_requested()) {

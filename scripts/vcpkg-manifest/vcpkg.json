@@ -11,6 +11,7 @@
         "uriparser",
         "openssl",
         "drlibs",
+        "pffft",
         {
             "name": "synthrt",
             "features": ["onnx"]

@@ -5,43 +5,30 @@
 #include <numbers>
 #include <stdexcept>
 
+#include <pffft/pffft.h>
+
 namespace srtsepinfer::demucs {
-    SpectralTransform::SpectralTransform(int fftSize, int hopLength) : size_(fftSize), hop_(hopLength) {
-        if (size_ < 4 || (size_ & (size_ - 1)) || hop_ != size_ / 4)
-            throw std::invalid_argument("Demucs requires a power-of-two FFT and quarter-window hop");
-        window_.resize(size_);
-        reversed_.resize(size_);
-        roots_.resize(size_ / 2);
-        for (int i = 0; i < size_; ++i) {
-            window_[i] = 0.5 - 0.5 * std::cos(2 * std::numbers::pi * i / size_);
-            std::size_t value = i, reversed = 0;
-            for (int n = size_; n > 1; n >>= 1) {
-                reversed = (reversed << 1) | (value & 1);
-                value >>= 1;
-            }
-            reversed_[i] = reversed;
+    namespace {
+        // PFFFT requires SIMD-aligned storage. Reuse these buffers across all
+        // frames in a call; keep them local so the cached read-only plan can be
+        // used concurrently without sharing mutable scratch space.
+        auto alignedBuffer(int size) {
+            std::unique_ptr<float, decltype(&pffft_aligned_free)> buffer(static_cast<float *>(pffft_aligned_malloc(size * sizeof(float))), &pffft_aligned_free);
+            if (!buffer)
+                throw std::bad_alloc();
+            return buffer;
         }
-        for (int i = 0; i < size_ / 2; ++i)
-            roots_[i] = std::polar(1.0, -2 * std::numbers::pi * i / size_);
     }
-    void SpectralTransform::fft(std::vector<std::complex<double>> &values, bool inverse) const {
-        for (std::size_t i = 0; i < values.size(); ++i)
-            if (i < reversed_[i])
-                std::swap(values[i], values[reversed_[i]]);
-        for (int span = 2; span <= size_; span *= 2) {
-            const int half = span / 2, step = size_ / span;
-            for (int begin = 0; begin < size_; begin += span) {
-                for (int j = 0; j < half; ++j) {
-                    const auto root = inverse ? std::conj(roots_[j * step]) : roots_[j * step];
-                    const auto even = values[begin + j], odd = values[begin + j + half] * root;
-                    values[begin + j] = even + odd;
-                    values[begin + j + half] = even - odd;
-                }
-            }
-        }
-        if (inverse)
-            for (auto &value : values)
-                value /= size_;
+    void SpectralTransform::SetupDeleter::operator()(PFFFT_Setup *setup) const { pffft_destroy_setup(setup); }
+    SpectralTransform::SpectralTransform(int fftSize, int hopLength) : size_(fftSize), hop_(hopLength) {
+        if (size_ < 32 || (size_ & (size_ - 1)) || hop_ != size_ / 4)
+            throw std::invalid_argument("Demucs requires a power-of-two FFT of at least 32 samples and quarter-window hop");
+        setup_.reset(pffft_new_setup(size_, PFFFT_REAL));
+        if (!setup_)
+            throw std::bad_alloc();
+        window_.resize(size_);
+        for (int i = 0; i < size_; ++i)
+            window_[i] = 0.5 - 0.5 * std::cos(2 * std::numbers::pi * i / size_);
     }
     srt::Expected<std::vector<float>> SpectralTransform::forward(std::span<const float> planar, int channels, const std::function<bool()> &cancelled) const {
         if (channels <= 0 || planar.empty() || planar.size() % channels)
@@ -52,7 +39,9 @@ namespace srtsepinfer::demucs {
         const auto frames = (length + hop_ - 1) / hop_;
         const auto bins = static_cast<std::size_t>(size_ / 2);
         std::vector<float> result(channels * 2 * bins * frames);
-        std::vector<std::complex<double>> scratch(size_);
+        auto scratch = alignedBuffer(size_);
+        auto work = alignedBuffer(size_);
+        auto *values = scratch.get();
         const double scale = 1 / std::sqrt(static_cast<double>(size_));
         for (int channel = 0; channel < channels; ++channel) {
             for (std::size_t frame = 0; frame < frames; ++frame) {
@@ -65,12 +54,16 @@ namespace srtsepinfer::demucs {
                         index = -index;
                     if (index >= static_cast<std::ptrdiff_t>(length))
                         index = 2 * static_cast<std::ptrdiff_t>(length) - 2 - index;
-                    scratch[i] = static_cast<double>(planar[channel * length + index]) * window_[i];
+                    values[i] = static_cast<float>(planar[channel * length + index] * window_[i]);
                 }
-                fft(scratch, false);
-                for (std::size_t bin = 0; bin < bins; ++bin) {
-                    result[((channel * 2) * bins + bin) * frames + frame] = static_cast<float>(scratch[bin].real() * scale);
-                    result[((channel * 2 + 1) * bins + bin) * frames + frame] = static_cast<float>(scratch[bin].imag() * scale);
+                pffft_transform_ordered(setup_.get(), values, values, work.get(), PFFFT_FORWARD);
+                // The real FFT packs DC and Nyquist into its first complex
+                // pair. Demucs drops Nyquist and keeps an imaginary DC of zero.
+                result[(channel * 2 * bins) * frames + frame] = static_cast<float>(values[0] * scale);
+                result[((channel * 2 + 1) * bins) * frames + frame] = 0;
+                for (std::size_t bin = 1; bin < bins; ++bin) {
+                    result[((channel * 2) * bins + bin) * frames + frame] = static_cast<float>(values[2 * bin] * scale);
+                    result[((channel * 2 + 1) * bins + bin) * frames + frame] = static_cast<float>(values[2 * bin + 1] * scale);
                 }
             }
         }
@@ -90,22 +83,26 @@ namespace srtsepinfer::demucs {
                 weights[frame * hop_ + i] += window_[i] * window_[i];
         }
         std::vector<float> result(channels * length);
-        std::vector<std::complex<double>> scratch(size_);
-        const double scale = std::sqrt(static_cast<double>(size_));
+        auto scratch = alignedBuffer(size_);
+        auto work = alignedBuffer(size_);
+        auto *values = scratch.get();
+        // PFFFT's backward transform is unnormalized. Together with the
+        // normalized forward STFT this needs 1/sqrt(N), rather than sqrt(N).
+        const double scale = 1 / std::sqrt(static_cast<double>(size_));
         for (int channel = 0; channel < channels; ++channel) {
             std::fill(accumulated.begin(), accumulated.end(), 0);
             for (std::size_t frame = 0; frame < frames; ++frame) {
                 if (cancelled && cancelled())
                     return cancelledError();
-                for (std::size_t bin = 0; bin < bins; ++bin) {
-                    scratch[bin] = {spectrum[((channel * 2) * bins + bin) * frames + frame], spectrum[((channel * 2 + 1) * bins + bin) * frames + frame]};
-                    if (bin)
-                        scratch[size_ - bin] = std::conj(scratch[bin]);
+                values[0] = spectrum[(channel * 2 * bins) * frames + frame];
+                values[1] = 0; // The model never predicts Nyquist.
+                for (std::size_t bin = 1; bin < bins; ++bin) {
+                    values[2 * bin] = spectrum[((channel * 2) * bins + bin) * frames + frame];
+                    values[2 * bin + 1] = spectrum[((channel * 2 + 1) * bins + bin) * frames + frame];
                 }
-                scratch[bins] = 0; // The model never predicts Nyquist.
-                fft(scratch, true);
+                pffft_transform_ordered(setup_.get(), values, values, work.get(), PFFFT_BACKWARD);
                 for (int i = 0; i < size_; ++i)
-                    accumulated[(frame + 2) * hop_ + i] += scratch[i].real() * scale * window_[i];
+                    accumulated[(frame + 2) * hop_ + i] += values[i] * scale * window_[i];
             }
             for (std::size_t i = 0; i < length; ++i)
                 result[channel * length + i] = static_cast<float>(accumulated[trim + i] / weights[trim + i]);

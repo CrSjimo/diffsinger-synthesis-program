@@ -32,7 +32,7 @@ namespace srtsepinfer::Api::Separation::L1 {
         int sampleRate = 0;
         int channelCount = 0;
         double maxSegmentDuration = 0; // 0: the interpreter partitions arbitrary-length audio.
-        std::vector<TrackInfo> tracks; // Ordered exactly as the model's source axis.
+        std::vector<TrackInfo> tracks; // Public result order; providers map the model's source axis.
     };
     SRTSEPINFER_EXPORT srt::Expected<std::unique_ptr<SeparationSchema>> readSeparationSchema(const srt::ContribSpec &, std::string variant);
 

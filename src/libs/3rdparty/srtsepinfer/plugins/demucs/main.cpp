@@ -23,6 +23,8 @@ using srtsepinfer::SeparationError;
 
 namespace {
     constexpr char Variant[] = "demucs";
+    const std::vector<std::string> Sources4{"drums", "bass", "other", "vocals"};
+    const std::vector<std::string> Sources6{"drums", "bass", "other", "vocals", "guitar", "piano"};
     class Configuration final : public srt::ContribConfiguration {
     public:
         Configuration() : ContribConfiguration(Sep::API_INTERFACE, Variant, Sep::API_LEVEL) {}
@@ -31,6 +33,8 @@ namespace {
         int fftSize = 0;
         int hopLength = 0;
         double overlap = 0.25;
+        std::size_t modelTrackCount = 0;
+        std::vector<std::size_t> trackMapping; // Export order -> model source axis.
     };
 
     class Executive final : public Sep::SeparationExecutive {
@@ -66,6 +70,10 @@ namespace {
             const auto frames = (segment + configuration_.hopLength - 1) / configuration_.hopLength;
             const auto bins = configuration_.fftSize / 2;
             const auto sources = schema_.tracks.size();
+            const auto modelSources = configuration_.modelTrackCount;
+            bool identityMapping = sources == modelSources;
+            for (std::size_t i = 0; i < sources; ++i)
+                identityMapping = identityMapping && configuration_.trackMapping[i] == i;
             const auto stopped = [this] { return cancelled(); };
             const auto progress = [&](double value) {
                 if (input.progress && !input.progress(value))
@@ -139,8 +147,8 @@ namespace {
                 auto *output = native ? native->as<Onnx::SessionResult>() : nullptr;
                 if (!output)
                     return srt::Error(SeparationError::ModelFailed, "ONNX driver returned no typed result");
-                const std::vector<int64_t> spectrumShape{1, static_cast<int64_t>(sources), 4, bins, static_cast<int64_t>(frames)};
-                const std::vector<int64_t> timeShape{1, static_cast<int64_t>(sources), 2, static_cast<int64_t>(segment)};
+                const std::vector<int64_t> spectrumShape{1, static_cast<int64_t>(modelSources), 4, bins, static_cast<int64_t>(frames)};
+                const std::vector<int64_t> timeShape{1, static_cast<int64_t>(modelSources), 2, static_cast<int64_t>(segment)};
                 for (const auto &[name, shape] : {std::pair{"spectrum", spectrumShape}, std::pair{"waveform_sources", timeShape}}) {
                     const auto found = output->outputs.find(name);
                     if (found == output->outputs.end() || !found->second || found->second->dataType() != ds::ITensor::Float || found->second->shape() != shape)
@@ -150,7 +158,18 @@ namespace {
                         return srt::Error(SeparationError::ModelMismatch, std::string("Nonfinite Demucs output: ") + name);
                 }
                 const auto frequency = output->outputs.at("spectrum")->view<float>();
-                auto reconstructed = transform_.inverse({frequency.data(), frequency.size()}, static_cast<int>(sources * 2), segment, stopped);
+                const auto sourceSpectrumSize = 4 * static_cast<std::size_t>(bins) * frames;
+                std::span<const float> exportedSpectrum(frequency.data(), frequency.size());
+                std::vector<float> selectedSpectrum;
+                if (sources == 1) {
+                    exportedSpectrum = exportedSpectrum.subspan(configuration_.trackMapping.front() * sourceSpectrumSize, sourceSpectrumSize);
+                } else if (!identityMapping) {
+                    selectedSpectrum.resize(sources * sourceSpectrumSize);
+                    for (std::size_t i = 0; i < sources; ++i)
+                        std::copy_n(frequency.data() + configuration_.trackMapping[i] * sourceSpectrumSize, sourceSpectrumSize, selectedSpectrum.data() + i * sourceSpectrumSize);
+                    exportedSpectrum = selectedSpectrum;
+                }
+                auto reconstructed = transform_.inverse(exportedSpectrum, static_cast<int>(sources * 2), segment, stopped);
                 if (!reconstructed)
                     return reconstructed.takeError();
                 const auto time = output->outputs.at("waveform_sources")->view<float>();
@@ -159,7 +178,8 @@ namespace {
                     for (std::size_t source = 0; source < sources; ++source) {
                         for (int channel = 0; channel < 2; ++channel) {
                             const auto index = (source * 2 + channel) * segment + padding + i;
-                            const auto value = ((*reconstructed)[index] + time[index]) * deviation + mean;
+                            const auto modelIndex = (configuration_.trackMapping[source] * 2 + channel) * segment + padding + i;
+                            const auto value = ((*reconstructed)[index] + time[modelIndex]) * deviation + mean;
                             result->tracks[source].audio.samples[2 * (offset + i) + channel] += static_cast<float>(value * triangle[i]);
                         }
                     }
@@ -196,13 +216,8 @@ namespace {
             if (!read)
                 return read.takeError();
             const auto &schema = **read;
-            const std::vector<std::string> expected4{"drums", "bass", "other", "vocals"};
-            const std::vector<std::string> expected6{"drums", "bass", "other", "vocals", "guitar", "piano"};
-            std::vector<std::string> ids;
-            for (const auto &track : schema.tracks)
-                ids.push_back(track.id);
-            if (schema.sampleRate != 44100 || schema.channelCount != 2 || schema.maxSegmentDuration != 0 || (ids != expected4 && ids != expected6))
-                return srt::Error(srt::Error::InvalidFormat, "Demucs exports require 44100 Hz stereo, unlimited duration, and the official ordered four or six sources");
+            if (schema.sampleRate != 44100 || schema.channelCount != 2 || schema.maxSegmentDuration != 0)
+                return srt::Error(srt::Error::InvalidFormat, "Demucs exports require 44100 Hz stereo and unlimited duration");
             return std::unique_ptr<srt::ContribExports>(read.take().release());
         }
         srt::Expected<std::unique_ptr<srt::ContribConfiguration>> createConfiguration(const srt::ContribSpec &spec) const override {
@@ -211,8 +226,9 @@ namespace {
                 return srt::Error(srt::Error::InvalidFormat, "Demucs configuration must be an object");
             const auto object = value.toObject();
             const std::set<std::string> fields{"model", "segmentSamples", "fftSize", "hopLength", "overlap"};
-            if (object.size() != fields.size())
-                return srt::Error(srt::Error::InvalidFormat, "Demucs configuration requires model, segmentSamples, fftSize, hopLength and overlap");
+            for (const auto &[field, unused] : object)
+                if (!fields.count(field) && field != "modelTracks" && field != "trackMapping")
+                    return srt::Error(srt::Error::InvalidFormat, "Unknown Demucs configuration field: " + field);
             for (const auto &field : fields)
                 if (!object.count(field))
                     return srt::Error(srt::Error::InvalidFormat, "Missing Demucs configuration field: " + field);
@@ -236,6 +252,51 @@ namespace {
             configuration->overlap = object.at("overlap").toDouble();
             if (configuration->segmentSamples != 343980 || configuration->fftSize != 4096 || configuration->hopLength != 1024 || !std::isfinite(configuration->overlap) || configuration->overlap < 0 || configuration->overlap > 0.5)
                 return srt::Error(srt::Error::InvalidFormat, "Unsupported HTDemucs graph geometry or overlap (expected 343980 samples, FFT 4096, hop 1024, overlap in [0,0.5])");
+            auto schema = Sep::readSeparationSchema(spec, Variant);
+            if (!schema)
+                return schema.takeError();
+            std::vector<std::string> exportedIds;
+            for (const auto &track : (*schema)->tracks)
+                exportedIds.push_back(track.id);
+            const bool hasModelTracks = object.count("modelTracks");
+            const bool hasMapping = object.count("trackMapping");
+            if (hasModelTracks != hasMapping)
+                return srt::Error(srt::Error::InvalidFormat, "modelTracks and trackMapping must be declared together");
+            std::vector<std::string> modelTracks;
+            if (hasModelTracks) {
+                if (!object.at("modelTracks").isArray())
+                    return srt::Error(srt::Error::InvalidFormat, "modelTracks must be the ordered model source names");
+                for (const auto &track : object.at("modelTracks").toArray()) {
+                    if (!track.isString())
+                        return srt::Error(srt::Error::InvalidFormat, "Each modelTracks entry must be a string");
+                    modelTracks.push_back(track.toString());
+                }
+            } else {
+                // Legacy declarations exported the complete model layout.
+                modelTracks = exportedIds;
+            }
+            if (modelTracks != Sources4 && modelTracks != Sources6)
+                return srt::Error(srt::Error::InvalidFormat, "modelTracks must match the official ordered four or six Demucs sources");
+            configuration->modelTrackCount = modelTracks.size();
+            if (hasMapping) {
+                if (!object.at("trackMapping").isObject())
+                    return srt::Error(srt::Error::InvalidFormat, "trackMapping must map every exported track ID to a model track name");
+                const auto mapping = object.at("trackMapping").toObject();
+                if (mapping.size() != exportedIds.size())
+                    return srt::Error(srt::Error::InvalidFormat, "trackMapping keys must exactly match exports.tracks IDs");
+                for (const auto &id : exportedIds) {
+                    const auto entry = mapping.find(id);
+                    if (entry == mapping.end() || !entry->second.isString())
+                        return srt::Error(srt::Error::InvalidFormat, "Missing or non-string trackMapping entry for " + id);
+                    const auto source = std::ranges::find(modelTracks, entry->second.toString());
+                    if (source == modelTracks.end())
+                        return srt::Error(srt::Error::InvalidFormat, "Unknown model track mapped from " + id);
+                    configuration->trackMapping.push_back(static_cast<std::size_t>(source - modelTracks.begin()));
+                }
+            } else {
+                for (std::size_t i = 0; i < modelTracks.size(); ++i)
+                    configuration->trackMapping.push_back(i);
+            }
             return std::unique_ptr<srt::ContribConfiguration>(configuration.release());
         }
         srt::Expected<std::unique_ptr<srt::InferenceExecutive>> createInference(srt::InferenceSpec &spec, const srt::ContribImportOptions &, const srt::InferenceRuntimeOptions &) override {

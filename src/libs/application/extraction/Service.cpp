@@ -12,6 +12,7 @@
 #include <dsspextraction/Results.h>
 #include <dsspextraction/Slicing.h>
 #include <dsspextraction/Separation.h>
+#include <dsspextraction/Tempo.h>
 #include <dsspmedia/Wave.h>
 #include <dsspresource/TaskExecutor.h>
 
@@ -174,6 +175,14 @@ namespace dssp::extraction {
     Service::Service(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
     Service::~Service() = default;
     void Service::shutdown() { impl_->tasks->shutdown(); }
+    void Service::tempo(Input input, std::stop_token stop, Completion<TempoOutput> complete) const {
+        const auto *record = impl_->catalog->find(Kind::Tempo, input.extractor);
+        if (!record) {
+            complete(fail<ExtractionErrors>(InvalidInputError("Tempo extractor does not exist: " + input.extractor)));
+            return;
+        }
+        extractTempo(impl_->catalog, *record, impl_->tasks, std::move(input), stop, std::move(complete));
+    }
     CatalogResult<ExtractorList> Service::extractors(std::string_view language) const { return impl_->catalog->list(language); }
     CatalogResult<ExtractorInfo> Service::extractor(Kind kind, std::string_view id, std::string_view language) const { return impl_->catalog->metadata(kind, id, language); }
     void Service::note(Input input, std::stop_token stop, Completion<NoteOutput> complete) const {
@@ -212,7 +221,7 @@ namespace dssp::extraction {
             return builder.take();
         });
     }
-    void Service::separation(Input input, std::stop_token stop, Completion<SeparationOutput> complete) const {
+    void Service::separation(SeparationInput input, std::stop_token stop, Completion<SeparationOutput> complete) const {
         const auto *record = impl_->catalog->find(Kind::Separation, input.extractor);
         if (!record) {
             complete(fail<ExtractionErrors>(InvalidInputError("Separation extractor does not exist: " + input.extractor)));

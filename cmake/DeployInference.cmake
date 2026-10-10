@@ -50,6 +50,16 @@ function(dssp_deploy_inference_plugins target)
     )
     add_dependencies(${target} srtsepinfer_deploy_plugins)
 
+    set(_beat_destination "${_plugin_root}/srtbeatinfer/inferenceinterpreters/beat-this")
+    add_custom_target(srtbeatinfer_deploy_plugins
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${_beat_destination}"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:srtbeatinferbeatthis>" "${_beat_destination}/$<TARGET_FILE_NAME:srtbeatinferbeatthis>"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${SRTBEATINFER_PLUGIN_MANIFEST}" "${_beat_destination}/plugin.json"
+        DEPENDS srtbeatinferbeatthis "${SRTBEATINFER_PLUGIN_MANIFEST}"
+        COMMENT "Stage project-built srtbeatinfer interpreter"
+        VERBATIM)
+    add_dependencies(${target} srtbeatinfer_deploy_plugins)
+
     set(_ort_destination "${_plugin_root}/dsinfer/inferencedrivers/onnx/runtime")
     set(_ort_install_destination "${DSSP_INSTALL_PLUGINS_DIR}/dsinfer/inferencedrivers/onnx/runtime")
     if(NOT IS_DIRECTORY "${ONNXRUNTIME_BUILDS_RUNTIME_DIR}")

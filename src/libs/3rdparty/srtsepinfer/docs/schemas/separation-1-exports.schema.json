@@ -10,7 +10,7 @@
     "maxSegmentDuration": {"type": "number", "minimum": 0, "default": 0},
     "tracks": {
       "type": "array", "minItems": 1,
-      "description": "Ordered output sources. Each id must also be unique; the runtime enforces this cross-item rule.",
+      "description": "Public output tracks in result order, which may differ from the model's raw source axis. Each id must also be unique; the runtime enforces this cross-item rule.",
       "items": {
         "type": "object", "additionalProperties": false, "required": ["id", "description"],
         "properties": {

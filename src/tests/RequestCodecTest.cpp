@@ -226,4 +226,74 @@ namespace dssp::tests {
         EXPECT_EQ(error->issues()[0].errorType, "format");
     }
 
+    TEST(RequestCodec, SeparationPreservesOptionalOutputPreferencesAndTheirOrder) {
+        Json::Value json;
+        json["extractor"] = "separator";
+        json["input"]["audioUrl"] = "data:audio/wav;base64,YQ==";
+        auto result = v1::fromJson<dto::SeparationExtractionRequest>(json);
+        ASSERT_TRUE(result);
+        EXPECT_EQ(result->extractor, "separator");
+        EXPECT_EQ(result->input.audioUrl, "data:audio/wav;base64,YQ==");
+        EXPECT_FALSE(result->acceptableFormats);
+        EXPECT_FALSE(result->acceptableSchemes);
+        json["acceptableFormats"] = Json::Value(Json::arrayValue);
+        json["acceptableSchemes"] = Json::Value(Json::arrayValue);
+        result = v1::fromJson<dto::SeparationExtractionRequest>(json);
+        ASSERT_TRUE(result);
+        ASSERT_TRUE(result->acceptableFormats);
+        EXPECT_TRUE(result->acceptableFormats->empty());
+        ASSERT_TRUE(result->acceptableSchemes);
+        EXPECT_TRUE(result->acceptableSchemes->empty());
+        json["acceptableFormats"].append("audio/flac");
+        json["acceptableFormats"].append("Audio/WAV");
+        json["acceptableSchemes"].append("https");
+        json["acceptableSchemes"].append("DATA");
+        result = v1::fromJson<dto::SeparationExtractionRequest>(json);
+        ASSERT_TRUE(result);
+        EXPECT_EQ(*result->acceptableFormats, (std::vector<std::string>{"audio/flac", "Audio/WAV"}));
+        EXPECT_EQ(*result->acceptableSchemes, (std::vector<std::string>{"https", "DATA"}));
+    }
+
+    TEST(RequestCodec, SeparationRejectsInvalidMimeTypesAndOutputPreferenceTypes) {
+        Json::Value json;
+        json["extractor"] = "separator";
+        json["input"]["audioUrl"] = "data:audio/wav;base64,YQ==";
+        for (const auto invalid : {"audio/wav;codecs=pcm", "audio/*", "*/*", "wav"}) {
+            SCOPED_TRACE(invalid);
+            json["acceptableFormats"] = Json::Value(Json::arrayValue);
+            json["acceptableFormats"].append(invalid);
+            const auto result = v1::fromJson<dto::SeparationExtractionRequest>(json);
+            ASSERT_FALSE(result);
+            const auto error = result.error().get_if<http::ValidationError>();
+            ASSERT_NE(error, nullptr);
+            ASSERT_EQ(error->issues().size(), 1);
+            EXPECT_EQ(error->issues()[0].pointer, "/acceptableFormats/0");
+            EXPECT_EQ(error->issues()[0].errorType, "format");
+        }
+        json.removeMember("acceptableFormats");
+        for (const auto field : {"acceptableFormats", "acceptableSchemes"}) {
+            for (const auto &invalid : {Json::Value{}, Json::Value("audio/wav"), Json::Value(42), Json::Value(Json::objectValue)}) {
+                SCOPED_TRACE(field);
+                json[field] = invalid;
+                const auto result = v1::fromJson<dto::SeparationExtractionRequest>(json);
+                ASSERT_FALSE(result);
+                const auto error = result.error().get_if<http::ValidationError>();
+                ASSERT_NE(error, nullptr);
+                ASSERT_EQ(error->issues().size(), 1);
+                EXPECT_EQ(error->issues()[0].pointer, "/" + std::string(field));
+                EXPECT_EQ(error->issues()[0].errorType, "type");
+            }
+            json[field] = Json::Value(Json::arrayValue);
+            json[field].append(42);
+            const auto result = v1::fromJson<dto::SeparationExtractionRequest>(json);
+            ASSERT_FALSE(result);
+            const auto error = result.error().get_if<http::ValidationError>();
+            ASSERT_NE(error, nullptr);
+            ASSERT_EQ(error->issues().size(), 1);
+            EXPECT_EQ(error->issues()[0].pointer, "/" + std::string(field) + "/0");
+            EXPECT_EQ(error->issues()[0].errorType, "type");
+            json.removeMember(field);
+        }
+    }
+
 }

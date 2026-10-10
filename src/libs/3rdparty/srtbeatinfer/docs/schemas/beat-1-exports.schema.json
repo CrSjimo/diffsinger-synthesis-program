@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SynthRT Beat Inference Level 1 exports",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sampleRate", "channelCount", "downbeats"],
+  "properties": {
+    "sampleRate": {"type": "integer", "minimum": 1, "description": "Required input PCM sample rate in Hz."},
+    "channelCount": {"type": "integer", "minimum": 1, "description": "Required number of interleaved PCM channels."},
+    "maxSegmentDuration": {"type": "number", "minimum": 0, "default": 0, "description": "Maximum input duration in seconds; zero means the interpreter handles arbitrary lengths."},
+    "downbeats": {"type": "boolean", "description": "Whether the model identifies downbeats (first beat of a measure)."}
+  }
+}

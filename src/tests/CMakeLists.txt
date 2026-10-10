@@ -87,3 +87,11 @@ target_include_directories(dssp_separation_tests PRIVATE "${DSSP_DRWAV_INCLUDE_D
 target_compile_definitions(dssp_separation_tests PRIVATE DSSP_TEST_SEPARATION_PLUGIN_DIR="${DSSP_BUILD_PLUGINS_DIR}/srtsepinfer/inferenceinterpreters")
 add_dependencies(dssp_separation_tests srtsepinfer_deploy_plugins)
 gtest_discover_tests(dssp_separation_tests DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 15)
+
+add_executable(dssp_beat_tests BeatTest.cpp BeatFeatureReference.h)
+target_compile_features(dssp_beat_tests PRIVATE cxx_std_23)
+target_link_libraries(dssp_beat_tests PRIVATE dssp_api_v1 srtbeatinfer_dsp GTest::gtest_main)
+target_include_directories(dssp_beat_tests PRIVATE "${DSSP_DRWAV_INCLUDE_DIR}")
+target_compile_definitions(dssp_beat_tests PRIVATE DSSP_TEST_BEAT_PLUGIN_DIR="${DSSP_BUILD_PLUGINS_DIR}/srtbeatinfer/inferenceinterpreters")
+add_dependencies(dssp_beat_tests srtbeatinfer_deploy_plugins)
+gtest_discover_tests(dssp_beat_tests DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 15)

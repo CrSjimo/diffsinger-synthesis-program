@@ -140,16 +140,16 @@ namespace dssp::api_v1 {
         if (value.acceptableAudioSampleRates) {
             result["acceptableAudioSampleRates"] = toJson(*value.acceptableAudioSampleRates);
         }
-        if (value.tracks) {
-            Json::Value tracks(Json::arrayValue);
-            for (const auto &track : *value.tracks) {
-                Json::Value item;
-                item["name"] = track.name;
-                item["description"] = track.description;
-                tracks.append(std::move(item));
-            }
-            result["tracks"] = std::move(tracks);
-        }
+        return result;
+    }
+    Json::Value toJson(const dto::SeparationTrackInfo &value) {
+        Json::Value result;
+        result["name"] = value.name;
+        return result;
+    }
+    Json::Value toJson(const dto::SeparationExtractorInfo &value) {
+        auto result = toJson(static_cast<const dto::ExtractorInfo &>(value));
+        result["tracks"] = toJson(value.tracks);
         return result;
     }
     Json::Value toJson(const dto::ExtractorList &value) {
@@ -234,7 +234,13 @@ namespace dssp::api_v1 {
     }
     Json::Value toJson(const dto::TempoExtractionOutput &value) {
         Json::Value result;
-        result["tempo"] = value.tempo;
+        result["beats"] = toJson(value.beats);
+        return result;
+    }
+    Json::Value toJson(const dto::ExtractedBeat &value) {
+        Json::Value result;
+        result["position"] = value.position;
+        result["downbeat"] = value.downbeat;
         return result;
     }
     Json::Value toJson(const dto::SeparationTrack &value) {

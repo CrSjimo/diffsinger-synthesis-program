@@ -9,7 +9,7 @@ endforeach()
 # Only binaries beside plugin metadata are inputs. In particular, the ONNX
 # Runtime payload is a separate bundle and must retain its own layout.
 set(_plugins)
-foreach(_family IN ITEMS dsinfer wolf otter srtsepinfer)
+foreach(_family IN ITEMS dsinfer wolf otter srtsepinfer srtbeatinfer)
     if(NOT IS_DIRECTORY "${plugin_root}/${_family}")
         message(FATAL_ERROR "Inference plugin directory is missing: ${plugin_root}/${_family}")
     endif()

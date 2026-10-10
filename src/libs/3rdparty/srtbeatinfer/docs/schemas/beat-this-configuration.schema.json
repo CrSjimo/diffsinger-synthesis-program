@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Beat This! final0 interpreter configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["model", "chunkFrames", "borderFrames"],
+  "properties": {
+    "model": {"type": "string", "minLength": 1, "description": "ONNX model path relative to the inference declaration."},
+    "chunkFrames": {"const": 1500},
+    "borderFrames": {"const": 6}
+  }
+}

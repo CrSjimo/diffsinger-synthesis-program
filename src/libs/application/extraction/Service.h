@@ -17,7 +17,8 @@ namespace dssp::extraction {
         CatalogResult<ExtractorInfo> extractor(Kind, std::string_view id, std::string_view acceptLanguage = {}) const;
         void note(Input, std::stop_token, Completion<NoteOutput>) const;
         void pitch(Input, std::stop_token, Completion<PitchOutput>) const;
-        void separation(Input, std::stop_token, Completion<SeparationOutput>) const;
+        void tempo(Input, std::stop_token, Completion<TempoOutput>) const;
+        void separation(SeparationInput, std::stop_token, Completion<SeparationOutput>) const;
         // Call on the host thread while the inference environment is alive.
         void shutdown();
 

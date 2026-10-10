@@ -20,6 +20,8 @@ namespace dssp::api_v1 {
     Json::Value toJson(const dto::SingerBackgroundResponse &value);
     Json::Value toJson(const dto::SingerDemoAudio &value);
     Json::Value toJson(const dto::ExtractorInfo &value);
+    Json::Value toJson(const dto::SeparationTrackInfo &value);
+    Json::Value toJson(const dto::SeparationExtractorInfo &value);
     Json::Value toJson(const dto::ExtractorList &value);
     Json::Value toJson(const dto::EnvTagResponse &value);
     Json::Value toJson(const dto::Pronunciation &value);
@@ -35,6 +37,7 @@ namespace dssp::api_v1 {
     Json::Value toJson(const dto::PitchExtractionSegment &value);
     Json::Value toJson(const dto::PitchExtractionOutput &value);
     Json::Value toJson(const dto::TempoExtractionOutput &value);
+    Json::Value toJson(const dto::ExtractedBeat &value);
     Json::Value toJson(const dto::SeparationTrack &value);
     Json::Value toJson(const dto::SeparationExtractionOutput &value);
 

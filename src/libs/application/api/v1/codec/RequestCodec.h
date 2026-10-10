@@ -21,6 +21,8 @@ namespace dssp::api_v1 {
     std::expected<dto::AudioRequest, http::DtoErrors> fromJson<dto::AudioRequest>(const Json::Value &);
     template <>
     std::expected<dto::ExtractionRequest, http::DtoErrors> fromJson<dto::ExtractionRequest>(const Json::Value &);
+    template <>
+    std::expected<dto::SeparationExtractionRequest, http::DtoErrors> fromJson<dto::SeparationExtractionRequest>(const Json::Value &);
 
     std::expected<dto::MediaQuery, http::DtoErrors> mediaQuery(const drogon::HttpRequest &request);
 
@@ -69,6 +71,10 @@ namespace drogon {
     template <>
     inline dssp::api_v1::Decoded<dssp::api_v1::dto::ExtractionRequest> fromRequest<dssp::api_v1::Decoded<dssp::api_v1::dto::ExtractionRequest>>(const HttpRequest &request) {
         return dssp::api_v1::fromHttp<dssp::api_v1::dto::ExtractionRequest>(request);
+    }
+    template <>
+    inline dssp::api_v1::Decoded<dssp::api_v1::dto::SeparationExtractionRequest> fromRequest<dssp::api_v1::Decoded<dssp::api_v1::dto::SeparationExtractionRequest>>(const HttpRequest &request) {
+        return dssp::api_v1::fromHttp<dssp::api_v1::dto::SeparationExtractionRequest>(request);
     }
 }
 

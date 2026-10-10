@@ -16,16 +16,20 @@
 #include <dsspresource/Async.h>
 
 namespace dssp::api_v1::detail {
+    template <class T, class Map>
+    void extractionCatalog(extraction::CatalogResult<T> result, const http::Callback &callback, const http::RequestLog &context, Map map) {
+        if (!result) callback(extractionProblemResponse(result.error(), context));
+        else callback(http::jsonResponse(toJson(std::invoke(map, std::move(*result))), context));
+    }
     template <class T>
     void extractionCatalog(extraction::CatalogResult<T> result, const http::Callback &callback, const http::RequestLog &context) {
-        if (!result) callback(extractionProblemResponse(result.error(), context));
-        else callback(http::jsonResponse(toJson(toDto(std::move(*result))), context));
+        extractionCatalog(std::move(result), callback, context, [](T value) { return toDto(std::move(value)); });
     }
-    template <class Response, class Output, class Start>
+    template <class Response, class Output, class Request = dto::ExtractionRequest, class Start>
     drogon::Task<> extract(drogon::HttpRequestPtr request, http::Callback callback, std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::shared_ptr<extraction::Service> service, Start start, std::string_view operation) {
         const auto context = lifetime->track(*request);
         if (context.stopRequested()) co_return;
-        auto input = request->as<Decoded<dto::ExtractionRequest>>();
+        auto input = request->as<Decoded<Request>>();
         if (context.stopRequested()) co_return;
         if (!input) {
             callback(http::problemResponse(input.error(), context.logContext()));

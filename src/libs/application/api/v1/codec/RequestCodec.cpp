@@ -279,6 +279,34 @@ namespace dssp::api_v1 {
                 return text;
             });
         }
+        template <class Request>
+        void acceptableMedia(const Node &n, Request &result) {
+            const auto formats = n.field("acceptableFormats", false), schemes = n.field("acceptableSchemes", false);
+            if (formats.value) {
+                result.acceptableFormats = strings(formats, true);
+            }
+            if (schemes.value) {
+                result.acceptableSchemes = strings(schemes, false);
+            }
+        }
+        void extractionRequest(const Node &n, dto::ExtractionRequest &result) {
+            result.extractor = n.field("extractor").string();
+            const auto input = n.field("input");
+            if (input.object()) {
+                const auto url = input.field("audioUrl");
+                result.input.audioUrl = url.string();
+                if (url.value && url.value->isString()) {
+                    auto checked = http::validateUri(result.input.audioUrl);
+                    if (!checked) {
+                        if (const auto *invalid = checked.error().get_if<http::UriSyntaxError>()) {
+                            url.issue("format", invalid->message());
+                        } else if (const auto *boundary = checked.error().get_if<http::HttpBoundaryError>()) {
+                            url.boundaryError = *boundary;
+                        }
+                    }
+                }
+            }
+        }
         template <class T, class Read>
         std::expected<T, DtoErrors> decode(const Json::Value &json, Read read) {
             std::vector<FieldIssue> issues;
@@ -365,34 +393,18 @@ namespace dssp::api_v1 {
             if (input.value && input.value->isObject()) {
                 r.input.parameters = parameters<dto::AudioParameter>(input.field("parameters"));
             }
-            const auto formats = n.field("acceptableFormats", false), schemes = n.field("acceptableSchemes", false);
-            if (formats.value) {
-                r.acceptableFormats = strings(formats, true);
-            }
-            if (schemes.value) {
-                r.acceptableSchemes = strings(schemes, false);
-            }
+            acceptableMedia(n, r);
         });
     }
     template <>
     std::expected<dto::ExtractionRequest, DtoErrors> fromJson<dto::ExtractionRequest>(const Json::Value &json) {
-        return decode<dto::ExtractionRequest>(json, [](const Node &n, auto &r) {
-            r.extractor = n.field("extractor").string();
-            const auto input = n.field("input");
-            if (input.object()) {
-                const auto url = input.field("audioUrl");
-                r.input.audioUrl = url.string();
-                if (url.value && url.value->isString()) {
-                    auto checked = http::validateUri(r.input.audioUrl);
-                    if (!checked) {
-                        if (const auto *invalid = checked.error().get_if<http::UriSyntaxError>()) {
-                            url.issue("format", invalid->message());
-                        } else if (const auto *boundary = checked.error().get_if<http::HttpBoundaryError>()) {
-                            url.boundaryError = *boundary;
-                        }
-                    }
-                }
-            }
+        return decode<dto::ExtractionRequest>(json, extractionRequest);
+    }
+    template <>
+    std::expected<dto::SeparationExtractionRequest, DtoErrors> fromJson<dto::SeparationExtractionRequest>(const Json::Value &json) {
+        return decode<dto::SeparationExtractionRequest>(json, [](const Node &n, auto &r) {
+            extractionRequest(n, r);
+            acceptableMedia(n, r);
         });
     }
 

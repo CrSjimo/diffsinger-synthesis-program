@@ -2,6 +2,7 @@
 find_package(synthrt CONFIG REQUIRED)
 find_package(dsinfer CONFIG REQUIRED)
 find_package(stdcorelib CONFIG REQUIRED)
+find_package(pffft CONFIG REQUIRED)
 include(GenerateExportHeader)
 
 add_library(srtsepinfer SHARED src/SeparationApiL1.cpp src/SeparationError.cpp src/SeparationTask.cpp)
@@ -20,6 +21,7 @@ set_target_properties(srtsepinfer PROPERTIES
 add_library(srtsepinfer_dsp STATIC src/SpectralTransform.cpp)
 target_compile_features(srtsepinfer_dsp PUBLIC cxx_std_23)
 target_link_libraries(srtsepinfer_dsp PUBLIC srtsepinfer)
+target_link_libraries(srtsepinfer_dsp PRIVATE pffft::pffft)
 target_include_directories(srtsepinfer_dsp PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 set_target_properties(srtsepinfer_dsp PROPERTIES POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden)
 

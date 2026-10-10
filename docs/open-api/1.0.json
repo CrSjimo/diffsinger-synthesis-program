@@ -492,7 +492,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/components/responses/Extractor"
+            "$ref": "#/components/responses/SeparationExtractor"
           }
         }
       }
@@ -522,7 +522,7 @@
         ],
         "operationId": "postExtractTempo",
         "summary": "Extract tempo from audio",
-        "description": "Extracts one global tempo value from audio.",
+        "description": "Extracts an ordered list of beats and downbeat indicators from audio.",
         "requestBody": {
           "$ref": "#/components/requestBodies/TempoExtractionRequest"
         },
@@ -558,7 +558,7 @@
         ],
         "operationId": "postExtractSeparation",
         "summary": "Separate audio",
-        "description": "Separates audio into its constituent tracks. Display language is specified via the Accept-Language request header.",
+        "description": "Separates audio into its constituent tracks. Output formats and URL schemes are constrained by acceptableFormats and acceptableSchemes in the request body. The server currently returns only audio/wav data URLs, preserving the input sample rate without resampling; the input must use a sample rate accepted by the extractor. A nonempty preference list that excludes the supported output format or scheme is rejected with HTTP 422. Display language is specified via the Accept-Language request header.",
         "requestBody": {
           "$ref": "#/components/requestBodies/SeparationExtractionRequest"
         },
@@ -935,6 +935,16 @@
           }
         }
       },
+      "SeparationExtractor": {
+        "description": "Separation extractor metadata, including the available output tracks.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SeparationExtractorInfo"
+            }
+          }
+        }
+      },
       "NoteExtractionResult": {
         "description": "Extracted notes.",
         "content": {
@@ -946,7 +956,7 @@
         }
       },
       "TempoExtractionResult": {
-        "description": "Extracted global tempo.",
+        "description": "Extracted beats and downbeat indicators.",
         "content": {
           "application/json": {
             "schema": {
@@ -1007,7 +1017,7 @@
           "separation": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ExtractorInfo"
+              "$ref": "#/components/schemas/SeparationExtractorInfo"
             }
           }
         }
@@ -1057,6 +1067,41 @@
           }
         }
       },
+      "SeparationExtractorInfo": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ExtractorInfo"
+          },
+          {
+            "type": "object",
+            "required": [
+              "tracks"
+            ],
+            "properties": {
+              "tracks": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SeparationTrackInfo"
+                },
+                "description": "Available output tracks in the same order as the separation result."
+              }
+            }
+          }
+        ]
+      },
+      "SeparationTrackInfo": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Stable, non-localized track name matching name in the separation result, for example drums, bass, other or vocals."
+          }
+        }
+      },
       "NoteExtractionRequest": {
         "$ref": "#/components/schemas/ExtractionRequest"
       },
@@ -1067,7 +1112,31 @@
         "$ref": "#/components/schemas/ExtractionRequest"
       },
       "SeparationExtractionRequest": {
-        "$ref": "#/components/schemas/ExtractionRequest"
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ExtractionRequest"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "acceptableFormats": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "media-type"
+                },
+                "description": "MIME types the client accepts for every separated track, in priority order. If omitted or empty, the server may return any supported format. MIME types are compared case-insensitively and must be type/subtype without parameters or wildcards. The server currently supports only audio/wav."
+              },
+              "acceptableSchemes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "URL schemes the client accepts for every separated track, in priority order. If omitted or empty, the server may return any supported scheme. Schemes are compared case-insensitively. The server currently supports only data."
+              }
+            }
+          }
+        ]
       },
       "ExtractionRequest": {
         "type": "object",
@@ -1155,13 +1224,33 @@
       "TempoExtractionOutput": {
         "type": "object",
         "required": [
-          "tempo"
+          "beats"
         ],
         "properties": {
-          "tempo": {
+          "beats": {
+            "type": "array",
+            "description": "Extracted beats in chronological order. The array can be empty when no beats are detected.",
+            "items": {
+              "$ref": "#/components/schemas/ExtractedBeat"
+            }
+          }
+        }
+      },
+      "ExtractedBeat": {
+        "type": "object",
+        "required": [
+          "position",
+          "downbeat"
+        ],
+        "properties": {
+          "position": {
             "type": "number",
-            "exclusiveMinimum": 0,
-            "description": "Estimated global tempo in beats per minute."
+            "minimum": 0,
+            "description": "Absolute time in seconds from the start of the input audio to this beat."
+          },
+          "downbeat": {
+            "type": "boolean",
+            "description": "Whether this beat is a downbeat (the first beat of a measure)."
           }
         }
       },

@@ -134,6 +134,10 @@ namespace dssp::api_v1::dto {
         std::string extractor;
         ExtractionInput input;
     };
+    struct SeparationExtractionRequest : ExtractionRequest {
+        std::optional<std::vector<std::string>> acceptableFormats;
+        std::optional<std::vector<std::string>> acceptableSchemes;
+    };
     struct MediaQuery {
         std::vector<std::string> acceptableFormats;
         std::vector<std::string> acceptableSchemes;

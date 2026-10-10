@@ -25,6 +25,10 @@ namespace dssp::tests {
             EXPECT_TRUE(extractors[key].isArray());
             EXPECT_TRUE(extractors[key].empty());
         }
+        const auto separator = api_v1::toJson(api_v1::dto::SeparationExtractorInfo{});
+        EXPECT_TRUE(separator["tracks"].isArray());
+        EXPECT_TRUE(separator["tracks"].empty());
+        EXPECT_FALSE(api_v1::toJson(api_v1::dto::ExtractorInfo{}).isMember("tracks"));
         const auto parameters = api_v1::toJson(api_v1::dto::ParameterResponse{});
         EXPECT_TRUE(parameters["output"]["parameters"].isObject());
         EXPECT_FALSE(parameters.isMember("state"));

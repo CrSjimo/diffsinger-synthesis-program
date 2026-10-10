@@ -1,13 +1,15 @@
 #ifndef SRTSEPINFER_SPECTRALTRANSFORM_H
 #define SRTSEPINFER_SPECTRALTRANSFORM_H
 
-#include <complex>
 #include <functional>
+#include <memory>
 #include <span>
 #include <vector>
 
 #include <srtsepinfer/Separation/SeparationError.h>
 #include <synthrt/Support/Expected.h>
+
+struct PFFFT_Setup;
 
 namespace srtsepinfer::demucs {
     /// HTDemucs's normalized, periodic-Hann STFT, including its two-frame crop
@@ -19,11 +21,12 @@ namespace srtsepinfer::demucs {
         srt::Expected<std::vector<float>> inverse(std::span<const float> spectrum, int channels, std::size_t length, const std::function<bool()> &cancelled = {}) const;
 
     private:
-        void fft(std::vector<std::complex<double>> &, bool inverse) const;
+        struct SetupDeleter {
+            void operator()(PFFFT_Setup *) const;
+        };
         int size_, hop_;
         std::vector<double> window_;
-        std::vector<std::size_t> reversed_;
-        std::vector<std::complex<double>> roots_;
+        std::unique_ptr<PFFFT_Setup, SetupDeleter> setup_;
     };
 }
 #endif

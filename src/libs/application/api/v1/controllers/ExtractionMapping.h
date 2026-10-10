@@ -7,10 +7,13 @@
 
 namespace dssp::api_v1 {
     extraction::Input toExtraction(dto::ExtractionRequest);
+    extraction::SeparationInput toExtraction(dto::SeparationExtractionRequest);
     dto::ExtractorInfo toDto(extraction::ExtractorInfo);
+    dto::SeparationExtractorInfo toSeparationDto(extraction::ExtractorInfo);
     dto::ExtractorList toDto(extraction::ExtractorList);
     dto::NotesOutput<dto::ExtractedNote> toDto(extraction::NoteOutput);
     dto::PitchExtractionOutput toDto(extraction::PitchOutput);
+    dto::TempoExtractionOutput toDto(extraction::TempoOutput);
     dto::SeparationExtractionOutput toDto(extraction::SeparationOutput);
 }
 

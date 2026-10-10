@@ -7,6 +7,7 @@
 
 #include <dsspextraction/OtterTypes.h>
 #include <dsspextraction/SeparationTypes.h>
+#include <dsspextraction/BeatTypes.h>
 #include <dsspextraction/Types.h>
 #include <dsspinference/Environment.h>
 

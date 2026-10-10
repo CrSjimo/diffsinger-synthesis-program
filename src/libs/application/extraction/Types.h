@@ -22,12 +22,17 @@ namespace dssp::extraction {
     };
     struct ExtractorList {
         std::vector<ExtractorInfo> note;
+        std::vector<ExtractorInfo> tempo;
         std::vector<ExtractorInfo> pitch;
         std::vector<ExtractorInfo> separation;
     };
     struct Input {
         std::string extractor;
         std::string audioUrl;
+    };
+    struct SeparationInput : Input {
+        std::vector<std::string> acceptableFormats;
+        std::vector<std::string> acceptableSchemes;
     };
     struct ExtractedNote {
         double gap = 0;
@@ -36,6 +41,13 @@ namespace dssp::extraction {
     };
     struct NoteOutput {
         std::vector<ExtractedNote> notes;
+    };
+    struct ExtractedBeat {
+        double position = 0;
+        bool downbeat = false;
+    };
+    struct TempoOutput {
+        std::vector<ExtractedBeat> beats;
     };
     struct PitchSegment {
         std::uint64_t gap = 0;

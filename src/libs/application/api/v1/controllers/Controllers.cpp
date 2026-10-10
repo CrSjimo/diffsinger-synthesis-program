@@ -108,7 +108,7 @@ namespace dssp::api_v1 {
         detail::extractionCatalog(service_->extractor(extraction::Kind::Pitch, id, request->getHeader("accept-language")), callback, http::requestLog(*request));
     }
     void ExtractionController::separationExtractor(const drogon::HttpRequestPtr &request, http::Callback &&callback, std::string id) const {
-        detail::extractionCatalog(service_->extractor(extraction::Kind::Separation, id, request->getHeader("accept-language")), callback, http::requestLog(*request));
+        detail::extractionCatalog(service_->extractor(extraction::Kind::Separation, id, request->getHeader("accept-language")), callback, http::requestLog(*request), toSeparationDto);
     }
 
     drogon::Task<> ExtractionController::note(drogon::HttpRequestPtr request, http::Callback callback) const {
@@ -118,11 +118,10 @@ namespace dssp::api_v1 {
         co_await detail::extract<dto::PitchExtractionResponse, extraction::PitchOutput>(request, std::move(callback), lifetime_, service_, &extraction::Service::pitch, "pitch extraction");
     }
     drogon::Task<> ExtractionController::tempo(drogon::HttpRequestPtr request, http::Callback callback) const {
-        callback(extractionProblemResponse(extraction::ExtractionErrors{extraction::InvalidInputError("No tempo extractor is available")}, http::requestLog(*request)));
-        co_return;
+        co_await detail::extract<dto::TempoExtractionResponse, extraction::TempoOutput>(request, std::move(callback), lifetime_, service_, &extraction::Service::tempo, "tempo extraction");
     }
     drogon::Task<> ExtractionController::separation(drogon::HttpRequestPtr request, http::Callback callback) const {
-        co_await detail::extract<dto::SeparationExtractionResponse, extraction::SeparationOutput>(request, std::move(callback), lifetime_, service_, &extraction::Service::separation, "audio separation");
+        co_await detail::extract<dto::SeparationExtractionResponse, extraction::SeparationOutput, dto::SeparationExtractionRequest>(request, std::move(callback), lifetime_, service_, &extraction::Service::separation, "audio separation");
     }
 
     void registerControllers(drogon::HttpAppFramework &app, const std::shared_ptr<http::RequestLifetimeRegistry> &lifetime, const std::shared_ptr<const arch::ArchitectureCatalog> &architectures, const std::shared_ptr<extraction::Service> &extraction) {

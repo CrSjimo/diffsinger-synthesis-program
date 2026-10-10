@@ -106,10 +106,6 @@ namespace dssp::api_v1::dto {
         std::string name;
         std::string audioUrl;
     };
-    struct ExtractorTrackInfo {
-        std::string name;
-        std::string description;
-    };
     struct ExtractorInfo {
         std::string id;
         std::string name;
@@ -117,13 +113,18 @@ namespace dssp::api_v1::dto {
         std::optional<std::vector<std::string>> acceptableFormats;
         std::optional<std::vector<std::string>> acceptableSchemes;
         std::optional<std::vector<std::uint32_t>> acceptableAudioSampleRates;
-        std::optional<std::vector<ExtractorTrackInfo>> tracks;
+    };
+    struct SeparationTrackInfo {
+        std::string name;
+    };
+    struct SeparationExtractorInfo : ExtractorInfo {
+        std::vector<SeparationTrackInfo> tracks;
     };
     struct ExtractorList {
         std::vector<ExtractorInfo> note;
         std::vector<ExtractorInfo> tempo;
         std::vector<ExtractorInfo> pitch;
-        std::vector<ExtractorInfo> separation;
+        std::vector<SeparationExtractorInfo> separation;
     };
     struct EnvTagResponse {
         std::string envTag;
@@ -182,8 +183,12 @@ namespace dssp::api_v1::dto {
         double sampleRate = 1;
     };
     using PitchExtractionResponse = Response<PitchExtractionOutput>;
+    struct ExtractedBeat {
+        double position = 0;
+        bool downbeat = false;
+    };
     struct TempoExtractionOutput {
-        double tempo = 1;
+        std::vector<ExtractedBeat> beats;
     };
     using TempoExtractionResponse = Response<TempoExtractionOutput>;
     struct SeparationTrack {

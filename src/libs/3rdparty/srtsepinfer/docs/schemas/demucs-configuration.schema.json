@@ -3,11 +3,21 @@
   "title": "HTDemucs ONNX neural core configuration",
   "type": "object", "additionalProperties": false,
   "required": ["model", "segmentSamples", "fftSize", "hopLength", "overlap"],
+  "dependentRequired": {"modelTracks": ["trackMapping"], "trackMapping": ["modelTracks"]},
   "properties": {
     "model": {"type": "string", "minLength": 1, "description": "Relative to the inference declaration; absolute paths are rejected by the interpreter."},
     "segmentSamples": {"const": 343980},
     "fftSize": {"const": 4096},
     "hopLength": {"const": 1024},
-    "overlap": {"type": "number", "minimum": 0, "maximum": 0.5}
+    "overlap": {"type": "number", "minimum": 0, "maximum": 0.5},
+    "modelTracks": {
+      "description": "Raw source axis shared by spectrum and waveform_sources. Declare together with trackMapping. If both are omitted, exports must be the complete official ordered four or six sources and identity mapping is used.",
+      "enum": [["drums", "bass", "other", "vocals"], ["drums", "bass", "other", "vocals", "guitar", "piano"]]
+    },
+    "trackMapping": {
+      "type": "object", "minProperties": 1,
+      "description": "Exported track ID -> raw model source name. Keys must exactly match exports.tracks IDs; values must be present in modelTracks. The interpreter enforces these cross-field rules. Result order follows exports.tracks, regardless of object key order.",
+      "additionalProperties": {"type": "string", "enum": ["drums", "bass", "other", "vocals", "guitar", "piano"]}
+    }
   }
 }
