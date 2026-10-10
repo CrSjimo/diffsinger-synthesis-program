@@ -24,7 +24,8 @@ namespace dssp::runtime {
         InferenceCacheGroup{"diffsinger-acoustic", "DSSP_DIFFSINGER_ACOUSTIC", "DiffSinger acoustic"},
         InferenceCacheGroup{"diffsinger-vocoder", "DSSP_DIFFSINGER_VOCODER", "DiffSinger vocoder"},
         InferenceCacheGroup{"extraction-note", "DSSP_EXTRACTION_NOTE", "Note extraction"},
-        InferenceCacheGroup{"extraction-pitch", "DSSP_EXTRACTION_PITCH", "Pitch extraction"}
+        InferenceCacheGroup{"extraction-pitch", "DSSP_EXTRACTION_PITCH", "Pitch extraction"},
+        InferenceCacheGroup{"extraction-separation", "DSSP_EXTRACTION_SEPARATION", "Audio separation"}
     };
     inline std::map<std::string, resource::CacheOptions> defaultInferenceCaches() {
         std::map<std::string, resource::CacheOptions> result;

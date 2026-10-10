@@ -122,8 +122,7 @@ namespace dssp::api_v1 {
         co_return;
     }
     drogon::Task<> ExtractionController::separation(drogon::HttpRequestPtr request, http::Callback callback) const {
-        callback(extractionProblemResponse(extraction::ExtractionErrors{extraction::InvalidInputError("No separation extractor is available")}, http::requestLog(*request)));
-        co_return;
+        co_await detail::extract<dto::SeparationExtractionResponse, extraction::SeparationOutput>(request, std::move(callback), lifetime_, service_, &extraction::Service::separation, "audio separation");
     }
 
     void registerControllers(drogon::HttpAppFramework &app, const std::shared_ptr<http::RequestLifetimeRegistry> &lifetime, const std::shared_ptr<const arch::ArchitectureCatalog> &architectures, const std::shared_ptr<extraction::Service> &extraction) {

@@ -11,6 +11,7 @@ namespace dssp::api_v1 {
     dto::ExtractorList toDto(extraction::ExtractorList);
     dto::NotesOutput<dto::ExtractedNote> toDto(extraction::NoteOutput);
     dto::PitchExtractionOutput toDto(extraction::PitchOutput);
+    dto::SeparationExtractionOutput toDto(extraction::SeparationOutput);
 }
 
 #endif // DSSP_API_V1_CONTROLLERS_EXTRACTIONMAPPING_H

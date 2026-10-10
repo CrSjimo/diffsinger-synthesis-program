@@ -11,6 +11,7 @@
 #include <dsspextraction/ExtractorCatalog.h>
 #include <dsspextraction/Results.h>
 #include <dsspextraction/Slicing.h>
+#include <dsspextraction/Separation.h>
 #include <dsspmedia/Wave.h>
 #include <dsspresource/TaskExecutor.h>
 
@@ -210,5 +211,13 @@ namespace dssp::extraction {
             }
             return builder.take();
         });
+    }
+    void Service::separation(Input input, std::stop_token stop, Completion<SeparationOutput> complete) const {
+        const auto *record = impl_->catalog->find(Kind::Separation, input.extractor);
+        if (!record) {
+            complete(fail<ExtractionErrors>(InvalidInputError("Separation extractor does not exist: " + input.extractor)));
+            return;
+        }
+        extractSeparation(impl_->catalog, *record, impl_->tasks, std::move(input), stop, std::move(complete));
     }
 }

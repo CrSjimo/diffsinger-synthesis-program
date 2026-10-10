@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HTDemucs ONNX neural core configuration",
+  "type": "object", "additionalProperties": false,
+  "required": ["model", "segmentSamples", "fftSize", "hopLength", "overlap"],
+  "properties": {
+    "model": {"type": "string", "minLength": 1, "description": "Relative to the inference declaration; absolute paths are rejected by the interpreter."},
+    "segmentSamples": {"const": 343980},
+    "fftSize": {"const": 4096},
+    "hopLength": {"const": 1024},
+    "overlap": {"type": "number", "minimum": 0, "maximum": 0.5}
+  }
+}

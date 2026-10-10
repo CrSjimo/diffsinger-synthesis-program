@@ -140,6 +140,16 @@ namespace dssp::api_v1 {
         if (value.acceptableAudioSampleRates) {
             result["acceptableAudioSampleRates"] = toJson(*value.acceptableAudioSampleRates);
         }
+        if (value.tracks) {
+            Json::Value tracks(Json::arrayValue);
+            for (const auto &track : *value.tracks) {
+                Json::Value item;
+                item["name"] = track.name;
+                item["description"] = track.description;
+                tracks.append(std::move(item));
+            }
+            result["tracks"] = std::move(tracks);
+        }
         return result;
     }
     Json::Value toJson(const dto::ExtractorList &value) {

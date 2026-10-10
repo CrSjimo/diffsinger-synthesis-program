@@ -106,6 +106,10 @@ namespace dssp::api_v1::dto {
         std::string name;
         std::string audioUrl;
     };
+    struct ExtractorTrackInfo {
+        std::string name;
+        std::string description;
+    };
     struct ExtractorInfo {
         std::string id;
         std::string name;
@@ -113,6 +117,7 @@ namespace dssp::api_v1::dto {
         std::optional<std::vector<std::string>> acceptableFormats;
         std::optional<std::vector<std::string>> acceptableSchemes;
         std::optional<std::vector<std::uint32_t>> acceptableAudioSampleRates;
+        std::optional<std::vector<ExtractorTrackInfo>> tracks;
     };
     struct ExtractorList {
         std::vector<ExtractorInfo> note;

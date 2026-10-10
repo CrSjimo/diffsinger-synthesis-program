@@ -10,14 +10,20 @@
 
 namespace dssp::extraction {
     enum class Kind { Note, Pitch, Tempo, Separation };
+    struct TrackInfo {
+        std::string name;
+        std::string description;
+    };
     struct ExtractorInfo {
         std::string id;
         std::string name;
         std::uint32_t sampleRate = 0;
+        std::vector<TrackInfo> tracks;
     };
     struct ExtractorList {
         std::vector<ExtractorInfo> note;
         std::vector<ExtractorInfo> pitch;
+        std::vector<ExtractorInfo> separation;
     };
     struct Input {
         std::string extractor;
@@ -38,6 +44,13 @@ namespace dssp::extraction {
     struct PitchOutput {
         std::vector<PitchSegment> segments;
         double sampleRate = 0;
+    };
+    struct SeparationTrack {
+        std::string name;
+        std::string audioUrl;
+    };
+    struct SeparationOutput {
+        std::vector<SeparationTrack> tracks;
     };
     template <class T> using Completion = std::function<void(ExtractionResult<T>)>;
 }

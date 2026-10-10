@@ -1,0 +1,6 @@
+{
+  "name": "srtsepinferdemucs",
+  "interpreters": [
+    {"interface": "org.openvpi.srtsepinfer.inference.Separation", "level": 1, "variant": "demucs"}
+  ]
+}

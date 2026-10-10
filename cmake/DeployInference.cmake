@@ -35,6 +35,21 @@ function(dssp_deploy_inference_plugins target)
         endif()
     endforeach()
 
+    # srtsepinfer is built by this project. Staging must follow its target and
+    # re-run even when only the manifest changed or a deployed file was removed.
+    set(_separation_destination "${_plugin_root}/srtsepinfer/inferenceinterpreters/demucs")
+    add_custom_target(srtsepinfer_deploy_plugins
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${_separation_destination}"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "$<TARGET_FILE:srtsepinferdemucs>" "${_separation_destination}/$<TARGET_FILE_NAME:srtsepinferdemucs>"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${SRTSEPINFER_PLUGIN_MANIFEST}" "${_separation_destination}/plugin.json"
+        DEPENDS srtsepinferdemucs "${SRTSEPINFER_PLUGIN_MANIFEST}"
+        COMMENT "Stage project-built srtsepinfer interpreter"
+        VERBATIM
+    )
+    add_dependencies(${target} srtsepinfer_deploy_plugins)
+
     set(_ort_destination "${_plugin_root}/dsinfer/inferencedrivers/onnx/runtime")
     set(_ort_install_destination "${DSSP_INSTALL_PLUGINS_DIR}/dsinfer/inferencedrivers/onnx/runtime")
     if(NOT IS_DIRECTORY "${ONNXRUNTIME_BUILDS_RUNTIME_DIR}")

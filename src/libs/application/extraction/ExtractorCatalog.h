@@ -6,6 +6,7 @@
 #include <utility>
 
 #include <dsspextraction/OtterTypes.h>
+#include <dsspextraction/SeparationTypes.h>
 #include <dsspextraction/Types.h>
 #include <dsspinference/Environment.h>
 
@@ -17,6 +18,8 @@ namespace dssp::extraction {
         srt::PackageHandle package;
         srt::InferenceSpec *spec = nullptr;
         int sampleRate = 0;
+        int channelCount = 1;
+        std::vector<srtsepinfer::Api::Separation::L1::TrackInfo> tracks;
         double maximumDuration = 0;
         double outputInterval = 0;
         inference::InferencePool *pool = nullptr;

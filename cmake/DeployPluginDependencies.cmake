@@ -9,7 +9,7 @@ endforeach()
 # Only binaries beside plugin metadata are inputs. In particular, the ONNX
 # Runtime payload is a separate bundle and must retain its own layout.
 set(_plugins)
-foreach(_family IN ITEMS dsinfer wolf otter)
+foreach(_family IN ITEMS dsinfer wolf otter srtsepinfer)
     if(NOT IS_DIRECTORY "${plugin_root}/${_family}")
         message(FATAL_ERROR "Inference plugin directory is missing: ${plugin_root}/${_family}")
     endif()
@@ -33,6 +33,6 @@ endif()
 # Its inputs are the staged plugins, never the application executable.
 execute_process(
     COMMAND "${qmcorecmd}" deploy --standard --force
-        --linkdir "${library_dir}" --out "${deploy_dir}" ${_plugins}
+        --linkdir "${deploy_dir}" --linkdir "${library_dir}" --out "${deploy_dir}" ${_plugins}
     COMMAND_ERROR_IS_FATAL ANY
 )
