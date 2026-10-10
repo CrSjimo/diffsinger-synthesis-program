@@ -1,4 +1,5 @@
 #include "Logger.h"
+#include "LogTimestamp.h"
 
 #include <chrono>
 #include <cstdio>
@@ -73,25 +74,8 @@ namespace dssp {
             }
         }
 
-        // [2024-06-01T13:45:12.123+08:00], matching the local time with its
-        // UTC offset that choruskit writes.
-        std::string formatTimestamp() {
-            using namespace std::chrono;
-            const auto now = system_clock::now();
-            const auto millis = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
-            const auto zoned = zoned_time{current_zone(), floor<seconds>(now)};
-            const auto offset = duration_cast<minutes>(zoned.get_info().offset).count();
-            const char sign = offset < 0 ? '-' : '+';
-            const auto magnitude = offset < 0 ? -offset : offset;
-
-            std::string timestamp = std::format("{:%FT%T}", zoned);
-            timestamp += std::format(".{:03d}", static_cast<int>(millis.count()));
-            timestamp += std::format("{}{:02d}:{:02d}", sign, magnitude / 60, magnitude % 60);
-            return timestamp;
-        }
-
         std::string formatRecord(int level, const stdc::LogContext &context, const std::string_view &message) {
-            return std::format("[{}] [{}] [{}]: {}", formatTimestamp(), context.category ? context.category : "", severityName(level), message);
+            return std::format("[{}] [{}] [{}]: {}", detail::formatLogTimestamp(std::chrono::system_clock::now()), context.category ? context.category : "", severityName(level), message);
         }
 
         void handleLogRecord(int level, const stdc::LogContext &context, const std::string_view &message) {

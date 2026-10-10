@@ -1,4 +1,5 @@
 find_package(stdcorelib CONFIG REQUIRED)
+find_package(ICU 68 REQUIRED COMPONENTS uc i18n data)
 
 file(GLOB _src CONFIGURE_DEPENDS *.cpp *.h cli/*.cpp cli/*.h)
 dssp_add_executable(dssp SOURCES ${_src})
@@ -21,6 +22,7 @@ target_link_libraries(dssp PRIVATE
     dssp_runtime
     dssp_inference
     stdcorelib::stdcorelib
+    ICU::uc ICU::i18n ICU::data
 )
 
 include("${DSSP_SOURCE_DIR}/cmake/DeployInference.cmake")
