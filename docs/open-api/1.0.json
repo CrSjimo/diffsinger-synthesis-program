@@ -1,0 +1,2666 @@
+{
+  "openapi": "3.2.0",
+  "info": {
+    "title": "DiffScope Synthesis Platform API",
+    "version": "1.0",
+    "description": "DSSP HTTP API surface represented by this service. A server implementation can support a subset of the broader DSSP API."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:13711/v1",
+      "description": "Default local server URL. The actual host and port are configured by the service."
+    }
+  ],
+  "tags": [
+    {
+      "name": "Application",
+      "description": "Application metadata endpoints."
+    },
+    {
+      "name": "Synthesis",
+      "description": "Synthesis service endpoints."
+    },
+    {
+      "name": "Extraction",
+      "description": "Audio analysis and extraction endpoints."
+    }
+  ],
+  "paths": {
+    "/info": {
+      "get": {
+        "tags": [
+          "Application"
+        ],
+        "operationId": "getApplicationInfo",
+        "summary": "Get application information",
+        "description": "Returns service application metadata.",
+        "responses": {
+          "200": {
+            "description": "Application information.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationInfoResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/arch": {
+      "get": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "getArchitectureList",
+        "summary": "List architectures",
+        "description": "Returns metadata for every registered architecture. Display language is specified via the Accept-Language request header.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ArchitectureList"
+          }
+        }
+      }
+    },
+    "/arch/{arch_id}": {
+      "get": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "getArchitecture",
+        "summary": "Get architecture metadata",
+        "description": "Returns metadata for one registered architecture. Display language is specified via the Accept-Language request header.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ArchID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Architecture"
+          }
+        }
+      }
+    },
+    "/singer": {
+      "get": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "getSingerList",
+        "summary": "List all singers",
+        "description": "Returns singers from every registered architecture. Display language is specified via the Accept-Language request header.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SingerList"
+          }
+        }
+      }
+    },
+    "/arch/{arch_id}/singer": {
+      "get": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "getArchSingerList",
+        "summary": "List singers for an architecture",
+        "description": "Returns singers from one registered architecture. Display language is specified via the Accept-Language request header.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ArchID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ArchSingerList"
+          }
+        }
+      }
+    },
+    "/arch/{arch_id}/singer/{singer_id}": {
+      "get": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "getArchSinger",
+        "summary": "Get singer metadata",
+        "description": "Returns one singer from one registered architecture. Display language is specified via the Accept-Language request header.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ArchID"
+          },
+          {
+            "$ref": "#/components/parameters/SingerID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Singer"
+          }
+        }
+      }
+    },
+    "/arch/{arch_id}/singer/{singer_id}/avatar": {
+      "get": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "getArchSingerAvatar",
+        "summary": "Get singer avatar URL",
+        "description": "Returns the avatar URL for one singer. Display language is specified via the Accept-Language request header. Acceptable formats and schemes can be constrained through the acceptable_formats and acceptable_schemes query parameters.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ArchID"
+          },
+          {
+            "$ref": "#/components/parameters/SingerID"
+          },
+          {
+            "$ref": "#/components/parameters/AcceptableFormats"
+          },
+          {
+            "$ref": "#/components/parameters/AcceptableSchemes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SingerAvatar"
+          }
+        }
+      }
+    },
+    "/arch/{arch_id}/singer/{singer_id}/background": {
+      "get": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "getArchSingerBackground",
+        "summary": "Get singer background URL",
+        "description": "Returns the background image URL for one singer. Display language is specified via the Accept-Language request header. Acceptable formats and schemes can be constrained through the acceptable_formats and acceptable_schemes query parameters.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ArchID"
+          },
+          {
+            "$ref": "#/components/parameters/SingerID"
+          },
+          {
+            "$ref": "#/components/parameters/AcceptableFormats"
+          },
+          {
+            "$ref": "#/components/parameters/AcceptableSchemes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SingerBackground"
+          }
+        }
+      }
+    },
+    "/arch/{arch_id}/singer/{singer_id}/demo-audio": {
+      "get": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "getArchSingerDemoAudioList",
+        "summary": "List singer demo audio",
+        "description": "Returns demo audio entries for one singer. Display language is specified via the Accept-Language request header. Acceptable formats and schemes can be constrained through the acceptable_formats and acceptable_schemes query parameters.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ArchID"
+          },
+          {
+            "$ref": "#/components/parameters/SingerID"
+          },
+          {
+            "$ref": "#/components/parameters/AcceptableFormats"
+          },
+          {
+            "$ref": "#/components/parameters/AcceptableSchemes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SingerDemoAudioList"
+          }
+        }
+      }
+    },
+    "/arch/{arch_id}/group": {
+      "get": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "getArchGroupList",
+        "summary": "List groups for an architecture",
+        "description": "Returns groups from one registered architecture. Display language is specified via the Accept-Language request header.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ArchID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GroupList"
+          }
+        }
+      }
+    },
+    "/arch/{arch_id}/group/{group_id}": {
+      "get": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "getArchGroup",
+        "summary": "Get group metadata",
+        "description": "Returns one group from one registered architecture. Display language is specified via the Accept-Language request header.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ArchID"
+          },
+          {
+            "$ref": "#/components/parameters/GroupID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Group"
+          }
+        }
+      }
+    },
+    "/arch/{arch_id}/group/{group_id}/singer": {
+      "get": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "getArchGroupSingerList",
+        "summary": "List singers for a group",
+        "description": "Returns singers from one registered group. Display language is specified via the Accept-Language request header.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ArchID"
+          },
+          {
+            "$ref": "#/components/parameters/GroupID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GroupSingerList"
+          }
+        }
+      }
+    },
+    "/synth/env-tag": {
+      "post": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "postSynthEnvTag",
+        "summary": "Get an environment tag",
+        "description": "Returns the environment tag for a synthesis context.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/EnvTagRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/EnvTagResult"
+          }
+        }
+      }
+    },
+    "/synth/pronunciation": {
+      "post": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "postSynthPronunciation",
+        "summary": "Generate pronunciations",
+        "description": "Generates pronunciation candidates for lyric input. Conversion capability is described by pronunciationMode for the selected singing language in the singer's group.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/PronunciationRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/PronunciationComplete"
+          }
+        }
+      }
+    },
+    "/synth/phoneme": {
+      "post": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "postSynthPhoneme",
+        "summary": "Generate phonemes",
+        "description": "Generates phoneme notes from pronunciation notes. Token conversion and onset-labeling capabilities are described by phonemeMode for the selected singing language in the singer's group.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/PhonemeRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/PhonemeComplete"
+          }
+        }
+      }
+    },
+    "/synth/duration": {
+      "post": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "postSynthDuration",
+        "summary": "Generate phoneme timing",
+        "description": "Generates phoneme timing for duration notes when the selected group has durationMode=full. Clients supply phoneme starts directly for later stages when durationMode=skip.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/DurationRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/DurationResult"
+          }
+        }
+      }
+    },
+    "/synth/parameter": {
+      "post": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "postSynthParameter",
+        "summary": "Generate parameter values",
+        "description": "Generates parameter values explicitly requested through retake. Consult the selected group's parameterPipeline for supported inputs, prediction dependencies, and full-piece or subrange retake capabilities. Parameters supplied without retake are conditions.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/ParameterRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ParameterResult"
+          }
+        }
+      }
+    },
+    "/synth/audio": {
+      "post": {
+        "tags": [
+          "Synthesis"
+        ],
+        "operationId": "postSynthAudio",
+        "summary": "Generate audio",
+        "description": "Generates encoded audio from prepared phoneme starts and parameter curves. The selected group's audioDependencies describes required parameter inputs. Formats and URL schemes can be constrained through acceptableFormats and acceptableSchemes.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/AudioRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AudioResult"
+          }
+        }
+      }
+    },
+    "/extractor": {
+      "get": {
+        "tags": [
+          "Extraction"
+        ],
+        "operationId": "getExtractorList",
+        "summary": "List extractors",
+        "description": "Returns the available note, tempo, pitch, and separation extractors. Display language is specified via the Accept-Language request header.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ExtractorList"
+          }
+        }
+      }
+    },
+    "/extractor/note/{extractor_id}": {
+      "get": {
+        "tags": [
+          "Extraction"
+        ],
+        "operationId": "getNoteExtractor",
+        "summary": "Get a note extractor",
+        "description": "Returns metadata for one note extractor. Display language is specified via the Accept-Language request header.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtractorID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Extractor"
+          }
+        }
+      }
+    },
+    "/extractor/tempo/{extractor_id}": {
+      "get": {
+        "tags": [
+          "Extraction"
+        ],
+        "operationId": "getTempoExtractor",
+        "summary": "Get a tempo extractor",
+        "description": "Returns metadata for one tempo extractor. Display language is specified via the Accept-Language request header.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtractorID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Extractor"
+          }
+        }
+      }
+    },
+    "/extractor/pitch/{extractor_id}": {
+      "get": {
+        "tags": [
+          "Extraction"
+        ],
+        "operationId": "getPitchExtractor",
+        "summary": "Get a pitch extractor",
+        "description": "Returns metadata for one pitch extractor. Display language is specified via the Accept-Language request header.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtractorID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Extractor"
+          }
+        }
+      }
+    },
+    "/extractor/separation/{extractor_id}": {
+      "get": {
+        "tags": [
+          "Extraction"
+        ],
+        "operationId": "getSeparationExtractor",
+        "summary": "Get a separation extractor",
+        "description": "Returns metadata for one separation extractor. Display language is specified via the Accept-Language request header.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtractorID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Extractor"
+          }
+        }
+      }
+    },
+    "/extract/note": {
+      "post": {
+        "tags": [
+          "Extraction"
+        ],
+        "operationId": "postExtractNote",
+        "summary": "Extract notes from audio",
+        "description": "Extracts note timing and pitch from audio.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/NoteExtractionRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/NoteExtractionResult"
+          }
+        }
+      }
+    },
+    "/extract/tempo": {
+      "post": {
+        "tags": [
+          "Extraction"
+        ],
+        "operationId": "postExtractTempo",
+        "summary": "Extract tempo from audio",
+        "description": "Extracts one global tempo value from audio.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/TempoExtractionRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TempoExtractionResult"
+          }
+        }
+      }
+    },
+    "/extract/pitch": {
+      "post": {
+        "tags": [
+          "Extraction"
+        ],
+        "operationId": "postExtractPitch",
+        "summary": "Extract pitch from audio",
+        "description": "Extracts a segmented pitch curve from audio.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/PitchExtractionRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/PitchExtractionResult"
+          }
+        }
+      }
+    },
+    "/extract/separation": {
+      "post": {
+        "tags": [
+          "Extraction"
+        ],
+        "operationId": "postExtractSeparation",
+        "summary": "Separate audio",
+        "description": "Separates audio into its constituent tracks. Display language is specified via the Accept-Language request header.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/SeparationExtractionRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SeparationExtractionResult"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "ArchID": {
+        "name": "arch_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "Architecture identifier."
+      },
+      "SingerID": {
+        "name": "singer_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "Singer reference understood by the selected architecture. DiffSinger uses package-id=version:singer/contribution-id with the exact package version. Preserve the returned reference and encode it once as a URI path component when used in a path."
+      },
+      "GroupID": {
+        "name": "group_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "Group identifier within the selected architecture."
+      },
+      "ExtractorID": {
+        "name": "extractor_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "Extractor identifier within the selected extraction capability."
+      },
+      "AcceptableFormats": {
+        "name": "acceptableFormats",
+        "in": "query",
+        "required": false,
+        "description": "Comma-separated MIME types the client accepts, in priority order. If omitted or empty, the server may return any URL.",
+        "style": "form",
+        "explode": false,
+        "allowEmptyValue": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "media-type"
+          },
+          "description": "MIME types the client expects to accept, in priority order. An empty list means the server may return any URL."
+        }
+      },
+      "AcceptableSchemes": {
+        "name": "acceptableSchemes",
+        "in": "query",
+        "required": false,
+        "description": "Comma-separated URL schemes the client accepts, in priority order. If omitted or empty, the server may return any URL.",
+        "style": "form",
+        "explode": false,
+        "allowEmptyValue": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "URL schemes the client expects to accept, in priority order. An empty list means the server may return any URL."
+        }
+      }
+    },
+    "requestBodies": {
+      "EnvTagRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/EnvTagRequest"
+            }
+          }
+        }
+      },
+      "PronunciationRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/PronunciationRequest"
+            }
+          }
+        }
+      },
+      "PhonemeRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/PhonemeRequest"
+            }
+          }
+        }
+      },
+      "DurationRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DurationRequest"
+            }
+          }
+        }
+      },
+      "ParameterRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ParameterRequest"
+            }
+          }
+        }
+      },
+      "AudioRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AudioRequest"
+            }
+          }
+        }
+      },
+      "NoteExtractionRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/NoteExtractionRequest"
+            }
+          }
+        }
+      },
+      "TempoExtractionRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/TempoExtractionRequest"
+            }
+          }
+        }
+      },
+      "PitchExtractionRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/PitchExtractionRequest"
+            }
+          }
+        }
+      },
+      "SeparationExtractionRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SeparationExtractionRequest"
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "ArchitectureList": {
+        "description": "Architecture metadata from every registered architecture.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ArchitectureMetadataList"
+            }
+          }
+        }
+      },
+      "Architecture": {
+        "description": "Architecture metadata.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ArchitectureMetadata"
+            }
+          }
+        }
+      },
+      "SingerList": {
+        "description": "Singer metadata from every registered architecture.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SingerInfoList"
+            }
+          }
+        }
+      },
+      "ArchSingerList": {
+        "description": "Singer metadata from one registered architecture.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SingerInfoList"
+            }
+          }
+        }
+      },
+      "Singer": {
+        "description": "Singer metadata.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SingerInfo"
+            }
+          }
+        }
+      },
+      "SingerAvatar": {
+        "description": "Singer avatar URL.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SingerAvatarResponse"
+            }
+          }
+        }
+      },
+      "SingerBackground": {
+        "description": "Singer background URL.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SingerBackgroundResponse"
+            }
+          }
+        }
+      },
+      "SingerDemoAudioList": {
+        "description": "Singer demo audio entries.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SingerDemoAudioList"
+            }
+          }
+        }
+      },
+      "GroupList": {
+        "description": "Group metadata from one registered architecture.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GroupMetadataList"
+            }
+          }
+        }
+      },
+      "Group": {
+        "description": "Group metadata.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GroupMetadata"
+            }
+          }
+        }
+      },
+      "GroupSingerList": {
+        "description": "Singer metadata from one registered group.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SingerInfoList"
+            }
+          }
+        }
+      },
+      "EnvTagResult": {
+        "description": "Environment tag for the supplied synthesis context.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/EnvTagResponse"
+            }
+          }
+        }
+      },
+      "PronunciationComplete": {
+        "description": "Pronunciation generation result.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/PronunciationResponse"
+            }
+          }
+        }
+      },
+      "PhonemeComplete": {
+        "description": "Phoneme generation result.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/PhonemeResponse"
+            }
+          }
+        }
+      },
+      "DurationResult": {
+        "description": "Duration generation result.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DurationResponse"
+            }
+          }
+        }
+      },
+      "ParameterResult": {
+        "description": "Parameter generation result.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ParameterResponse"
+            }
+          }
+        }
+      },
+      "AudioResult": {
+        "description": "Audio generation result.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AudioResponse"
+            }
+          }
+        }
+      },
+      "ExtractorList": {
+        "description": "Available extractors grouped by capability.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ExtractorList"
+            }
+          }
+        }
+      },
+      "Extractor": {
+        "description": "Extractor metadata.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ExtractorInfo"
+            }
+          }
+        }
+      },
+      "NoteExtractionResult": {
+        "description": "Extracted notes.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/NoteExtractionResponse"
+            }
+          }
+        }
+      },
+      "TempoExtractionResult": {
+        "description": "Extracted global tempo.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/TempoExtractionResponse"
+            }
+          }
+        }
+      },
+      "PitchExtractionResult": {
+        "description": "Extracted segmented pitch curve.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/PitchExtractionResponse"
+            }
+          }
+        }
+      },
+      "SeparationExtractionResult": {
+        "description": "Separated audio tracks.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SeparationExtractionResponse"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ExtractorList": {
+        "type": "object",
+        "required": [
+          "note",
+          "tempo",
+          "pitch",
+          "separation"
+        ],
+        "properties": {
+          "note": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExtractorInfo"
+            }
+          },
+          "tempo": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExtractorInfo"
+            }
+          },
+          "pitch": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExtractorInfo"
+            }
+          },
+          "separation": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExtractorInfo"
+            }
+          }
+        }
+      },
+      "ExtractorInfo": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "preferredAudioSampleRate"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Extractor identifier within its extraction capability."
+          },
+          "name": {
+            "type": "string"
+          },
+          "preferredAudioSampleRate": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "description": "Preferred input audio sample rate in Hz."
+          },
+          "acceptableFormats": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "media-type"
+            },
+            "description": "MIME types this extractor can accept, in priority order. If omitted or empty, the extractor can accept any format."
+          },
+          "acceptableSchemes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "URL schemes this extractor can accept, in priority order. If omitted or empty, the extractor can accept any scheme."
+          },
+          "acceptableAudioSampleRates": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "description": "Input audio sample rates in Hz that this extractor can accept, in priority order. If omitted or empty, the extractor can accept any sample rate."
+          }
+        }
+      },
+      "NoteExtractionRequest": {
+        "$ref": "#/components/schemas/ExtractionRequest"
+      },
+      "TempoExtractionRequest": {
+        "$ref": "#/components/schemas/ExtractionRequest"
+      },
+      "PitchExtractionRequest": {
+        "$ref": "#/components/schemas/ExtractionRequest"
+      },
+      "SeparationExtractionRequest": {
+        "$ref": "#/components/schemas/ExtractionRequest"
+      },
+      "ExtractionRequest": {
+        "type": "object",
+        "required": [
+          "extractor",
+          "input"
+        ],
+        "properties": {
+          "extractor": {
+            "type": "string",
+            "description": "Identifier of an extractor for the requested capability."
+          },
+          "input": {
+            "$ref": "#/components/schemas/ExtractionInput"
+          }
+        }
+      },
+      "ExtractionInput": {
+        "type": "object",
+        "required": [
+          "audioUrl"
+        ],
+        "properties": {
+          "audioUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the audio to analyze."
+          }
+        }
+      },
+      "NoteExtractionResponse": {
+        "type": "object",
+        "required": [
+          "output"
+        ],
+        "properties": {
+          "output": {
+            "$ref": "#/components/schemas/NoteExtractionOutput"
+          }
+        }
+      },
+      "NoteExtractionOutput": {
+        "type": "object",
+        "required": [
+          "notes"
+        ],
+        "properties": {
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExtractedNote"
+            }
+          }
+        }
+      },
+      "ExtractedNote": {
+        "type": "object",
+        "required": [
+          "position",
+          "cent"
+        ],
+        "properties": {
+          "position": {
+            "$ref": "#/components/schemas/NotePosition"
+          },
+          "cent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 12800,
+            "description": "Extracted note pitch in cents."
+          }
+        }
+      },
+      "TempoExtractionResponse": {
+        "type": "object",
+        "required": [
+          "output"
+        ],
+        "properties": {
+          "output": {
+            "$ref": "#/components/schemas/TempoExtractionOutput"
+          }
+        }
+      },
+      "TempoExtractionOutput": {
+        "type": "object",
+        "required": [
+          "tempo"
+        ],
+        "properties": {
+          "tempo": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Estimated global tempo in beats per minute."
+          }
+        }
+      },
+      "PitchExtractionResponse": {
+        "type": "object",
+        "required": [
+          "output"
+        ],
+        "properties": {
+          "output": {
+            "$ref": "#/components/schemas/PitchExtractionOutput"
+          }
+        }
+      },
+      "PitchExtractionOutput": {
+        "type": "object",
+        "required": [
+          "segments",
+          "sampleRate"
+        ],
+        "properties": {
+          "segments": {
+            "type": "array",
+            "description": "Voiced pitch segments. The array can be empty when no pitch is detected.",
+            "items": {
+              "$ref": "#/components/schemas/PitchExtractionSegment"
+            }
+          },
+          "sampleRate": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Number of pitch samples per second."
+          }
+        }
+      },
+      "SeparationExtractionResponse": {
+        "type": "object",
+        "required": [
+          "output"
+        ],
+        "properties": {
+          "output": {
+            "$ref": "#/components/schemas/SeparationExtractionOutput"
+          }
+        }
+      },
+      "SeparationExtractionOutput": {
+        "type": "object",
+        "required": [
+          "tracks"
+        ],
+        "properties": {
+          "tracks": {
+            "type": "array",
+            "description": "Separated audio tracks. The array can be empty when no tracks are produced.",
+            "items": {
+              "$ref": "#/components/schemas/SeparationTrack"
+            }
+          }
+        }
+      },
+      "SeparationTrack": {
+        "type": "object",
+        "required": [
+          "name",
+          "audioUrl"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "audioUrl": {
+            "type": "string",
+            "description": "Encoded audio URL."
+          }
+        }
+      },
+      "PitchExtractionSegment": {
+        "type": "object",
+        "required": [
+          "gap",
+          "pitch"
+        ],
+        "properties": {
+          "gap": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of missing pitch frames before this segment. For the first segment, frames are counted from the start of the audio. For later segments, the start frame is the previous segment start plus its pitch value count plus this gap."
+          },
+          "pitch": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Pitch values in cents.",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 12800
+            }
+          }
+        }
+      },
+      "ApplicationInfoResponse": {
+        "type": "object",
+        "required": [
+          "dssp"
+        ],
+        "properties": {
+          "dssp": {
+            "$ref": "#/components/schemas/ApplicationInfo"
+          }
+        }
+      },
+      "ApplicationInfo": {
+        "type": "object",
+        "required": [
+          "apiVersion"
+        ],
+        "properties": {
+          "apiVersion": {
+            "type": "object",
+            "required": [
+              "major",
+              "minor"
+            ],
+            "properties": {
+              "major": {
+                "type": "number",
+                "description": "Major API version number."
+              },
+              "minor": {
+                "type": "number",
+                "description": "Minor API version number."
+              }
+            },
+            "description": "API version represented by major and minor numbers."
+          }
+        }
+      },
+      "ArchitectureMetadataList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ArchitectureMetadata"
+        }
+      },
+      "ArchitectureMetadata": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "parameters"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Architecture identifier."
+          },
+          "name": {
+            "type": "string"
+          },
+          "parameters": {
+            "type": "object",
+            "description": "Parameter definitions keyed by parameter ID.",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "name",
+                "defaultValue",
+                "showBaseline",
+                "baselineValue",
+                "fillMode",
+                "fallbackOnDefaultValue",
+                "displayValueMappingExpression",
+                "displayValueInverseMappingExpression",
+                "displayValuePrefix",
+                "displayValueSuffix",
+                "displayValueDecimalPlaces"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Human-readable parameter name."
+                },
+                "defaultValue": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Default parameter value used when a parameter curve has no sample value."
+                },
+                "showBaseline": {
+                  "type": "boolean",
+                  "description": "Whether clients should display the parameter baseline."
+                },
+                "baselineValue": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Baseline parameter value."
+                },
+                "fillMode": {
+                  "type": "string",
+                  "enum": [
+                    "no",
+                    "top",
+                    "bottom",
+                    "baseline"
+                  ],
+                  "description": "How clients should fill the area associated with the parameter curve."
+                },
+                "fallbackOnDefaultValue": {
+                  "type": "boolean",
+                  "description": "Whether clients should use the default value when drawing curve segments that have no sample values."
+                },
+                "displayValueMappingExpression": {"$ref":"#/components/schemas/AST"},
+                "displayValueInverseMappingExpression": {"$ref":"#/components/schemas/AST"},
+                "displayValuePrefix": {
+                  "type": "string",
+                  "description": "Prefix to include when displaying the mapped value as text."
+                },
+                "displayValueSuffix": {
+                  "type": "string",
+                  "description": "Suffix to include when displaying the mapped value as text."
+                },
+                "displayValueDecimalPlaces": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Number of decimal places to use when displaying the mapped value as text."
+                }
+              }
+            }
+          }
+        }
+      },
+      "GroupMetadataList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/GroupMetadata"
+        }
+      },
+      "GroupMetadata": {
+        "type": "object",
+        "description": "A shared complete synthesis pipeline and its effective capabilities. All singers in a group have the same supported singing languages, language conversion bindings, and pipeline capabilities. Singer-specific voice selections and default languages may differ. Metadata discovery does not require loading inference models.",
+        "required": [
+          "id",
+          "arch",
+          "languages",
+          "durationMode",
+          "parameterPipeline",
+          "audioDependencies",
+          "mixable",
+          "archSpecificInfo",
+          "defaultArchExtra"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Group identifier within the selected architecture."
+          },
+          "arch": {
+            "type": "string",
+            "description": "Architecture identifier."
+          },
+          "languages": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/GroupLanguageInfo"
+            },
+            "description": "Supported singing language handles mapped to their localized metadata and individual conversion capabilities. An empty object means no singing language is available. Different languages may have different conversion capabilities; there is no aggregate conversion mode on the group."
+          },
+          "durationMode": {
+            "$ref": "#/components/schemas/DurationMode"
+          },
+          "parameterPipeline": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ArchitectureParameterMetadata"
+            },
+            "description": "Supported parameter inputs and prediction capabilities. Each key must be a parameter ID defined by the selected architecture. A parameter omitted from this map is unsupported by this group. Direct and indirect parameters can both be supplied as input curves; only indirect parameters can be predicted. Dependencies must refer to entries in this map and must be acyclic."
+          },
+          "audioDependencies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Parameter IDs consumed by the audio synthesis stage. Every ID must be present in parameterPipeline. This list describes prepared input requirements; the audio endpoint does not implicitly predict these parameters."
+          },
+          "mixable": {
+            "type": "boolean",
+            "description": "Whether multiple singer sources within this group may be mixed. All sources in a multi-singer context must belong to the same architecture and the same group, and that group must have mixable=true. A value of false prohibits mixing within the group; it does not restrict single-source use. This flag does not permit mixing across groups."
+          },
+          "archSpecificInfo": {
+            "description": "Architecture-specific information about the shared synthesis pipeline of this group. May be any JSON value, including null; its meaning is defined by the selected architecture. Common language, duration, and parameter capabilities are described by the dedicated group fields."
+          },
+          "defaultArchExtra": {
+            "description": "Default architecture-specific JSON payload for context.archExtra when using this group. May be any JSON value, including null; its meaning is defined by the selected architecture. These defaults apply to the shared request context and are separate from each singer's defaultExtra."
+          }
+        },
+        "examples": [
+          {
+            "id": "example-group",
+            "arch": "diffsinger",
+            "languages": {
+              "cmn": {
+                "name": "Mandarin Chinese",
+                "defaultLyric": "",
+                "pronunciationMode": "full",
+                "phonemeMode": "full"
+              },
+              "eng": {
+                "name": "English",
+                "defaultLyric": "",
+                "pronunciationMode": "full",
+                "phonemeMode": "token_only"
+              }
+            },
+            "durationMode": "full",
+            "parameterPipeline": {
+              "pitch": {
+                "type": "indirect",
+                "dependsOn": [
+                  "expressiveness"
+                ],
+                "retakeMode": "range"
+              },
+              "expressiveness": {
+                "type": "direct"
+              },
+              "energy": {
+                "type": "indirect",
+                "dependsOn": [
+                  "pitch"
+                ],
+                "retakeMode": "range"
+              }
+            },
+            "audioDependencies": [
+              "pitch",
+              "energy"
+            ],
+            "mixable": false,
+            "archSpecificInfo": {},
+            "defaultArchExtra": {
+              "steps": 20,
+              "depth": 1
+            }
+          }
+        ]
+      },
+      "GroupLanguageInfo": {
+        "type": "object",
+        "description": "Language metadata and effective conversion capabilities shared by all singers in the group. The containing map key is the singing language handle accepted by the selected architecture; it is independent of the display locale selected by Accept-Language.",
+        "required": [
+          "name",
+          "defaultLyric",
+          "pronunciationMode",
+          "phonemeMode"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Localized display name of the singing language."
+          },
+          "defaultLyric": {
+            "type": "string",
+            "description": "Default placeholder lyric provided by the language metadata. An empty string means no default lyric is available."
+          },
+          "pronunciationMode": {
+            "$ref": "#/components/schemas/PronunciationMode"
+          },
+          "phonemeMode": {
+            "$ref": "#/components/schemas/PhonemeMode"
+          }
+        }
+      },
+      "PronunciationMode": {
+        "type": "string",
+        "enum": [
+          "full",
+          "skip"
+        ],
+        "description": "Per-language automatic lyric-to-pronunciation capability. full means the service can perform the conversion; skip means clients must provide pronunciation directly when required by subsequent stages. skip does not imply a substitute conversion algorithm."
+      },
+      "PhonemeMode": {
+        "type": "string",
+        "enum": [
+          "full",
+          "token_only",
+          "skip"
+        ],
+        "description": "Per-language automatic pronunciation-to-phoneme capability. full supports phoneme tokens and syllable onset labeling; token_only supports phoneme tokens without an onset-labeling capability; skip means clients must provide phonemes directly when required by subsequent stages."
+      },
+      "DurationMode": {
+        "type": "string",
+        "enum": [
+          "full",
+          "skip"
+        ],
+        "description": "Phoneme timing prediction capability of the shared pipeline. full means the duration endpoint can predict phoneme starts; skip means clients must supply phoneme starts for subsequent stages. A duration prediction request for a group with skip is unsupported and must not be replaced with fabricated timing."
+      },
+      "ArchitectureParameterMetadata": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DirectArchitectureParameterMetadata"
+          },
+          {
+            "$ref": "#/components/schemas/IndirectArchitectureParameterMetadata"
+          }
+        ]
+      },
+      "DirectArchitectureParameterMetadata": {
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "const": "direct"
+          }
+        },
+        "description": "A supported parameter supplied as an input curve without model prediction. A nonempty retake range for a direct parameter is invalid. A zero-length retake is a no-op."
+      },
+      "IndirectArchitectureParameterMetadata": {
+        "type": "object",
+        "required": [
+          "type",
+          "dependsOn",
+          "retakeMode"
+        ],
+        "properties": {
+          "type": {
+            "const": "indirect"
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Parameter IDs used as prediction conditions. Dependencies may be direct or indirect and must be present in the group's parameterPipeline."
+          },
+          "retakeMode": {
+            "$ref": "#/components/schemas/ParameterRetakeMode"
+          }
+        },
+        "description": "A supported parameter that can be predicted and can also be supplied as a conditioning curve. Prediction is requested only when the input parameter includes retake; dependencies supplied without retake are conditions and are not implicitly regenerated."
+      },
+      "ParameterRetakeMode": {
+        "type": "string",
+        "enum": [
+          "full",
+          "range"
+        ],
+        "description": "Supported scope of parameter recomputation exposed by the service. full accepts nonempty retake ranges only when they cover the complete piece; range accepts both subranges and the complete piece. An unsupported nonempty subrange is rejected with 422 and must not be silently expanded. A zero-length retake is a no-op in either mode. This describes observable service behavior, not whether a backend computes only the requested frames."
+      },
+      "ArchitectureParameterType": {
+        "type": "string",
+        "enum": [
+          "direct",
+          "indirect"
+        ]
+      },
+      "SingerInfoList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/SingerInfo"
+        }
+      },
+      "SingerInfo": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "arch",
+          "group",
+          "defaultLanguage",
+          "archSpecificInfo",
+          "defaultExtra"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Singer reference understood by the selected architecture. DiffSinger uses package-id=version:singer/contribution-id with the exact package version. Preserve the returned reference and encode it once as a URI path component when used in a path."
+          },
+          "name": {
+            "type": "string"
+          },
+          "arch": {
+            "type": "string",
+            "description": "Architecture identifier."
+          },
+          "group": {
+            "type": "string",
+            "description": "Group identifier within the selected architecture."
+          },
+          "defaultLanguage": {
+            "type": "string",
+            "description": "This singer's preferred singing language handle. A nonempty value must be a key in its group's languages map. It may differ between singers in the same group. An empty string means no default language is declared or the group has no available languages; clients must not infer a preference from map order."
+          },
+          "archSpecificInfo": {
+            "description": "Architecture-specific properties of this individual singer, such as selectable voices. Shared duration and language conversion capabilities belong to GroupMetadata and GroupLanguageInfo, not this payload."
+          },
+          "defaultExtra": {
+            "description": "Default architecture-specific parameters for this singer's extra payload, such as a voice selection. Request-wide synthesis parameters are supplied separately in context.archExtra and are not part of these defaults."
+          }
+        },
+        "description": "An installed singer and its individual metadata. Shared language and pipeline capabilities are obtained from the group identified by arch and group.",
+        "examples": [
+          {
+            "id": "example/singers=1.0:singer/main",
+            "name": "Example Singer",
+            "arch": "diffsinger",
+            "group": "example-group",
+            "defaultLanguage": "cmn",
+            "archSpecificInfo": {
+              "speakers": [
+                "main",
+                "soft"
+              ]
+            },
+            "defaultExtra": {
+              "speaker": "main"
+            }
+          }
+        ]
+      },
+      "SingerAvatarResponse": {
+        "type": "object",
+        "required": [
+          "avatarUrl"
+        ],
+        "properties": {
+          "avatarUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "SingerBackgroundResponse": {
+        "type": "object",
+        "required": [
+          "backgroundUrl"
+        ],
+        "properties": {
+          "backgroundUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "SingerDemoAudioList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/SingerDemoAudio"
+        }
+      },
+      "SingerDemoAudio": {
+        "type": "object",
+        "required": [
+          "name",
+          "audioUrl"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "audioUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "EnvTagRequest": {
+        "type": "object",
+        "required": [
+          "context"
+        ],
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/MultiSingerContext"
+          }
+        }
+      },
+      "EnvTagResponse": {
+        "type": "object",
+        "required": [
+          "envTag"
+        ],
+        "properties": {
+          "envTag": {
+            "$ref": "#/components/schemas/EnvTag"
+          }
+        }
+      },
+      "PronunciationRequest": {
+        "type": "object",
+        "required": [
+          "context",
+          "input"
+        ],
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/SingleSingerContext"
+          },
+          "input": {
+            "$ref": "#/components/schemas/PronunciationInput"
+          }
+        }
+      },
+      "PhonemeRequest": {
+        "type": "object",
+        "required": [
+          "context",
+          "input"
+        ],
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/SingleSingerContext"
+          },
+          "input": {
+            "$ref": "#/components/schemas/PhonemeInput"
+          }
+        }
+      },
+      "DurationRequest": {
+        "type": "object",
+        "required": [
+          "context",
+          "input"
+        ],
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/MultiSingerContext"
+          },
+          "input": {
+            "$ref": "#/components/schemas/DurationInput"
+          }
+        }
+      },
+      "ParameterRequest": {
+        "type": "object",
+        "required": [
+          "context",
+          "input"
+        ],
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/MultiSingerContext"
+          },
+          "input": {
+            "$ref": "#/components/schemas/ParameterInput"
+          }
+        }
+      },
+      "AudioRequest": {
+        "type": "object",
+        "required": [
+          "context",
+          "input"
+        ],
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/MultiSingerContext"
+          },
+          "input": {
+            "$ref": "#/components/schemas/AudioInput"
+          },
+          "acceptableFormats": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "media-type"
+            },
+            "description": "MIME types the client expects to accept, in priority order. An empty list means the server may return any URL."
+          },
+          "acceptableSchemes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "URL schemes the client expects to accept, in priority order. An empty list means the server may return any URL."
+          }
+        }
+      },
+      "SingleSingerContext": {
+        "type": "object",
+        "required": [
+          "arch",
+          "archExtra",
+          "singer"
+        ],
+        "properties": {
+          "arch": {
+            "type": "string",
+            "description": "Architecture identifier."
+          },
+          "archExtra": {
+            "description": "Architecture-specific synthesis parameters shared by the entire request, including all singer sources. DiffSinger uses an object with steps (positive integer, default 20) and depth (finite number from 0 to 1, default 1); an empty object selects these defaults. The selected architecture interprets and validates this payload."
+          },
+          "singer": {
+            "$ref": "#/components/schemas/Singer"
+          }
+        }
+      },
+      "MultiSingerContext": {
+        "type": "object",
+        "required": [
+          "arch",
+          "archExtra",
+          "singers"
+        ],
+        "properties": {
+          "arch": {
+            "type": "string",
+            "description": "Architecture identifier."
+          },
+          "archExtra": {
+            "description": "Architecture-specific synthesis parameters shared by the entire request, including all singer sources. DiffSinger uses an object with steps (positive integer, default 20) and depth (finite number from 0 to 1, default 1); an empty object selects these defaults. The selected architecture interprets and validates this payload."
+          },
+          "singers": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/Singer"
+            },
+            "description": "Ordered singer sources. Multiple sources must belong to the same architecture and group, and that group must allow mixing. Each source has its own singer-specific extra payload; all sources share context.archExtra."
+          }
+        }
+      },
+      "Singer": {
+        "type": "object",
+        "required": [
+          "id",
+          "extra"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Singer reference understood by the selected architecture. DiffSinger uses package-id=version:singer/contribution-id with the exact package version. Preserve the returned reference and encode it once as a URI path component when used in a path."
+          },
+          "extra": {
+            "description": "Architecture-specific parameters for this singer source, such as a voice selection. SingerInfo.defaultExtra provides the corresponding defaults. Request-wide synthesis parameters are supplied separately in context.archExtra. The selected architecture interprets and validates this payload."
+          }
+        }
+      },
+      "EnvTag": {
+        "type": "string",
+        "description": "Environment tag for a synthesis context."
+      },
+      "PronunciationInput": {
+        "type": "object",
+        "required": [
+          "notes"
+        ],
+        "properties": {
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Lyric"
+            }
+          }
+        }
+      },
+      "Lyric": {
+        "type": "object",
+        "required": [
+          "lyric",
+          "language"
+        ],
+        "properties": {
+          "lyric": {
+            "type": "string",
+            "description": "This note's own lyric. Every input note supplies its own lyric and language; lyric text does not encode slur relationships or syllable allocation markers."
+          },
+          "language": {
+            "type": "string"
+          }
+        }
+      },
+      "PhonemeInput": {
+        "type": "object",
+        "required": [
+          "notes"
+        ],
+        "properties": {
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PronunciationNote"
+            }
+          }
+        },
+        "description": "Pronunciation input for individual notes. Each item supplies its own pronunciation and language, and may select a syllable range using syllableSliceStart and syllableSliceEnd."
+      },
+      "PronunciationNote": {
+        "type": "object",
+        "required": [
+          "pronunciation",
+          "language"
+        ],
+        "properties": {
+          "pronunciation": {
+            "type": "string",
+            "description": "This note's own complete pronunciation. Adjacent notes may repeat the same pronunciation without cross-note references. Syllable ranges are expressed by slice fields, not by plus signs or suffixes in the pronunciation text."
+          },
+          "language": {
+            "type": "string"
+          },
+          "syllableSliceStart": {
+            "$ref": "#/components/schemas/SyllableSliceEndpoint",
+            "description": "Inclusive start of the syllable range. Omission or null selects position 0. Integer endpoint conversion and clamping are defined by SyllableSliceEndpoint. Positions count syllable groups, not phonemes."
+          },
+          "syllableSliceEnd": {
+            "$ref": "#/components/schemas/SyllableSliceEndpoint",
+            "description": "Exclusive end of the syllable range. Omission or null selects M, the number of groups in the complete result. Integer endpoint conversion and clamping are defined by SyllableSliceEndpoint. The selected range is empty when its start is greater than or equal to its end."
+          }
+        },
+        "description": "Slice endpoints refer to syllable groups in this note's complete phoneme result. The first group begins at the start of the sequence and includes phonemes preceding the first onset=true. The second and each subsequent onset=true begin a new group. A nonempty sequence with no onset=true forms one group; an empty sequence has zero groups. All phonemes in the selected groups are returned in their original order with their token and onset values preserved."
+      },
+      "DurationInput": {
+        "type": "object",
+        "required": [
+          "pieceDuration",
+          "notes",
+          "mix",
+          "mixSampleRate"
+        ],
+        "properties": {
+          "pieceDuration": {
+            "type": "number",
+            "minimum": 0
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DurationNote"
+            }
+          },
+          "mix": {
+            "$ref": "#/components/schemas/Mix"
+          },
+          "mixSampleRate": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        }
+      },
+      "DurationNote": {
+        "type": "object",
+        "required": [
+          "position",
+          "cent",
+          "pronunciation",
+          "language",
+          "phonemes",
+          "kind"
+        ],
+        "properties": {
+          "position": {
+            "$ref": "#/components/schemas/NotePosition"
+          },
+          "cent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 12800
+          },
+          "pronunciation": {
+            "type": "string",
+            "description": "This note's complete pronunciation. Slur notes also supply their own pronunciation and do not use a hyphen placeholder."
+          },
+          "language": {
+            "type": "string"
+          },
+          "phonemes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DurationInputPhoneme"
+            }
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NoteKind"
+          }
+        },
+        "description": "Each item represents one note and supplies its own pronunciation and language. phonemes contains the phonemes allocated to this note; kind identifies a normal pronunciation or a slur relationship."
+      },
+      "NotePosition": {
+        "type": "object",
+        "required": [
+          "gap",
+          "duration"
+        ],
+        "properties": {
+          "gap": {
+            "type": "number",
+            "minimum": 0
+          },
+          "duration": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      },
+      "DurationInputPhoneme": {
+        "type": "object",
+        "required": [
+          "token",
+          "onset",
+          "language"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "onset": {
+            "type": "boolean"
+          },
+          "language": {
+            "type": "string"
+          }
+        }
+      },
+      "ParameterInput": {
+        "type": "object",
+        "required": [
+          "pieceDuration",
+          "notes",
+          "mix",
+          "mixSampleRate",
+          "parameters"
+        ],
+        "properties": {
+          "pieceDuration": {
+            "type": "number",
+            "minimum": 0
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParameterNote"
+            }
+          },
+          "mix": {
+            "$ref": "#/components/schemas/Mix"
+          },
+          "mixSampleRate": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/ParameterMap"
+          }
+        }
+      },
+      "ParameterNote": {
+        "type": "object",
+        "required": [
+          "position",
+          "cent",
+          "pronunciation",
+          "language",
+          "phonemes",
+          "kind"
+        ],
+        "properties": {
+          "position": {
+            "$ref": "#/components/schemas/NotePosition"
+          },
+          "cent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 12800
+          },
+          "pronunciation": {
+            "type": "string",
+            "description": "This note's complete pronunciation. Slur notes also supply their own pronunciation and do not use a hyphen placeholder."
+          },
+          "language": {
+            "type": "string"
+          },
+          "phonemes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParameterInputPhoneme"
+            }
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NoteKind"
+          }
+        },
+        "description": "Each item represents one note and supplies its own pronunciation and language. phonemes contains the phonemes allocated to this note; kind identifies a normal pronunciation or a slur relationship."
+      },
+      "ParameterInputPhoneme": {
+        "type": "object",
+        "required": [
+          "token",
+          "onset",
+          "language",
+          "start"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "onset": {
+            "type": "boolean"
+          },
+          "language": {
+            "type": "string"
+          },
+          "start": {
+            "type": "number"
+          }
+        }
+      },
+      "AudioInput": {
+        "type": "object",
+        "required": [
+          "pieceDuration",
+          "notes",
+          "mix",
+          "mixSampleRate",
+          "parameters"
+        ],
+        "properties": {
+          "pieceDuration": {
+            "type": "number",
+            "minimum": 0
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParameterNote"
+            }
+          },
+          "mix": {
+            "$ref": "#/components/schemas/Mix"
+          },
+          "mixSampleRate": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/AudioParameterMap"
+          }
+        }
+      },
+      "Mix": {
+        "type": "array",
+        "description": "Per-frame singer mix data. Each value must be in [0, 1]. Each row must contain exactly singers.length - 1 values, and the sum of values in each row must be less than or equal to 1.",
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "ParameterMap": {
+        "type": "object",
+        "description": "Open string-keyed parameter map. Supported keys and semantic requirements are defined by the selected architecture.",
+        "additionalProperties": {
+          "$ref": "#/components/schemas/Parameter"
+        }
+      },
+      "AudioParameterMap": {
+        "type": "object",
+        "description": "Open string-keyed audio parameter map. Supported keys and semantic requirements are defined by the selected architecture.",
+        "additionalProperties": {
+          "$ref": "#/components/schemas/AudioParameter"
+        }
+      },
+      "Parameter": {
+        "type": "object",
+        "required": [
+          "values",
+          "sampleRate"
+        ],
+        "properties": {
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "sampleRate": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "retake": {
+            "$ref": "#/components/schemas/ParameterRetake",
+            "description": "Presence requests recomputation of this parameter; omission supplies only a condition curve. A nonempty range is valid only for an indirect parameter and must satisfy its group's retakeMode. A zero-length range returns the existing effective curve without recomputation."
+          }
+        }
+      },
+      "AudioParameter": {
+        "type": "object",
+        "required": [
+          "sampleRate"
+        ],
+        "properties": {
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "sampleRate": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        }
+      },
+      "ParameterRetake": {
+        "type": "object",
+        "required": [
+          "position",
+          "length"
+        ],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Inclusive start frame on this parameter's input sampling grid."
+          },
+          "length": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of frames to recompute on this parameter's input sampling grid; zero means no recomputation."
+          }
+        },
+        "description": "Half-open recomputation range in frames of this parameter's input sampleRate: [position/sampleRate, (position+length)/sampleRate) seconds. The range must stay within pieceDuration, allowing the normal final-frame rounding for a full-piece range. Group parameter metadata determines whether subranges are supported; full mode requires every nonempty range to cover the complete piece. A zero-length range changes nothing."
+      },
+      "PronunciationResponse": {
+        "type": "object",
+        "required": [
+          "output"
+        ],
+        "properties": {
+          "output": {
+            "$ref": "#/components/schemas/PronunciationOutput"
+          }
+        }
+      },
+      "PronunciationOutput": {
+        "type": "object",
+        "required": [
+          "notes"
+        ],
+        "properties": {
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Pronunciation"
+            }
+          }
+        }
+      },
+      "Pronunciation": {
+        "type": "object",
+        "required": [
+          "pronunciation",
+          "candidates"
+        ],
+        "properties": {
+          "pronunciation": {
+            "type": "string",
+            "description": "The complete pronunciation selected for this note, without appended slur, syllable quota, or allocation markers."
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Complete pronunciation candidates for this note, without appended slur or syllable allocation markers."
+          }
+        }
+      },
+      "PhonemeResponse": {
+        "type": "object",
+        "required": [
+          "output"
+        ],
+        "properties": {
+          "output": {
+            "$ref": "#/components/schemas/PhonemeOutput"
+          }
+        }
+      },
+      "PhonemeOutput": {
+        "type": "object",
+        "required": [
+          "notes"
+        ],
+        "properties": {
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PhonemeNote"
+            }
+          }
+        }
+      },
+      "PhonemeNote": {
+        "type": "object",
+        "required": [
+          "phonemes"
+        ],
+        "properties": {
+          "phonemes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Phoneme"
+            }
+          }
+        },
+        "description": "The phoneme sequence corresponding to exactly one input note. It contains all phonemes within the selected syllable range, preserving token order and onset flags. phonemes is an empty array when the selected range is empty."
+      },
+      "Phoneme": {
+        "type": "object",
+        "required": [
+          "token",
+          "onset"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "onset": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DurationResponse": {
+        "type": "object",
+        "required": [
+          "output"
+        ],
+        "properties": {
+          "output": {
+            "$ref": "#/components/schemas/DurationOutput"
+          }
+        }
+      },
+      "DurationOutput": {
+        "type": "object",
+        "required": [
+          "notes"
+        ],
+        "properties": {
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DurationOutputNote"
+            }
+          }
+        }
+      },
+      "DurationOutputNote": {
+        "type": "object",
+        "required": [
+          "phonemes"
+        ],
+        "properties": {
+          "phonemes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DurationOutputPhoneme"
+            }
+          }
+        }
+      },
+      "DurationOutputPhoneme": {
+        "type": "object",
+        "required": [
+          "start"
+        ],
+        "properties": {
+          "start": {
+            "type": "number"
+          }
+        }
+      },
+      "ParameterResponse": {
+        "type": "object",
+        "required": [
+          "output"
+        ],
+        "properties": {
+          "output": {
+            "$ref": "#/components/schemas/ParameterOutput"
+          }
+        }
+      },
+      "ParameterOutput": {
+        "type": "object",
+        "required": [
+          "parameters"
+        ],
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ParameterOutputParameter"
+            }
+          }
+        }
+      },
+      "ParameterOutputParameter": {
+        "type": "object",
+        "required": [
+          "values",
+          "sampleRate"
+        ],
+        "properties": {
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "sampleRate": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        }
+      },
+      "AudioResponse": {
+        "type": "object",
+        "required": [
+          "output"
+        ],
+        "properties": {
+          "output": {
+            "$ref": "#/components/schemas/AudioOutput"
+          }
+        }
+      },
+      "AudioOutput": {
+        "type": "object",
+        "required": [
+          "audioUrl"
+        ],
+        "properties": {
+          "audioUrl": {
+            "type": "string",
+            "description": "Encoded audio URL."
+          }
+        }
+      },
+      "AST": {
+        "description": "An AST expression is either a numeric literal or an operator expression. Relational and boolean operators interpret non-zero values as true and zero as false; boolean results are represented as 1 for true and 0 for false.",
+        "oneOf": [
+          {
+            "type": "number",
+            "description": "Numeric literal."
+          },
+          {
+            "type": "object",
+            "description": "Operator expression.",
+            "required": [
+              "operator",
+              "operands"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string"
+              },
+              "operands": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AST"
+                }
+              }
+            },
+            "additionalProperties": false,
+            "oneOf": [
+              {
+                "description": "Zero-operand constants.",
+                "properties": {
+                  "operator": {
+                    "enum": [
+                      "x",
+                      "e",
+                      "pi"
+                    ]
+                  },
+                  "operands": {
+                    "minItems": 0,
+                    "maxItems": 0
+                  }
+                }
+              },
+              {
+                "description": "Variadic operators with at least one operand.",
+                "properties": {
+                  "operator": {
+                    "enum": [
+                      "+",
+                      "*",
+                      "hypot",
+                      "max",
+                      "min"
+                    ]
+                  },
+                  "operands": {
+                    "minItems": 1
+                  }
+                }
+              },
+              {
+                "description": "Binary operators.",
+                "properties": {
+                  "operator": {
+                    "enum": [
+                      "-",
+                      "/",
+                      "%",
+                      "pow",
+                      ">",
+                      "<",
+                      ">=",
+                      "<=",
+                      "==",
+                      "!=",
+                      "||",
+                      "&&"
+                    ]
+                  },
+                  "operands": {
+                    "minItems": 2,
+                    "maxItems": 2
+                  }
+                }
+              },
+              {
+                "description": "Unary operators.",
+                "properties": {
+                  "operator": {
+                    "enum": [
+                      "abs",
+                      "acos",
+                      "acosh",
+                      "asin",
+                      "asinh",
+                      "atan",
+                      "atanh",
+                      "ceil",
+                      "cos",
+                      "cosh",
+                      "exp",
+                      "floor",
+                      "ln",
+                      "log",
+                      "round",
+                      "sign",
+                      "sin",
+                      "sinh",
+                      "sqrt",
+                      "tan",
+                      "tanh",
+                      "trunc",
+                      "!"
+                    ]
+                  },
+                  "operands": {
+                    "minItems": 1,
+                    "maxItems": 1
+                  }
+                }
+              },
+              {
+                "description": "Ternary conditional operator: condition, true result, false result.",
+                "properties": {
+                  "operator": {
+                    "enum": [
+                      "if"
+                    ]
+                  },
+                  "operands": {
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "SyllableSliceEndpoint": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "default": null,
+        "description": "A slice endpoint in the syllable group sequence, expressed as an integer or null; omission is equivalent to null. For M groups, boundary positions range from 0 to M. Nonnegative integers count from the beginning; negative integers first add M, so -1 denotes the position of the last group. Converted positions below 0 are clamped to 0, and positions above M are clamped to M. The start and end fields define their own defaults for null. The start is inclusive and the end exclusive; a start greater than or equal to the end selects an empty range. Reverse selection and a step are not supported."
+      },
+      "NoteKind": {
+        "type": "string",
+        "enum": [
+          "normal",
+          "slur"
+        ],
+        "description": "normal starts a new pronunciation at this note; slur continues the previous note's pronunciation without introducing new phonemes. A slur note must have an empty phonemes array and gap=0, and cannot be the first note. The slur relationship is expressed by kind, not by the pronunciation string."
+      }
+    }
+  }
+}
