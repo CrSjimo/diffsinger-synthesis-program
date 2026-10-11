@@ -10,16 +10,19 @@ namespace dssp::inference {
         using ErrorType::ErrorType;
         std::string_view kind() const noexcept override { return "dssp.inference.initialization"; }
     };
+
     class ResourceError final : public ErrorType<ResourceError> {
     public:
         using ErrorType::ErrorType;
         std::string_view kind() const noexcept override { return "dssp.inference.resource"; }
     };
+
     class ExecutionError final : public ErrorType<ExecutionError> {
     public:
         using ErrorType::ErrorType;
         std::string_view kind() const noexcept override { return "dssp.inference.execution"; }
     };
+
     class CancelledError final : public ErrorType<CancelledError> {
     public:
         using ErrorType::ErrorType;

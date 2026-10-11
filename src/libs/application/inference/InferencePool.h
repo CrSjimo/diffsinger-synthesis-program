@@ -45,6 +45,7 @@ namespace dssp::inference {
         // False is deliberately the default for custom/unknown resource types.
         bool parallelSafe = false;
     };
+
     using InferenceDefinition = ExecutiveDefinition<srt::InferenceExecutive>;
 
     // One independently configured cache group. Resource definitions and FIFO
@@ -62,6 +63,7 @@ namespace dssp::inference {
             if (!definition.create) {
                 return std::unexpected{ExecutionError("Task resource requires a factory")};
             }
+
             ExecutiveDefinition<TaskExecutive> adapted;
             adapted.key = std::move(definition.key);
             adapted.label = std::move(definition.label);
@@ -75,8 +77,10 @@ namespace dssp::inference {
                 if (!*created) {
                     return std::unexpected{ExecutionError("Task provider returned a null executive")};
                 }
+
                 return std::make_unique<TaskExecutive>(std::move(*created));
             };
+
             return bindTask(std::move(adapted));
         }
 
@@ -86,22 +90,27 @@ namespace dssp::inference {
             if (!definition) {
                 return std::unexpected{std::move(definition.error())};
             }
+
             auto factory = std::move(definition->create);
             definition->create = [factory = std::move(factory)]() -> std::expected<std::unique_ptr<srt::InferenceExecutive>, ExecutionError> {
                 auto created = factory();
                 if (!created) {
                     return std::unexpected{std::move(created.error())};
                 }
+
                 auto *typed = dynamic_cast<Executive *>(created->get());
                 if (!typed) {
                     return std::unexpected{ExecutionError("Inference provider returned an incompatible executive")};
                 }
+
                 auto initialized = nativeCall("InferenceExecutive::initialize", [&] { return typed->initialize(InitArgs{}); });
                 if (!initialized) {
                     return std::unexpected{std::move(initialized.error())};
                 }
+
                 return std::move(*created);
             };
+
             return bind(std::move(*definition));
         }
 
@@ -135,6 +144,7 @@ namespace dssp::inference {
                     result->emplace(fail<ExecutionErrors>(ExecutionError("Inference resource does not match the requested contract")));
                     return false;
                 }
+
                 result->emplace(std::invoke(function, *typed, token));
                 if (executive.state() == srt::ITask::Canceled) {
                     result->emplace(fail<ExecutionErrors>(CancelledError("Inference execution was cancelled")));
@@ -165,6 +175,7 @@ namespace dssp::inference {
                 run<Executive>(std::move(handle), stop, std::move(function), std::move(complete));
             });
         }
+
         template <class Executive, class Function>
         auto useCoro(InferenceHandle handle, std::stop_token stop, Function function) {
             using Value = typename std::invoke_result_t<Function, Executive &, std::stop_token>::value_type;
@@ -172,6 +183,7 @@ namespace dssp::inference {
                 use<Executive>(std::move(handle), stop, std::move(function), std::move(complete));
             });
         }
+
         void sweep();
         // Cancel queues, request native stop, wait for callbacks, release all
         // executives. Call on the host thread before releasing the SynthUnit.

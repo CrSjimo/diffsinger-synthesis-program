@@ -33,13 +33,16 @@ namespace dssp::error {
 
         template <class Visitor>
         decltype(auto) visit(Visitor &&visitor) const & { return std::visit(std::forward<Visitor>(visitor), value_); }
+
         template <class Visitor>
         decltype(auto) visit(Visitor &&visitor) && { return std::visit(std::forward<Visitor>(visitor), std::move(value_)); }
+
         template <class E>
             requires contains<E>
         const E *get_if() const noexcept {
             return std::get_if<E>(&value_);
         }
+
         const Error &asError() const noexcept {
             return visit([](const auto &error) -> const Error & { return error; });
         }
@@ -64,6 +67,7 @@ namespace dssp::error {
     struct Overload : F... {
         using F::operator()...;
     };
+
     template <class... F>
     Overload(F...) -> Overload<F...>;
 

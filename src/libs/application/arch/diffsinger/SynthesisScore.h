@@ -14,10 +14,12 @@ namespace dssp::arch_diffsinger {
         std::size_t note = 0;
         std::size_t phoneme = 0;
     };
+
     struct WordOrigins {
         double start = 0;
         std::vector<std::optional<PhonemeOrigin>> phonemes;
     };
+
     struct SynthesisScore {
         std::vector<Common::InputWordInfo> words;
         std::vector<WordOrigins> origins;
@@ -25,6 +27,7 @@ namespace dssp::arch_diffsinger {
         std::vector<std::size_t> phonemeCounts;
         bool silent = true;
     };
+
     struct StageScore {
         std::vector<Common::InputWordInfo> words;
         std::vector<Common::InputSpeakerInfo> speakers;

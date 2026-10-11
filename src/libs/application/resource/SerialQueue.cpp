@@ -22,6 +22,7 @@ namespace dssp::resource {
             Running,
             Done
         };
+
         struct Item {
             Task task;
             std::stop_source stop;
@@ -30,7 +31,9 @@ namespace dssp::resource {
             std::uint64_t sequence = 0;
             std::list<std::shared_ptr<Item>>::iterator position{};
         };
+
         State(Dispatch dispatch, std::string name) : dispatch(std::move(dispatch)), name(std::move(name)) {}
+
         Dispatch dispatch;
         std::string name;
         std::mutex mutex;
@@ -49,6 +52,7 @@ namespace dssp::resource {
             --completing;
             idle.notify_all();
         }
+
         void cancel(const std::shared_ptr<Item> &item) {
             item->stop.request_stop();
             bool complete = false;
@@ -61,11 +65,13 @@ namespace dssp::resource {
                     complete = true;
                 }
             }
+
             if (complete) {
                 log.stdcTrace("Queue %1 cancelled waiting task %2", name, item->sequence);
                 finishCancelled(item);
             }
         }
+
         void drain() {
             for (;;) {
                 std::shared_ptr<Item> item;
@@ -81,6 +87,7 @@ namespace dssp::resource {
                     item->phase = Phase::Running;
                     running = item;
                 }
+
                 log.stdcTrace("Queue %1 starting task %2", name, item->sequence);
                 if (!item->stop.stop_requested() && item->task.runAsync) {
                     auto start = item->task.runAsync;
@@ -94,34 +101,40 @@ namespace dssp::resource {
                     });
                     return;
                 }
+
                 if (!item->stop.stop_requested()) {
                     item->task.run(item->stop.get_token());
                 }
                 finish(item);
             }
         }
+
         void finish(const std::shared_ptr<Item> &item) {
             // Do not let a late request cancellation reach the next task.
             item->cancellation.reset();
             item->task.complete(item->stop.stop_requested());
             item->task = {};
+
             {
                 const std::lock_guard lock(mutex);
                 item->phase = Phase::Done;
                 running.reset();
                 idle.notify_all();
             }
+
             log.stdcTrace("Queue %1 finished task %2 (cancelled=%3)", name, item->sequence, item->stop.stop_requested());
         }
     };
 
     SerialQueue::SerialQueue(Dispatch dispatch, std::string name) : state_(std::make_shared<State>(std::move(dispatch), std::move(name))) {}
+
     SerialQueue::~SerialQueue() { close(); }
 
     void SerialQueue::submit(Task task, std::stop_token stop) {
         const auto state = state_;
         auto item = std::make_shared<State::Item>();
         item->task = std::move(task);
+
         const std::weak_ptr<State> weakState = state;
         const std::weak_ptr<State::Item> weakItem = item;
         item->cancellation = std::make_unique<std::stop_callback<std::function<void()>>>(stop, [weakState, weakItem] {
@@ -131,6 +144,7 @@ namespace dssp::resource {
                 state->cancel(item);
             }
         });
+
         bool dispatch = false;
         bool cancelled = false;
         {
@@ -147,16 +161,19 @@ namespace dssp::resource {
                 dispatch = !std::exchange(state->scheduled, true);
             }
         }
+
         if (cancelled) {
             state->finishCancelled(item);
         } else if (dispatch) {
             state->dispatch([state] { state->drain(); });
         }
     }
+
     void SerialQueue::close() {
         const auto state = state_;
         std::list<std::shared_ptr<State::Item>> pending;
         std::shared_ptr<State::Item> running;
+
         {
             const std::lock_guard lock(state->mutex);
             state->closed = true;
@@ -167,14 +184,17 @@ namespace dssp::resource {
             }
             running = state->running;
         }
+
         for (const auto &item : pending) {
             item->stop.request_stop();
             state->finishCancelled(item);
         }
+
         if (running) {
             running->stop.request_stop();
         }
     }
+
     void SerialQueue::wait() {
         const auto state = state_;
         std::unique_lock lock(state->mutex);

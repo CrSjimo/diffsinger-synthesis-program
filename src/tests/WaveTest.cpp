@@ -61,6 +61,7 @@ namespace dssp::tests {
             else if (character == '=') payload += "%3D";
             else payload += character;
         }
+
         escaped = "data:audio/x-wav;base64," + payload;
         const auto result = media::readWaveDataUrl(escaped);
         ASSERT_TRUE(result);

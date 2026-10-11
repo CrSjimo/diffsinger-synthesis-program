@@ -5,6 +5,7 @@ namespace srtbeatinfer {
         class Category final : public std::error_category {
         public:
             const char *name() const noexcept override { return "srtbeatinfer.beat"; }
+
             std::string message(int code) const override {
                 switch (static_cast<BeatError>(code)) {
                     case BeatError::Cancelled: return "Audio beat was cancelled";
@@ -14,9 +15,11 @@ namespace srtbeatinfer {
                     case BeatError::ModelFailed: return "Beat model failed";
                     case BeatError::ModelMismatch: return "Beat model tensor mismatch";
                 }
+
                 return "Unknown beat error";
             }
         };
+
         static const Category category;
         return category;
     }

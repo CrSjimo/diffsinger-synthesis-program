@@ -26,6 +26,7 @@ namespace dssp::localization {
             if (ures_getType(bundle.get()) != URES_TABLE) {
                 return std::unexpected{LocalizationError("Translation bundle must be a keyed resource table")};
             }
+
             std::map<std::string, std::string> result;
             for (int32_t i = 0; i < ures_getSize(bundle.get()); ++i) {
                 Bundle item(ures_getByIndex(bundle.get(), i, nullptr, &status), ures_close);
@@ -54,6 +55,7 @@ namespace dssp::localization {
             if (log.isLevelEnabled(stdc::Logger::Debug)) {
                 log.stdcDebug("Loading translation directory %1 with preferred fallback %2", stdc::path::to_utf8(directory), fallbackLocale);
             }
+
             auto result = std::shared_ptr<Catalog>(new Catalog);
             result->fallbackLocale_ = fallbackLocale;
             std::error_code error;
@@ -62,6 +64,7 @@ namespace dssp::localization {
             if (error == std::errc::no_such_file_or_directory) {
                 error.clear();
             }
+
             std::vector<std::string> locales;
             while (!error && iterator != end) {
                 const auto path = iterator->path();
@@ -75,6 +78,7 @@ namespace dssp::localization {
             if (error) {
                 return std::unexpected{LocalizationError("Cannot enumerate translation bundles", std::make_shared<const ExternalError>(error.message(), NativeDiagnostic{"filesystem", "directory_iterator", "error_code", error.value()}))};
             }
+
             std::ranges::sort(locales);
             for (const auto &locale : locales) {
                 auto strings = readBundle(directory, locale);
@@ -84,11 +88,13 @@ namespace dssp::localization {
                 result->locales_.push_back(locale);
                 result->translations_.push_back(std::move(*strings));
             }
+
             if (locales.empty()) {
                 log.stdcDebug("No translation bundles available; display values will use resource keys");
             } else if (std::ranges::find(locales, result->fallbackLocale_) == locales.end()) {
                 log.stdcDebug("Preferred fallback bundle %1 is absent; using available translations", fallbackLocale);
             }
+
             log.stdcDebug("Translation locales available: %1; directory=%2", stdc::str::join(locales, ", "), stdc::path::to_utf8(directory));
             return std::shared_ptr<const Catalog>(std::move(result));
         } catch (const std::exception &error) {
@@ -107,10 +113,12 @@ namespace dssp::localization {
                 strings.push_back(&it->second);
             }
         }
+
         if (strings.empty()) {
             // The untranslated display value is deliberately not a contract.
             return resourceKey;
         }
+
         auto matched = matchLocale(locales, acceptLanguage);
         if (!matched) {
             return std::unexpected{std::move(matched.error())};
@@ -121,6 +129,7 @@ namespace dssp::localization {
         if (const auto fallback = std::ranges::find(locales, fallbackLocale_); fallback != locales.end()) {
             return *strings[static_cast<std::size_t>(fallback - locales.begin())];
         }
+
         // The preferred fallback bundle is optional, too.
         return *strings.front();
     }

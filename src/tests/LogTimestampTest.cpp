@@ -15,14 +15,17 @@ namespace dssp::tests {
             void SetUp() override {
                 previous_.reset(icu::TimeZone::createDefault());
             }
+
             void TearDown() override {
                 icu::TimeZone::adoptDefault(previous_.release());
             }
+
             void zone(const char *value) {
                 auto *selected = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(value));
                 ASSERT_NE(selected, nullptr);
                 icu::TimeZone::adoptDefault(selected);
             }
+
             static auto utc(int y, unsigned m, unsigned d, int h, int min, int sec, int ms = 0) {
                 using namespace std::chrono;
                 return sys_days{year{y} / month{m} / day{d}} + hours{h} + minutes{min} + seconds{sec} + milliseconds{ms};

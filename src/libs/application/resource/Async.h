@@ -19,7 +19,9 @@ namespace dssp::resource {
     class CallbackAwaiter final {
     public:
         explicit CallbackAwaiter(Start start) : start_(std::move(start)), state_(std::make_shared<State>()) {}
+
         bool await_ready() const noexcept { return false; }
+
         void await_suspend(std::coroutine_handle<> continuation) {
             // Publish only shared state. An inline callback can destroy this
             // awaiter before start() returns, so nothing accesses it afterwards.
@@ -30,6 +32,7 @@ namespace dssp::resource {
                 continuation.resume();
             });
         }
+
         Result await_resume() { return std::move(*state_->result); }
 
     private:
@@ -37,6 +40,7 @@ namespace dssp::resource {
             std::atomic_flag completed = ATOMIC_FLAG_INIT;
             std::optional<Result> result;
         };
+
         Start start_;
         std::shared_ptr<State> state_;
     };

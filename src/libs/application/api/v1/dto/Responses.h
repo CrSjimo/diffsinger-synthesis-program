@@ -11,12 +11,15 @@ namespace dssp::api_v1::dto {
         double major = 0;
         double minor = 0;
     };
+
     struct ApplicationInfo {
         ApiVersion apiVersion;
     };
+
     struct ApplicationInfoResponse {
         ApplicationInfo dssp;
     };
+
     struct AST {
         struct Operation {
             std::string op;
@@ -24,12 +27,14 @@ namespace dssp::api_v1::dto {
         };
         std::variant<double, Operation> value = 0.0;
     };
+
     enum class FillMode {
         No,
         Top,
         Bottom,
         Baseline
     };
+
     struct ParameterPresentation {
         std::string name;
         double defaultValue = 0;
@@ -43,39 +48,48 @@ namespace dssp::api_v1::dto {
         std::string displayValueSuffix;
         unsigned displayValueDecimalPlaces = 0;
     };
+
     struct ArchitectureMetadata {
         std::string id;
         std::string name;
         std::map<std::string, ParameterPresentation> parameters;
     };
+
     enum class PronunciationMode {
         Full,
         Skip
     };
+
     enum class PhonemeMode {
         Full,
         TokenOnly,
         Skip
     };
+
     enum class DurationMode {
         Full,
         Skip
     };
+
     enum class ParameterRetakeMode {
         Full,
         Range
     };
+
     struct DirectParameter {};
+
     struct IndirectParameter {
         std::vector<std::string> dependsOn;
         ParameterRetakeMode retakeMode = ParameterRetakeMode::Full;
     };
+
     struct GroupLanguageInfo {
         std::string name;
         std::string defaultLyric;
         PronunciationMode pronunciationMode = PronunciationMode::Skip;
         PhonemeMode phonemeMode = PhonemeMode::Skip;
     };
+
     struct GroupMetadata {
         std::string id;
         std::string arch;
@@ -87,6 +101,7 @@ namespace dssp::api_v1::dto {
         Json::Value archSpecificInfo;
         Json::Value defaultArchExtra;
     };
+
     struct SingerInfo {
         std::string id;
         std::string name;
@@ -96,16 +111,20 @@ namespace dssp::api_v1::dto {
         Json::Value archSpecificInfo;
         Json::Value defaultExtra;
     };
+
     struct SingerAvatarResponse {
         std::string avatarUrl;
     };
+
     struct SingerBackgroundResponse {
         std::string backgroundUrl;
     };
+
     struct SingerDemoAudio {
         std::string name;
         std::string audioUrl;
     };
+
     struct ExtractorInfo {
         std::string id;
         std::string name;
@@ -114,42 +133,53 @@ namespace dssp::api_v1::dto {
         std::optional<std::vector<std::string>> acceptableSchemes;
         std::optional<std::vector<std::uint32_t>> acceptableAudioSampleRates;
     };
+
     struct SeparationTrackInfo {
         std::string name;
     };
+
     struct SeparationExtractorInfo : ExtractorInfo {
         std::vector<SeparationTrackInfo> tracks;
     };
+
     struct ExtractorList {
         std::vector<ExtractorInfo> note;
         std::vector<ExtractorInfo> tempo;
         std::vector<ExtractorInfo> pitch;
         std::vector<SeparationExtractorInfo> separation;
     };
+
     struct EnvTagResponse {
         std::string envTag;
     };
+
     template <class Output>
     struct Response {
         Output output;
     };
+
     struct Pronunciation {
         std::string pronunciation;
         std::vector<std::string> candidates;
     };
+
     struct Phoneme {
         std::string token;
         bool onset = false;
     };
+
     struct PhonemeNote {
         std::vector<Phoneme> phonemes;
     };
+
     struct DurationOutputPhoneme {
         double start = 0;
     };
+
     struct DurationOutputNote {
         std::vector<DurationOutputPhoneme> phonemes;
     };
+
     template <class NoteType>
     struct NotesOutput {
         std::vector<NoteType> notes;
@@ -161,6 +191,7 @@ namespace dssp::api_v1::dto {
         std::vector<double> values;
         double sampleRate = 1;
     };
+
     struct ParameterOutput {
         std::map<std::string, ParameterOutputParameter> parameters;
     };
@@ -178,6 +209,7 @@ namespace dssp::api_v1::dto {
         std::uint64_t gap = 0;
         std::vector<double> pitch;
     };
+
     struct PitchExtractionOutput {
         std::vector<PitchExtractionSegment> segments;
         double sampleRate = 1;
@@ -187,6 +219,7 @@ namespace dssp::api_v1::dto {
         double position = 0;
         bool downbeat = false;
     };
+
     struct TempoExtractionOutput {
         std::vector<ExtractedBeat> beats;
     };
@@ -195,6 +228,7 @@ namespace dssp::api_v1::dto {
         std::string name;
         std::string audioUrl;
     };
+
     struct SeparationExtractionOutput {
         std::vector<SeparationTrack> tracks;
     };

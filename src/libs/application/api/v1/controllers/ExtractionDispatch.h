@@ -21,10 +21,12 @@ namespace dssp::api_v1::detail {
         if (!result) callback(extractionProblemResponse(result.error(), context));
         else callback(http::jsonResponse(toJson(std::invoke(map, std::move(*result))), context));
     }
+
     template <class T>
     void extractionCatalog(extraction::CatalogResult<T> result, const http::Callback &callback, const http::RequestLog &context) {
         extractionCatalog(std::move(result), callback, context, [](T value) { return toDto(std::move(value)); });
     }
+
     template <class Response, class Output, class Request = dto::ExtractionRequest, class Start>
     drogon::Task<> extract(drogon::HttpRequestPtr request, http::Callback callback, std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::shared_ptr<extraction::Service> service, Start start, std::string_view operation) {
         const auto context = lifetime->track(*request);
@@ -35,6 +37,7 @@ namespace dssp::api_v1::detail {
             callback(http::problemResponse(input.error(), context.logContext()));
             co_return;
         }
+
         const auto reply = std::make_shared<AsyncReply>(std::move(callback), context, service, operation);
         auto parameters = toExtraction(std::move(*input));
         auto result = co_await resource::awaitCallback<extraction::ExtractionResult<Output>>([service, parameters = std::move(parameters), context, start](auto complete) mutable {

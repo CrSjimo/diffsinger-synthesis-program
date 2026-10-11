@@ -38,7 +38,9 @@ namespace dssp::tests {
             ASSERT_EQ(singers->size(), 1U);
             context = {Json::Value(Json::objectValue), {{singers->front().id, Json::Value(Json::objectValue)}}};
         }
+
         void TearDown() override { if (environment) environment->shutdown(); }
+
         template <class Output, class Function>
         arch::SynthesisResult<Output> await(Function submit) {
             const auto promise = std::make_shared<std::promise<arch::SynthesisResult<Output>>>();
@@ -50,6 +52,7 @@ namespace dssp::tests {
             }
             return future.get();
         }
+
         arch::AudioInput audioInput() const {
             arch::AudioInput input;
             input.context = context;
@@ -60,6 +63,7 @@ namespace dssp::tests {
             }
             return input;
         }
+
         TestFiles files;
         std::shared_ptr<inference::Environment> environment;
         arch::ArchitecturePtr implementation;
@@ -199,6 +203,7 @@ namespace dssp::tests {
             stage.speakers = {"model-a", "model-b"};
             stage.embeddedSpeakers = {"model-a", "model-b"};
         }
+
         first.stages.at("acoustic").speakerMapping = {{"main", "model-a"}};
         second.stages.at("acoustic").speakerMapping = {{"main", "model-b"}};
         arch_diffsinger::SynthesisContext resolved;

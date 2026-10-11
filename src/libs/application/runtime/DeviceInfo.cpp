@@ -40,6 +40,7 @@ namespace dssp::runtime {
                     return true;
                 }
             }
+
             auto name = device.description();
             std::transform(name.begin(), name.end(), name.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
             return name == "nvidia";
@@ -76,10 +77,12 @@ namespace dssp::runtime {
             if (!wstr) {
                 return {};
             }
+
             const int length = WideCharToMultiByte(CP_UTF8, 0, wstr, -1, nullptr, 0, nullptr, nullptr);
             if (length <= 0) {
                 return {};
             }
+
             std::string result(static_cast<std::size_t>(length), '\0');
             WideCharToMultiByte(CP_UTF8, 0, wstr, -1, &result[0], length, nullptr, nullptr);
             result.pop_back();
@@ -130,6 +133,7 @@ namespace dssp::runtime {
                     log.stdcTrace("Excluding DXGI adapter %1 with %2 bytes of VRAM (minimum %3)", adapterIndex, desc.DedicatedVideoMemory, kMinGpuVramBytes);
                     continue;
                 }
+
                 log.stdcTrace("Discovered DirectML adapter %1 with %2 bytes of VRAM", adapterIndex, desc.DedicatedVideoMemory);
 
                 gpus.push_back(createGpuDataFromDesc(desc, adapterIndex));
@@ -171,6 +175,7 @@ namespace dssp::runtime {
             if (status != 0) {
                 return std::unexpected{DeviceError("nvidia-smi returned a failure status", std::make_shared<ExternalError>("Device query failed", NativeDiagnostic{"nvidia-smi", "query-gpu", "exit-status", status}))};
             }
+
             return result;
         }
 
@@ -186,6 +191,7 @@ namespace dssp::runtime {
                     const auto [end, error] = std::from_chars(field.data(), field.data() + field.size(), number);
                     valid = valid && error == std::errc{} && end == field.data() + field.size();
                 };
+
                 switch (fieldIndex_) {
                     case 0: parse(data.index); break;
                     case 1: data.description = field; break;
@@ -224,6 +230,7 @@ namespace dssp::runtime {
             if (!valid || insideQuotes || fieldIndex < 3 || data.index < 0) {
                 return std::unexpected{DeviceError("Malformed nvidia-smi device record")};
             }
+
             return data;
         }
 
@@ -244,6 +251,7 @@ namespace dssp::runtime {
                 if (line.empty()) {
                     continue;
                 }
+
                 auto data = parseGpuFromLine(line);
                 if (!data) {
                     return std::unexpected{std::move(data.error())};
@@ -252,9 +260,11 @@ namespace dssp::runtime {
                     log.stdcTrace("Excluding CUDA device %1 with %2 bytes of VRAM (minimum %3)", data->index, data->memory, kMinGpuVramBytes);
                     continue;
                 }
+
                 log.stdcTrace("Discovered CUDA device %1 with %2 bytes of VRAM", data->index, data->memory);
                 gpus.push_back(std::move(*data));
             }
+
             return gpus;
         }
 
@@ -275,6 +285,7 @@ namespace dssp::runtime {
             if (!directMLGpus) {
                 return std::unexpected{std::move(directMLGpus.error())};
             }
+
             for (const auto &gpu : *directMLGpus) {
                 devices.emplace_back(DeviceInfo{ExecutionProvider::DirectML, gpu.index, gpu.description, gpu.id, gpu.memory});
             }
@@ -287,6 +298,7 @@ namespace dssp::runtime {
             if (!cudaGpus) {
                 return std::unexpected{std::move(cudaGpus.error())};
             }
+
             for (const auto &gpu : *cudaGpus) {
                 devices.emplace_back(DeviceInfo{ExecutionProvider::CUDA, gpu.index, gpu.description, gpu.id, gpu.memory});
             }
@@ -310,6 +322,7 @@ namespace dssp::runtime {
         if (!devices) {
             return std::unexpected{std::move(devices.error())};
         }
+
         return defaultDevice(*devices, provider);
     }
 
@@ -326,6 +339,7 @@ namespace dssp::runtime {
             if ((provider == ExecutionProvider::DirectML || provider == ExecutionProvider::CUDA) && device.memory() < kMinGpuVramBytes) {
                 continue;
             }
+
             const bool preferred = provider == ExecutionProvider::DirectML && isPreferredDirectMLDevice(device);
             if (!selected || (preferred && !selectedPreferred) ||
                 (preferred == selectedPreferred && (device.memory() > selected->memory() ||
@@ -334,9 +348,11 @@ namespace dssp::runtime {
                 selectedPreferred = preferred;
             }
         }
+
         if (!selected) {
             return std::unexpected{DeviceError("No available device found for execution provider " + executionProviderToString(provider))};
         }
+
         log.stdcDebug("Selected default execution provider %1, native device %2 (%3)", executionProviderToString(provider), selected->index(), selected->description());
         return *selected;
     }
@@ -348,6 +364,7 @@ namespace dssp::runtime {
             case ExecutionProvider::DirectML: return "directml";
             case ExecutionProvider::CoreML: return "coreml";
         }
+
         std::unreachable();
     }
 
@@ -364,6 +381,7 @@ namespace dssp::runtime {
         if (s == "cpu") {
             return ExecutionProvider::CPU;
         }
+
         return std::unexpected{DeviceError("Unknown execution provider: " + s)};
     }
 

@@ -27,8 +27,10 @@
 namespace dssp::tests {
     using namespace std::chrono_literals;
     namespace Sep = srtsepinfer::Api::Separation::L1;
+
     namespace {
         constexpr char Id[] = "example/separation=1.0:inference/demucs";
+
         drogon::HttpRequestPtr separationRequest(const Json::Value &body) {
             auto request = drogon::HttpRequest::newHttpRequest();
             request->setMethod(drogon::Post);
@@ -36,10 +38,12 @@ namespace dssp::tests {
             request->setBody(Json::writeString(Json::StreamWriterBuilder{}, body));
             return request;
         }
+
         std::string wave(int rate = 44100, int channels = 2) {
             std::vector<float> samples(501 * channels);
             for (std::size_t i = 0; i < samples.size(); ++i)
                 samples[i] = (i % channels == 0) ? 0.25f : -0.125f;
+
             const drwav_data_format format{drwav_container_riff, DR_WAVE_FORMAT_IEEE_FLOAT, static_cast<drwav_uint32>(channels), static_cast<drwav_uint32>(rate), 32};
             void *bytes = nullptr;
             std::size_t size = 0;
@@ -47,25 +51,30 @@ namespace dssp::tests {
             EXPECT_TRUE(drwav_init_memory_write(&writer, &bytes, &size, &format, nullptr));
             EXPECT_EQ(drwav_write_pcm_frames(&writer, 501, samples.data()), 501);
             EXPECT_EQ(drwav_uninit(&writer), DRWAV_SUCCESS);
+
             const codecutil::Base64EncodingView encoded(std::span(static_cast<const std::uint8_t *>(bytes), size));
             auto result = "data:audio/wav;base64," + std::string(encoded.begin(), encoded.end());
             drwav_free(bytes, nullptr);
             return result;
         }
+
         Json::Value mappedDeclaration(const std::vector<std::string> &modelTracks, const std::vector<std::pair<std::string, std::string>> &tracks) {
             Json::Value declaration;
             declaration["name"] = "Mapped Demucs";
             declaration["interface"] = Sep::API_INTERFACE;
             declaration["variant"] = "demucs";
             declaration["level"] = 1;
+
             declaration["exports"]["sampleRate"] = 44100;
             declaration["exports"]["channelCount"] = 2;
+
             auto &configuration = declaration["configuration"];
             configuration["model"] = "missing.onnx";
             configuration["segmentSamples"] = 343980;
             configuration["fftSize"] = 4096;
             configuration["hopLength"] = 1024;
             configuration["overlap"] = .25;
+
             for (const auto &track : modelTracks)
                 configuration["modelTracks"].append(track);
             for (const auto &[id, source] : tracks) {
@@ -75,20 +84,25 @@ namespace dssp::tests {
                 declaration["exports"]["tracks"].append(track);
                 configuration["trackMapping"][id] = source;
             }
+
             return declaration;
         }
+
         auto loadMappedDeclaration(const TestFiles &files, const Json::Value &declaration) {
             files.write("package/desc.json", R"({"$version":"1.0","id":"example/mapped-separation","version":"1","runtimeLevel":1,"contributions":{"inference":[{"id":"demucs","path":"demucs.json"}]}})");
             files.write("package/demucs.json", Json::writeString(Json::StreamWriterBuilder{}, declaration));
+
             inference::EnvironmentOptions options;
             options.packageRoots = {files.path()};
             options.pluginPaths = {{"inference", DSSP_TEST_SEPARATION_PLUGIN_DIR}};
             return inference::Environment::create(options);
         }
+
         class FakeSeparator final : public Sep::SeparationExecutive {
         public:
             FakeSeparator(srt::InferenceSpec &spec, bool invalid, std::shared_ptr<std::promise<void>> started)
                 : SeparationExecutive(spec), invalid_(invalid), started_(std::move(started)) {}
+
             ~FakeSeparator() override {
                 (void)stop();
                 (void)waitForFinished();
@@ -105,11 +119,13 @@ namespace dssp::tests {
                         return srtsepinfer::cancelledError();
                     return srt::Error(srtsepinfer::SeparationError::Internal, "Native cancellation did not arrive");
                 }
+
                 auto result = std::make_unique<Sep::SeparationResult>();
                 for (const auto &id : {"drums", "bass", "other", "vocals"})
                     result->tracks.push_back({id, {input.audio.sampleRate, input.audio.channelCount, input.audio.samples, input.audio.startTime}});
                 if (invalid_)
                     result->tracks.back().audio.samples.pop_back();
+
                 return result;
             }
 
@@ -118,11 +134,13 @@ namespace dssp::tests {
             std::shared_ptr<std::promise<void>> started_;
         };
     }
+
     class SeparationTest : public ::testing::Test {
     protected:
         void SetUp() override {
             files.write("package/desc.json", R"({"$version":"1.0","id":"example/separation","version":"1","runtimeLevel":1,"contributions":{"inference":[{"id":"demucs","path":"demucs.json"}]}})");
             files.write("package/demucs.json", R"({"name":"Demucs","interface":"org.openvpi.srtsepinfer.inference.Separation","variant":"demucs","level":1,"exports":{"sampleRate":44100,"channelCount":2,"tracks":[{"id":"drums","description":{"_":"Drums","zh-CN":"鼓"}},{"id":"bass","description":"Bass"},{"id":"other","description":"Other"},{"id":"vocals","description":"Vocals"}]},"configuration":{"model":"missing.onnx","segmentSamples":343980,"fftSize":4096,"hopLength":1024,"overlap":0.25}})");
+
             inference::EnvironmentOptions options;
             options.packageRoots = {files.path()};
             options.pluginPaths = {{"inference", DSSP_TEST_SEPARATION_PLUGIN_DIR}};
@@ -131,12 +149,14 @@ namespace dssp::tests {
             environment = *made;
             ASSERT_TRUE(environment->problems().empty()) << (environment->problems().empty() ? "" : environment->problems().front().error.formatChain());
         }
+
         void TearDown() override {
             if (service)
                 service->shutdown();
             if (environment)
                 environment->shutdown();
         }
+
         void install(bool invalid = false, std::shared_ptr<std::promise<void>> started = {}) {
             auto *category = dynamic_cast<srt::InferenceCategory *>(environment->unit().category("inference"));
             ASSERT_NE(category, nullptr);
@@ -145,23 +165,27 @@ namespace dssp::tests {
             auto *spec = specs.front();
             auto pool = environment->inferences("extraction-separation");
             ASSERT_TRUE(pool);
+
             inference::InferenceDefinition definition;
             definition.key = inference::resourceReference(*spec) + "/default";
             definition.packages = {spec->package()};
             definition.create = [spec, invalid, started]() -> std::expected<std::unique_ptr<srt::InferenceExecutive>, inference::ExecutionError> { return std::make_unique<FakeSeparator>(*spec, invalid, started); };
             ASSERT_TRUE((*pool)->bind(std::move(definition)));
         }
+
         void start() {
             auto made = extraction::Service::create(environment);
             ASSERT_TRUE(made);
             service = *made;
         }
+
         auto submit(extraction::SeparationInput input, std::stop_token token = {}) {
             auto promise = std::make_shared<std::promise<extraction::ExtractionResult<extraction::SeparationOutput>>>();
             auto future = promise->get_future();
             service->separation(std::move(input), token, [promise](auto result) { promise->set_value(std::move(result)); });
             return future;
         }
+
         TestFiles files;
         std::shared_ptr<inference::Environment> environment;
         std::shared_ptr<extraction::Service> service;
@@ -169,28 +193,33 @@ namespace dssp::tests {
 
     TEST_F(SeparationTest, ColdDiscoveryExportsLocalizedOrderedTracksWithoutLoadingModel) {
         start();
+
         auto list = service->extractors("zh-CN");
         ASSERT_TRUE(list);
         ASSERT_EQ(list->separation.size(), 1);
         EXPECT_TRUE(list->note.empty());
         EXPECT_TRUE(list->pitch.empty());
+
         const auto &info = list->separation.front();
         EXPECT_EQ(info.id, Id);
         ASSERT_EQ(info.tracks.size(), 4);
         EXPECT_EQ(info.tracks.front().name, "drums");
         EXPECT_EQ(info.tracks.front().description, "鼓");
+
         api_v1::ExtractionController controller(std::make_shared<http::RequestLifetimeRegistry>(), service);
         auto request = drogon::HttpRequest::newHttpRequest();
         request->addHeader("accept-language", "zh-CN");
         drogon::HttpResponsePtr listResponse, metadataResponse;
         controller.extractors(request, [&](const auto &response) { listResponse = response; });
         controller.separationExtractor(request, [&](const auto &response) { metadataResponse = response; }, Id);
+
         ASSERT_NE(listResponse, nullptr);
         ASSERT_NE(metadataResponse, nullptr);
         ASSERT_EQ(listResponse->statusCode(), drogon::k200OK);
         ASSERT_EQ(metadataResponse->statusCode(), drogon::k200OK);
         ASSERT_NE(listResponse->getJsonObject(), nullptr);
         ASSERT_NE(metadataResponse->getJsonObject(), nullptr);
+
         const auto &json = *metadataResponse->getJsonObject();
         EXPECT_EQ((*listResponse->getJsonObject())["separation"][0], json);
         EXPECT_EQ(json.getMemberNames(), (std::vector<std::string>{"acceptableAudioSampleRates", "acceptableFormats", "acceptableSchemes", "id", "name", "preferredAudioSampleRate", "tracks"}));
@@ -202,17 +231,21 @@ namespace dssp::tests {
             EXPECT_EQ(json["tracks"][i].getMemberNames(), (std::vector<std::string>{"name"}));
             EXPECT_EQ(json["tracks"][i]["name"].asString(), info.tracks[i].name);
         }
+
         auto pool = environment->inferences("extraction-separation");
         ASSERT_TRUE(pool);
         EXPECT_EQ((*pool)->residentCount(), 0);
         EXPECT_FALSE(service->extractor(extraction::Kind::Pitch, Id));
     }
+
     TEST_F(SeparationTest, PreservesStereoAndPartialTailInEveryWaveOutput) {
         install();
         start();
+
         auto future = submit({{Id, wave()}});
         ASSERT_EQ(future.wait_for(5s), std::future_status::ready);
         auto result = future.get();
+
         ASSERT_TRUE(result) << result.error().asError().formatChain();
         ASSERT_EQ(result->tracks.size(), 4);
         for (const auto &track : result->tracks) {
@@ -225,8 +258,10 @@ namespace dssp::tests {
             EXPECT_FLOAT_EQ(decoded->samples[1001], -0.125f);
         }
     }
+
     TEST_F(SeparationTest, RejectsWrongFormatBeforeOpeningModel) {
         start();
+
         for (const auto &input : std::vector<extraction::SeparationInput>{{{Id, wave(48000)}}, {{Id, wave(44100, 1)}}, {{Id, "https://example.invalid/audio.wav"}}, {{"missing", wave()}}}) {
             auto future = submit(input);
             ASSERT_EQ(future.wait_for(5s), std::future_status::ready);
@@ -234,37 +269,47 @@ namespace dssp::tests {
             ASSERT_FALSE(result);
             EXPECT_NE(result.error().get_if<extraction::InvalidInputError>(), nullptr);
         }
+
         auto pool = environment->inferences("extraction-separation");
         ASSERT_TRUE(pool);
         EXPECT_EQ((*pool)->residentCount(), 0);
     }
+
     TEST_F(SeparationTest, RejectsMalformedNativeTrack) {
         install(true);
         start();
+
         auto future = submit({{Id, wave()}});
         ASSERT_EQ(future.wait_for(5s), std::future_status::ready);
         auto result = future.get();
+
         ASSERT_FALSE(result);
         EXPECT_NE(result.error().get_if<extraction::OperationError>(), nullptr);
     }
+
     TEST_F(SeparationTest, CancellationReachesNativeSeparatorAndReturnsNoTracks) {
         auto started = std::make_shared<std::promise<void>>();
         auto entered = started->get_future();
         install(false, started);
         start();
+
         std::stop_source stop;
         auto future = submit({{Id, wave()}}, stop.get_token());
         ASSERT_EQ(entered.wait_for(5s), std::future_status::ready);
+
         stop.request_stop();
         ASSERT_EQ(future.wait_for(5s), std::future_status::ready);
+
         auto result = future.get();
         ASSERT_FALSE(result);
         EXPECT_NE(result.error().get_if<extraction::CancelledError>(), nullptr);
     }
+
     TEST_F(SeparationTest, HttpNegotiationAcceptsDefaultsEmptyListsAndSupportedFallbacks) {
         install();
         start();
         api_v1::ExtractionController controller(std::make_shared<http::RequestLifetimeRegistry>(), service);
+
         for (int variant = 0; variant < 3; ++variant) {
             SCOPED_TRACE(variant);
             Json::Value body;
@@ -280,11 +325,13 @@ namespace dssp::tests {
                 body["acceptableSchemes"].append("https");
                 body["acceptableSchemes"].append("DATA");
             }
+
             auto promise = std::make_shared<std::promise<drogon::HttpResponsePtr>>();
             auto future = promise->get_future();
             startCoroutine(controller.separation(separationRequest(body), [promise](const auto &response) { promise->set_value(response); }));
             ASSERT_EQ(future.wait_for(5s), std::future_status::ready);
             const auto response = future.get();
+
             ASSERT_EQ(response->statusCode(), drogon::k200OK) << response->body();
             const auto json = response->getJsonObject();
             ASSERT_NE(json, nullptr);
@@ -301,9 +348,11 @@ namespace dssp::tests {
             }
         }
     }
+
     TEST_F(SeparationTest, HttpNegotiationRejectsUnsupportedOutputBeforeDecodingOrOpeningModel) {
         start();
         api_v1::ExtractionController controller(std::make_shared<http::RequestLifetimeRegistry>(), service);
+
         for (const auto field : {"acceptableFormats", "acceptableSchemes"}) {
             SCOPED_TRACE(field);
             Json::Value body;
@@ -311,26 +360,32 @@ namespace dssp::tests {
             body["input"]["audioUrl"] = "data:audio/wav;base64,broken";
             body[field] = Json::Value(Json::arrayValue);
             body[field].append(std::string_view(field) == "acceptableFormats" ? "audio/flac" : "https");
+
             auto promise = std::make_shared<std::promise<drogon::HttpResponsePtr>>();
             auto future = promise->get_future();
             startCoroutine(controller.separation(separationRequest(body), [promise](const auto &response) { promise->set_value(response); }));
             ASSERT_EQ(future.wait_for(5s), std::future_status::ready);
             const auto response = future.get();
+
             ASSERT_EQ(response->statusCode(), drogon::k422UnprocessableEntity) << response->body();
             const auto json = response->getJsonObject();
             ASSERT_NE(json, nullptr);
             EXPECT_TRUE((*json)["detail"].asString().starts_with(std::string(field) + " does not accept the separated audio"));
         }
+
         auto pool = environment->inferences("extraction-separation");
         ASSERT_TRUE(pool);
         EXPECT_EQ((*pool)->residentCount(), 0);
     }
+
     TEST(DemucsConfiguration, AcceptsSubsetsRenamingReorderingAndLegacySixSourcesWithoutLoadingModel) {
         const std::vector<std::string> four{"drums", "bass", "other", "vocals"};
         const std::vector<std::string> six{"drums", "bass", "other", "vocals", "guitar", "piano"};
+
         auto legacy = mappedDeclaration(six, {{"drums", "drums"}, {"bass", "bass"}, {"other", "other"}, {"vocals", "vocals"}, {"guitar", "guitar"}, {"piano", "piano"}});
         legacy["configuration"].removeMember("modelTracks");
         legacy["configuration"].removeMember("trackMapping");
+
         for (const auto &declaration : {mappedDeclaration(four, {{"vocals", "vocals"}}), mappedDeclaration(four, {{"lead", "vocals"}, {"percussion", "drums"}}), mappedDeclaration(six, {{"keys", "piano"}, {"strings", "guitar"}}), legacy}) {
             SCOPED_TRACE(Json::writeString(Json::StreamWriterBuilder{}, declaration));
             TestFiles files;
@@ -338,22 +393,27 @@ namespace dssp::tests {
             ASSERT_TRUE(host);
             ASSERT_TRUE((*host)->problems().empty());
             ASSERT_EQ((*host)->packages().size(), 1);
+
             auto service = extraction::Service::create(*host);
             ASSERT_TRUE(service);
             auto list = (*service)->extractors();
             ASSERT_TRUE(list);
             ASSERT_EQ(list->separation.size(), 1);
+
             const auto &tracks = list->separation.front().tracks;
             ASSERT_EQ(tracks.size(), declaration["exports"]["tracks"].size());
             for (Json::ArrayIndex i = 0; i < tracks.size(); ++i)
                 EXPECT_EQ(tracks[i].name, declaration["exports"]["tracks"][i]["id"].asString());
+
             auto pool = (*host)->inferences("extraction-separation");
             ASSERT_TRUE(pool);
             EXPECT_EQ((*pool)->residentCount(), 0);
+
             (*service)->shutdown();
             (*host)->shutdown();
         }
     }
+
     TEST(DemucsConfiguration, RejectsIncompleteOrInvalidMappingsDuringPackageLoad) {
         const auto valid = mappedDeclaration({"drums", "bass", "other", "vocals"}, {{"lead", "vocals"}, {"percussion", "drums"}});
         for (int variant = 0; variant < 10; ++variant) {
@@ -370,40 +430,51 @@ namespace dssp::tests {
             case 6: config["trackMapping"] = Json::Value(Json::arrayValue); break;
             case 7: config["modelTracks"][0] = "vocals"; break;
             case 8: config["modelTracks"][0] = 0; break;
-            case 9: config.removeMember("modelTracks"); config.removeMember("trackMapping"); break;
+            case 9:
+                config.removeMember("modelTracks");
+                config.removeMember("trackMapping");
+                break;
             }
+
             TestFiles files;
             auto host = loadMappedDeclaration(files, declaration);
             ASSERT_TRUE(host);
             EXPECT_TRUE((*host)->packages().empty());
             ASSERT_EQ((*host)->problems().size(), 1);
             EXPECT_FALSE((*host)->problems().front().error.message().empty());
+
             (*host)->shutdown();
         }
     }
+
     TEST(DemucsSpectral, MatchesOfficialStftAndIstftIncludingBoundaryPadding) {
         constexpr std::size_t length = 8201, frames = 9, bins = 2048;
         std::vector<float> input(2 * length);
         for (int channel = 0; channel < 2; ++channel)
             for (std::size_t i = 0; i < length; ++i)
                 input[channel * length + i] = static_cast<float>(std::sin(i * .013 + channel * .3) * .2 + (static_cast<int>((i * 17 + channel * 11) % 31) - 15) * .001);
+
         srtsepinfer::demucs::SpectralTransform transform;
         auto spectrum = transform.forward(input, 2);
         ASSERT_TRUE(spectrum);
         for (const auto &point : spectralReference)
             EXPECT_NEAR((*spectrum)[((point.channel * 2 + point.part) * bins + point.bin) * frames + point.frame], point.value, 3e-6);
+
         auto reconstructed = transform.inverse(*spectrum, 2, length);
         ASSERT_TRUE(reconstructed);
         for (const auto &point : audioReference)
             EXPECT_NEAR((*reconstructed)[point.channel * length + point.sample], point.value, 3e-6);
+
         EXPECT_FALSE(transform.forward(input, 2, [] { return true; }));
         EXPECT_FALSE(transform.inverse(*spectrum, 2, length, [] { return true; }));
     }
+
     TEST(DemucsSpectral, RealInverseMatchesAnalyticDcAndComplexBinsForFourAndSixStereoTracks) {
         constexpr std::size_t length = 8201, frames = 9, bins = 2048;
         constexpr int size = 4096, hop = 1024, trim = size / 2 + hop * 3 / 2;
         const auto window = [](int i) { return 0.5 - 0.5 * std::cos(2 * std::numbers::pi * i / size); };
         srtsepinfer::demucs::SpectralTransform transform;
+
         for (const auto channels : {8, 12}) {
             std::vector<float> spectrum(channels * 2 * bins * frames);
             for (int channel = 0; channel < channels; ++channel) {
@@ -417,9 +488,11 @@ namespace dssp::tests {
                     }
                 }
             }
+
             auto audio = transform.inverse(spectrum, channels, length);
             ASSERT_TRUE(audio);
             ASSERT_EQ(audio->size(), channels * length);
+
             for (int channel = 0; channel < channels; ++channel) {
                 for (const auto sample : {0, 1, 1024, 4096, 8200}) {
                     double numerator = 0, denominator = 0;
@@ -428,6 +501,7 @@ namespace dssp::tests {
                         if (index >= 0 && index < size)
                             denominator += window(index) * window(index);
                     }
+
                     for (int frame = 0; frame < frames; ++frame) {
                         const auto index = sample + trim - (frame + 2) * hop;
                         if (index < 0 || index >= size)
@@ -439,6 +513,7 @@ namespace dssp::tests {
                         }
                         numerator += value / std::sqrt(size) * window(index);
                     }
+
                     EXPECT_NEAR((*audio)[channel * length + sample], numerator / denominator, 3e-6);
                 }
             }

@@ -63,6 +63,7 @@ namespace dssp::tests {
             ASSERT_NE(definition, nullptr);
             EXPECT_DOUBLE_EQ(metadata->parameters.at(id).defaultValue, definition->defaultValue);
         }
+
         const auto singers = implementation->singers({});
         ASSERT_TRUE(singers);
         EXPECT_TRUE(singers->empty());
@@ -121,6 +122,7 @@ namespace dssp::tests {
             });
             EXPECT_EQ(done.wait_for(std::chrono::seconds(5)), std::future_status::ready);
         };
+
         check([&](auto callback) { implementation->pronunciation({}, {}, std::move(callback)); });
         check([&](auto callback) { implementation->phoneme({}, {}, std::move(callback)); });
         check([&](auto callback) { implementation->duration({}, {}, std::move(callback)); });
@@ -148,6 +150,7 @@ namespace dssp::tests {
                 });
             });
         }
+
         workers.clear();
         EXPECT_EQ(completed.load(), 8U);
     }
@@ -159,6 +162,7 @@ namespace dssp::tests {
             record.info.languages.emplace(handle, arch::GroupLanguageInfo{});
             record.languageNames.emplace(handle, srt::DisplayText(handle));
         }
+
         const auto info = arch_diffsinger::groupInfo(record, {});
         ASSERT_TRUE(info);
         ASSERT_EQ(info->languages.size(), record.languageNames.size());

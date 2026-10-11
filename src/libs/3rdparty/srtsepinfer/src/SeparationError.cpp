@@ -5,6 +5,7 @@ namespace srtsepinfer {
         class Category final : public std::error_category {
         public:
             const char *name() const noexcept override { return "srtsepinfer.separation"; }
+
             std::string message(int code) const override {
                 switch (static_cast<SeparationError>(code)) {
                     case SeparationError::Cancelled: return "Audio separation was cancelled";
@@ -14,9 +15,11 @@ namespace srtsepinfer {
                     case SeparationError::ModelFailed: return "Separation model failed";
                     case SeparationError::ModelMismatch: return "Separation model tensor mismatch";
                 }
+
                 return "Unknown separation error";
             }
         };
+
         static const Category category;
         return category;
     }

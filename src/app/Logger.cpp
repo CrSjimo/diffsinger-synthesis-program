@@ -83,6 +83,7 @@ namespace dssp {
             if (level < toStdcLevel(configuredLogLevel())) {
                 return;
             }
+
             const std::string record = formatRecord(level, context, message) + '\n';
             // stdcorelib emits the attributes only for a terminal and transcodes
             // for the Windows console.

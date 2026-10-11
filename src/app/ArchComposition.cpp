@@ -14,11 +14,13 @@
 namespace dssp {
     namespace {
         stdc::LogCategory log("dssp.ArchComposition");
+
         struct BuiltinArchitecture {
             std::string_view id;
             std::expected<arch::ArchitecturePtr, arch::CatalogConstructionError> (*create)(const arch::ArchitectureServices &);
             std::vector<inference::PluginSearchPath> (*pluginPaths)(const std::filesystem::path &);
         };
+
         // The application's complete supported set is fixed at compile time.
         constexpr std::array builtins{BuiltinArchitecture{arch_diffsinger::Id, &arch_diffsinger::create, &arch_diffsinger::pluginPaths}};
 
@@ -27,14 +29,17 @@ namespace dssp {
                 if (builtins[i].id.empty() || !builtins[i].create || !builtins[i].pluginPaths) {
                     return false;
                 }
+
                 for (std::size_t j = 0; j < i; ++j) {
                     if (builtins[i].id == builtins[j].id) {
                         return false;
                     }
                 }
             }
+
             return true;
         }
+
         static_assert(validBuiltins(), "Built-in architecture IDs must be nonempty and unique, with a factory");
     }
 
@@ -46,6 +51,7 @@ namespace dssp {
                 paths.push_back(std::move(path));
             }
         }
+
         return paths;
     }
 
@@ -53,20 +59,24 @@ namespace dssp {
         std::vector<arch::ArchitecturePtr> entries;
         entries.reserve(builtins.size());
         log.stdcDebug("Creating %1 compiled architecture implementations", builtins.size());
+
         for (const auto &builtin : builtins) {
             auto implementation = builtin.create(services);
             if (!implementation) {
                 return std::unexpected{std::move(implementation.error())};
             }
+
             if (!*implementation || (*implementation)->id() != builtin.id) {
                 return std::unexpected{arch::CatalogConstructionError("Architecture factory returned an unexpected ID for " + std::string(builtin.id))};
             }
             entries.push_back(std::move(*implementation));
         }
+
         auto catalog = arch::ArchitectureCatalog::create(std::move(entries));
         if (!catalog) {
             return std::unexpected{std::move(catalog.error())};
         }
+
         return std::make_shared<const arch::ArchitectureCatalog>(std::move(*catalog));
     }
 

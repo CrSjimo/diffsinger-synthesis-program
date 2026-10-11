@@ -24,6 +24,7 @@ namespace dssp::extraction {
             if (!schema || !spec.configuration() || schema->interface() != spec.interface() || schema->level() != spec.level() || schema->variant() != spec.variant() || schema->sampleRate <= 0 || schema->channelCount != 1 || !std::isfinite(schema->maxSegmentDuration) || schema->maxSegmentDuration < 0) {
                 return std::unexpected{inference::ResourceError("Analyzer has an unsupported typed contract, format or duration limit")};
             }
+
             ExtractorRecord record;
             record.kind = kind;
             record.id = inference::resourceReference(spec);
@@ -39,6 +40,7 @@ namespace dssp::extraction {
                 }
                 record.outputInterval = schema->interval;
             }
+
             inference::InferenceDefinition definition;
             definition.key = record.id + "/default";
             definition.label = record.id;
@@ -49,11 +51,13 @@ namespace dssp::extraction {
                 if (!created) return std::unexpected{std::move(created.error())};
                 return std::move(*created);
             };
+
             auto resource = pool.bind(std::move(definition));
             if (!resource) return std::unexpected{inference::ResourceError("Cannot bind analyzer resource", resource.error().clone())};
             record.resource = std::move(*resource);
             return record;
         }
+
         std::expected<ExtractorRecord, inference::ResourceError> readSeparation(srt::InferenceSpec &spec, inference::InferencePool &pool) {
             const auto *schema = dynamic_cast<const Sep::SeparationSchema *>(spec.exports());
             if (!schema || !spec.configuration() || schema->interface() != spec.interface() || schema->level() != spec.level() || schema->variant() != spec.variant() || schema->sampleRate <= 0 || schema->channelCount <= 0 || schema->tracks.empty() || !std::isfinite(schema->maxSegmentDuration) || schema->maxSegmentDuration != 0) return std::unexpected{inference::ResourceError("Separator has an unsupported typed audio or duration contract")};
@@ -77,11 +81,13 @@ namespace dssp::extraction {
                 if (!created) return std::unexpected{std::move(created.error())};
                 return std::move(*created);
             };
+
             auto resource = pool.bind(std::move(definition));
             if (!resource) return std::unexpected{inference::ResourceError("Cannot bind separator resource", resource.error().clone())};
             record.resource = std::move(*resource);
             return record;
         }
+
         CatalogResult<ExtractorInfo> present(const ExtractorRecord &record, std::string_view acceptLanguage) {
             auto name = inference::localize(record.name, acceptLanguage, record.id);
             if (!name) return fail<CatalogErrors>(OperationError("Cannot localize extractor " + record.id, name.error().clone()));
@@ -91,6 +97,7 @@ namespace dssp::extraction {
                 if (!description) return fail<CatalogErrors>(OperationError("Cannot localize separation track " + track.id, description.error().clone()));
                 result.tracks.push_back({track.id, std::move(*description)});
             }
+
             return result;
         }
     }
@@ -126,6 +133,7 @@ namespace dssp::extraction {
                 } else {
                     continue;
                 }
+
                 if (!record) {
                     ++rejected;
                     log.stdcWarning("Skipping extractor %1: %2", inference::resourceReference(*spec), record.error().formatChain());
@@ -139,21 +147,25 @@ namespace dssp::extraction {
                 const auto id = record->id;
                 catalog->records_.emplace(id, std::move(*record));
             }
+
             log.stdcInfo("Extractor catalogue ready: %1 note extractors, %2 pitch extractors, %3 tempo extractors, %4 separation extractors, %5 rejected declarations", notes, pitches, tempos, separations, rejected);
             return std::shared_ptr<const ExtractorCatalog>(std::move(catalog));
         } catch (const std::exception &error) {
             return std::unexpected{inference::InitializationError("Cannot enumerate Otter analyzers", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"otter/synthrt", "enumerate analyzers", "exception"}))};
         }
     }
+
     const ExtractorRecord *ExtractorCatalog::find(Kind kind, std::string_view id) const {
         const auto found = records_.find(id);
         return found != records_.end() && found->second.kind == kind ? &found->second : nullptr;
     }
+
     CatalogResult<ExtractorInfo> ExtractorCatalog::metadata(Kind kind, std::string_view id, std::string_view acceptLanguage) const {
         const auto *record = find(kind, id);
         if (!record) return fail<CatalogErrors>(ResourceNotFoundError("Extractor does not exist for the requested type: " + std::string(id)));
         return present(*record, acceptLanguage);
     }
+
     CatalogResult<ExtractorList> ExtractorCatalog::list(std::string_view acceptLanguage) const {
         ExtractorList result;
         for (const auto &[id, record] : records_) {
@@ -164,6 +176,7 @@ namespace dssp::extraction {
             else if (record.kind == Kind::Tempo) result.tempo.push_back(std::move(*info));
             else if (record.kind == Kind::Separation) result.separation.push_back(std::move(*info));
         }
+
         return result;
     }
 }

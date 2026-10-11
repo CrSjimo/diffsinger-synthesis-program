@@ -188,6 +188,7 @@ namespace srtbeatinfer {
             if (!result) {
                 return result.takeError();
             }
+
             return toResult(result.take());
         }
 
@@ -200,6 +201,7 @@ namespace srtbeatinfer {
                 return srt::Error(srt::Error::InvalidArgument,
                     "an asynchronous callback must not be empty");
             }
+
             return startAsync(std::static_pointer_cast<const srt::TaskStartInput>(std::move(input)),
                 [callback = std::move(callback)](
                     srt::Expected<std::unique_ptr<srt::TaskResult>> result) mutable {
@@ -207,6 +209,7 @@ namespace srtbeatinfer {
                         callback(result.takeError());
                         return;
                     }
+
                     callback(toResult(result.take()));
                 });
         }
@@ -219,6 +222,7 @@ namespace srtbeatinfer {
             if (!result) {
                 return result.takeError();
             }
+
             return std::unique_ptr<srt::TaskResult>(result.take().release());
         }
 
@@ -240,6 +244,7 @@ namespace srtbeatinfer {
                     "the beat produced a " + result->type() + " level " +
                         std::to_string(result->version()) + " result");
             }
+
             return std::unique_ptr<Result>(static_cast<Result *>(result.release()));
         }
 

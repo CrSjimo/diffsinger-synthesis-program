@@ -8,6 +8,7 @@ namespace dssp::arch_diffsinger {
         if (!extra.isObject()) {
             return fail<arch::SynthesisErrors>(arch::InvalidInputError("DiffSinger archExtra must be an object"));
         }
+
         SynthesisOptions result;
         if (extra.isMember("steps")) {
             const auto &steps = extra["steps"];
@@ -16,6 +17,7 @@ namespace dssp::arch_diffsinger {
             }
             result.steps = steps.asInt64();
         }
+
         if (extra.isMember("depth")) {
             const auto &depth = extra["depth"];
             if (!depth.isNumeric() || !std::isfinite(depth.asDouble()) || depth.asDouble() < 0 || depth.asDouble() > 1) {
@@ -23,6 +25,7 @@ namespace dssp::arch_diffsinger {
             }
             result.depth = static_cast<float>(depth.asDouble());
         }
+
         return result;
     }
 
@@ -34,6 +37,7 @@ namespace dssp::arch_diffsinger {
         if (!input.extra.isObject()) {
             return fail<arch::SynthesisErrors>(arch::InvalidInputError("DiffSinger extra must be an object for singer " + input.id));
         }
+
         auto speaker = singer->speakers.empty() ? std::string{} : singer->speakers.front();
         if (input.extra.isMember("speaker")) {
             const auto &value = input.extra["speaker"];
@@ -42,9 +46,11 @@ namespace dssp::arch_diffsinger {
             }
             speaker = value.asString();
         }
+
         if ((!speaker.empty() && std::ranges::find(singer->speakers, speaker) == singer->speakers.end()) || (speaker.empty() && !singer->speakers.empty())) {
             return fail<arch::SynthesisErrors>(arch::InvalidInputError("Singer " + input.id + " has no selectable logical speaker '" + speaker + "'"));
         }
+
         return SingerSource{singer, std::move(speaker)};
     }
 
@@ -56,6 +62,7 @@ namespace dssp::arch_diffsinger {
         if (input.singers.empty()) {
             return fail<arch::SynthesisErrors>(arch::InvalidInputError("DiffSinger synthesis requires at least one singer"));
         }
+
         SynthesisContext result;
         result.options = *options;
         for (const auto &inputSinger : input.singers) {
@@ -77,6 +84,7 @@ namespace dssp::arch_diffsinger {
         if (result.sources.size() > 1 && !result.group->info.mixable) {
             return fail<arch::SynthesisErrors>(arch::InvalidInputError("Group " + result.group->info.id + " does not permit multiple singer or speaker sources"));
         }
+
         return result;
     }
 }

@@ -30,17 +30,21 @@ namespace dssp::tests {
             bool block = false;
             bool released = false;
         };
+
         // A native contract test double lets cancellation races be controlled
         // without sleeps, external models, or edits to any upstream library.
         class ControlledExecutive final : public G2P::G2PExecutive {
         public:
             ControlledExecutive(srt::InferenceSpec &spec, std::shared_ptr<ExecutionControl> control) : G2PExecutive(spec), control_(std::move(control)) { ++control_->created; }
+
             srt::Expected<void> initialize(const G2P::G2PInitArgs &) override { return {}; }
+
             srt::Expected<std::unique_ptr<G2P::G2PResult>> start(const G2P::G2PStartInput &input) override {
                 state_ = srt::ITask::Running;
                 if (input.lyrics.front() == "throw") {
                     throw std::runtime_error("simulated native failure");
                 }
+
                 {
                     std::unique_lock lock(control_->mutex);
                     ++control_->active;
@@ -52,29 +56,36 @@ namespace dssp::tests {
                     }
                     --control_->active;
                 }
+
                 auto result = std::make_unique<G2P::G2PResult>();
                 for (const auto &lyric : input.lyrics) {
                     G2P::G2PWordOutput word;
                     word.pronunciation = lyric;
                     result->words.push_back(std::move(word));
                 }
+
                 state_ = stopped_ ? srt::ITask::Canceled : srt::ITask::Succeeded;
                 return result;
             }
+
             srt::Expected<void> startAsync(std::shared_ptr<const G2P::G2PStartInput> input, AsyncCallback complete) override {
                 complete(start(*input));
                 return {};
             }
+
             srt::ITask::State state() const noexcept override { return state_; }
+
             srt::Expected<void> stop() override {
                 {
                     const std::lock_guard lock(control_->mutex);
                     stopped_ = true;
                 }
+
                 ++control_->stopped;
                 control_->wake.notify_all();
                 return {};
             }
+
             srt::Expected<void> waitForFinished() override { return {}; }
 
         private:
@@ -82,6 +93,7 @@ namespace dssp::tests {
             std::atomic<srt::ITask::State> state_ = srt::ITask::Idle;
             std::atomic<bool> stopped_ = false;
         };
+
         G2pResult awaitResult(std::future<G2pResult> result) {
             const auto ready = result.wait_for(5s);
             EXPECT_EQ(ready, std::future_status::ready);
@@ -122,11 +134,13 @@ namespace dssp::tests {
             spec = dynamic_cast<srt::InferenceSpec *>(host->packages().front().contribution("inference", "g2p"));
             ASSERT_NE(spec, nullptr);
         }
+
         void TearDown() override {
             if (host) {
                 host->shutdown();
             }
         }
+
         inference::InferenceHandle controlled(std::string key, const std::shared_ptr<ExecutionControl> &control, inference::InferencePool *group = nullptr, bool parallelSafe = false) {
             auto definition = inference::InferenceDefinition{key, key, {spec->package()}, [spec = spec, control]() -> std::expected<std::unique_ptr<srt::InferenceExecutive>, inference::ExecutionError> {
                 return std::make_unique<ControlledExecutive>(*spec, control);
@@ -136,6 +150,7 @@ namespace dssp::tests {
             EXPECT_TRUE(handle);
             return handle ? *handle : inference::InferenceHandle{};
         }
+
         std::future<G2pResult> submit(inference::InferenceHandle handle, std::string lyric, std::stop_token stop = {}, inference::InferencePool *group = nullptr) {
             auto input = std::make_shared<G2P::G2PStartInput>();
             input->lyrics.push_back(std::move(lyric));
@@ -144,6 +159,7 @@ namespace dssp::tests {
             (group ? group : pool)->run<G2P::G2PExecutive>(std::move(handle), stop, [input](auto &executive) { return executive.start(*input); }, [promise](auto value) { promise->set_value(std::move(value)); });
             return result;
         }
+
         TestFiles files;
         std::shared_ptr<inference::Environment> host;
         inference::InferencePool *pool = nullptr;
@@ -162,6 +178,7 @@ namespace dssp::tests {
             std::unique_lock lock(control->mutex);
             started = control->wake.wait_for(lock, 5s, [&] { return !control->starts.empty(); });
         }
+
         EXPECT_TRUE(started);
         auto second = submit(handle, "second", secondStop.get_token());
         auto third = submit(handle, "third");
@@ -174,6 +191,7 @@ namespace dssp::tests {
             const std::lock_guard lock(control->mutex);
             control->released = true;
         }
+
         control->wake.notify_all();
         const auto running = awaitResult(std::move(first));
         ASSERT_FALSE(running);
@@ -263,6 +281,7 @@ namespace dssp::tests {
             std::unique_lock lock(control->mutex);
             EXPECT_TRUE(control->wake.wait_for(lock, 5s, [&] { return !control->starts.empty(); }));
         }
+
         auto queued = submit(handle, "queued");
         host->shutdown();
         EXPECT_FALSE(awaitResult(std::move(first)));
@@ -305,6 +324,7 @@ namespace dssp::tests {
             ASSERT_TRUE(resource);
             pending.push_back(submit(*resource, key, i == 0 ? stop.get_token() : std::stop_token{}, group));
         }
+
         // There are only four workers in the first group. All five resources
         // must nevertheless initialize while their executions await admission.
         for (auto &initialized : loaded) EXPECT_EQ(initialized.wait_for(1s), std::future_status::ready);

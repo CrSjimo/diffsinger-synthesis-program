@@ -29,10 +29,12 @@ namespace dssp {
             if (includeExecutionProvider) {
                 obj.emplace("execution_provider", stdc::json::Value(runtime::DeviceInfo::executionProviderToString(device.executionProvider())));
             }
+
             obj.emplace("index", stdc::json::Value(static_cast<int64_t>(device.index())));
             obj.emplace("description", stdc::json::Value(device.description()));
             obj.emplace("id", stdc::json::Value(device.id()));
             obj.emplace("memory", stdc::json::Value(static_cast<uint64_t>(device.memory())));
+
             return obj;
         }
 
@@ -49,10 +51,12 @@ namespace dssp {
                     const auto [it2, inserted] = grouped.emplace(epId, stdc::json::Array{});
                     array = it2->second.asArray();
                 }
+
                 if (array) {
                     array->push_back(stdc::json::Value(deviceToObject(device, false)));
                 }
             }
+
             return grouped;
         }
 
@@ -62,6 +66,7 @@ namespace dssp {
                 log.stdcCritical("Failed to list devices: %1", devices.error().formatChain());
                 return 1;
             }
+
             try {
                 const auto defaultDevice = runtime::DeviceInfo::defaultDevice(*devices);
                 if (!defaultDevice) {

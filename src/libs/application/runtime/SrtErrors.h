@@ -19,10 +19,12 @@ namespace dssp::runtime {
         for (auto current = error; !current.ok(); current = current.cause()) {
             chain.push_back(current);
         }
+
         Error::Ptr cause;
         for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
             cause = std::make_shared<const ExternalError>(it->message(), NativeDiagnostic{"synthrt", operation, it->code().category().name(), it->code().value()}, std::move(cause));
         }
+
         return cause;
     }
 
@@ -31,6 +33,7 @@ namespace dssp::runtime {
         if (!result) {
             return std::unexpected<E>{std::invoke(std::forward<MapError>(mapError), result.error())};
         }
+
         if constexpr (std::is_void_v<T>) {
             return {};
         } else {

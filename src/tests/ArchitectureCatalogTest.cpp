@@ -60,6 +60,7 @@ namespace dssp::tests {
             ASSERT_NE(catalog, nullptr);
             selected = catalog->find("diffsinger");
         }
+
         EXPECT_FALSE(observed.expired());
         selected.reset();
         EXPECT_TRUE(observed.expired());

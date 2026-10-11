@@ -13,11 +13,13 @@ namespace dssp::arch {
         using ErrorType::ErrorType;
         std::string_view kind() const noexcept override { return "dssp.arch.not-found"; }
     };
+
     class InvalidInputError final : public ErrorType<InvalidInputError> {
     public:
         using ErrorType::ErrorType;
         std::string_view kind() const noexcept override { return "dssp.arch.invalid-input"; }
     };
+
     // Reserve this type for identified internal/resource/execution faults.
     // Missing capabilities and invalid inputs use InvalidInputError instead.
     class OperationError final : public ErrorType<OperationError> {
@@ -25,6 +27,7 @@ namespace dssp::arch {
         using ErrorType::ErrorType;
         std::string_view kind() const noexcept override { return "dssp.arch.operation"; }
     };
+
     class CancelledError final : public ErrorType<CancelledError> {
     public:
         using ErrorType::ErrorType;

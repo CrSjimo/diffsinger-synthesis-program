@@ -12,6 +12,7 @@ namespace dssp::arch {
     }
 
     ArchitectureCatalog::ArchitectureCatalog(std::vector<ArchitecturePtr> entries) : entries_(std::move(entries)) {}
+
     std::expected<ArchitectureCatalog, CatalogConstructionError> ArchitectureCatalog::create(std::vector<ArchitecturePtr> entries) {
         for (auto current = entries.begin(); current != entries.end(); ++current) {
             if (!*current || (*current)->id().empty()) {
@@ -22,6 +23,7 @@ namespace dssp::arch {
                 return std::unexpected{CatalogConstructionError("Duplicate architecture ID: " + std::string((*current)->id()))};
             }
         }
+
         std::string ids;
         for (const auto &entry : entries) {
             if (!ids.empty()) {
@@ -29,12 +31,15 @@ namespace dssp::arch {
             }
             ids += entry->id();
         }
+
         log.stdcInfo("Available architectures: %1", ids.empty() ? "none" : ids);
         return ArchitectureCatalog(std::move(entries));
     }
+
     std::span<const ArchitecturePtr> ArchitectureCatalog::entries() const noexcept {
         return entries_;
     }
+
     ArchitecturePtr ArchitectureCatalog::find(std::string_view id) const noexcept {
         const auto found = std::find_if(entries_.begin(), entries_.end(), [&](const auto &implementation) { return implementation->id() == id; });
         return found == entries_.end() ? ArchitecturePtr{} : *found;

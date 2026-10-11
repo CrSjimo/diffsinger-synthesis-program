@@ -17,6 +17,7 @@ namespace dssp::inference {
             if (!declaration.isObject()) {
                 return std::unexpected{ResourceError("Media path declaration must be a string or a language map")};
             }
+
             auto fallback = resolved.text();
             std::map<std::string, std::string> localized;
             for (const auto &[locale, value] : declaration.toObject()) {
@@ -31,6 +32,7 @@ namespace dssp::inference {
                     localized.emplace(locale, value.toString().empty() ? std::string{} : resolved.text(locale));
                 }
             }
+
             return srt::DisplayText(std::move(fallback), localized);
         } catch (const std::exception &error) {
             return std::unexpected{ResourceError("Cannot preserve optional media path values", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"synthrt", "read media path declaration", "exception"}))};

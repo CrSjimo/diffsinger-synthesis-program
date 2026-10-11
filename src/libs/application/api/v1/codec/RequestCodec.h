@@ -34,10 +34,12 @@ namespace dssp::api_v1 {
         if (!json) {
             return std::unexpected{widen_errors<http::RequestErrors>(std::move(json.error()))};
         }
+
         auto dto = fromJson<T>(*json);
         if (!dto) {
             return std::unexpected{widen_errors<http::RequestErrors>(std::move(dto.error()))};
         }
+
         return std::move(*dto);
     }
 }
@@ -48,30 +50,37 @@ namespace drogon {
     inline dssp::api_v1::Decoded<dssp::api_v1::dto::EnvTagRequest> fromRequest<dssp::api_v1::Decoded<dssp::api_v1::dto::EnvTagRequest>>(const HttpRequest &request) {
         return dssp::api_v1::fromHttp<dssp::api_v1::dto::EnvTagRequest>(request);
     }
+
     template <>
     inline dssp::api_v1::Decoded<dssp::api_v1::dto::PronunciationRequest> fromRequest<dssp::api_v1::Decoded<dssp::api_v1::dto::PronunciationRequest>>(const HttpRequest &request) {
         return dssp::api_v1::fromHttp<dssp::api_v1::dto::PronunciationRequest>(request);
     }
+
     template <>
     inline dssp::api_v1::Decoded<dssp::api_v1::dto::PhonemeRequest> fromRequest<dssp::api_v1::Decoded<dssp::api_v1::dto::PhonemeRequest>>(const HttpRequest &request) {
         return dssp::api_v1::fromHttp<dssp::api_v1::dto::PhonemeRequest>(request);
     }
+
     template <>
     inline dssp::api_v1::Decoded<dssp::api_v1::dto::DurationRequest> fromRequest<dssp::api_v1::Decoded<dssp::api_v1::dto::DurationRequest>>(const HttpRequest &request) {
         return dssp::api_v1::fromHttp<dssp::api_v1::dto::DurationRequest>(request);
     }
+
     template <>
     inline dssp::api_v1::Decoded<dssp::api_v1::dto::ParameterRequest> fromRequest<dssp::api_v1::Decoded<dssp::api_v1::dto::ParameterRequest>>(const HttpRequest &request) {
         return dssp::api_v1::fromHttp<dssp::api_v1::dto::ParameterRequest>(request);
     }
+
     template <>
     inline dssp::api_v1::Decoded<dssp::api_v1::dto::AudioRequest> fromRequest<dssp::api_v1::Decoded<dssp::api_v1::dto::AudioRequest>>(const HttpRequest &request) {
         return dssp::api_v1::fromHttp<dssp::api_v1::dto::AudioRequest>(request);
     }
+
     template <>
     inline dssp::api_v1::Decoded<dssp::api_v1::dto::ExtractionRequest> fromRequest<dssp::api_v1::Decoded<dssp::api_v1::dto::ExtractionRequest>>(const HttpRequest &request) {
         return dssp::api_v1::fromHttp<dssp::api_v1::dto::ExtractionRequest>(request);
     }
+
     template <>
     inline dssp::api_v1::Decoded<dssp::api_v1::dto::SeparationExtractionRequest> fromRequest<dssp::api_v1::Decoded<dssp::api_v1::dto::SeparationExtractionRequest>>(const HttpRequest &request) {
         return dssp::api_v1::fromHttp<dssp::api_v1::dto::SeparationExtractionRequest>(request);

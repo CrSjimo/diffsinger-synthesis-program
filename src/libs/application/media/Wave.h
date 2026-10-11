@@ -19,6 +19,7 @@ namespace dssp::media {
         int channelCount = 0;
         std::vector<float> samples;
     };
+
     // Decode the actual container in memory; no file access or resampling.
     std::expected<WaveAudio, MediaInputErrors> readWaveDataUrl(std::string_view, std::stop_token = {});
 }

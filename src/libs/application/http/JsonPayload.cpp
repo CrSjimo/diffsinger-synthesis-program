@@ -12,6 +12,7 @@ namespace dssp::http {
         if (!encoding.empty() && !stdc::str::equals_insensitive(stdc::str::trim(encoding, " \t"), "identity")) {
             return fail<PayloadErrors>(UnsupportedPayloadError("Unsupported HTTP Content-Encoding"));
         }
+
         const auto contentType = matchesJsonContentType(request.getHeader("content-type"));
         if (!contentType) {
             return fail<PayloadErrors>(contentType.error());
@@ -19,6 +20,7 @@ namespace dssp::http {
         if (!*contentType) {
             return fail<PayloadErrors>(UnsupportedPayloadError("Content-Type must be application/json"));
         }
+
         const auto body = request.body();
         if (body.empty()) {
             return fail<PayloadErrors>(MalformedJsonError("Request body must contain JSON"));
@@ -44,6 +46,7 @@ namespace dssp::http {
                 // JSONcpp throws for excessive nesting rather than returning false.
                 return fail<PayloadErrors>(MalformedJsonError(error.what(), std::make_shared<ExternalError>(error.what(), NativeDiagnostic{"jsoncpp", "parse request", "exception"})));
             }
+
             return value;
         } catch (const Json::Exception &error) {
             return fail<PayloadErrors>(HttpBoundaryError("JSON parser failed", std::make_shared<ExternalError>(error.what(), NativeDiagnostic{"jsoncpp", "parse request", "exception"})));

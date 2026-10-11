@@ -23,17 +23,20 @@ namespace dssp::runtime {
             if (text.empty()) {
                 return std::unexpected{ConfigurationError(option, "A nonempty path must be configured")};
             }
+
             std::filesystem::path path;
             try {
                 path = stdc::path::from_utf8(text);
             } catch (const std::exception &error) {
                 return std::unexpected{ConfigurationError(option, "Cannot decode path", std::make_shared<ExternalError>(error.what(), NativeDiagnostic{"stdcorelib", "from_utf8", "exception"}))};
             }
+
             std::error_code error;
             auto absolute = std::filesystem::absolute(path, error);
             if (error) {
                 return std::unexpected{ConfigurationError(option, "Cannot resolve absolute path", std::make_shared<ExternalError>(error.message(), NativeDiagnostic{"filesystem", "absolute", error.category().name(), error.value()}))};
             }
+
             return absolute.lexically_normal();
         }
 
@@ -55,6 +58,7 @@ namespace dssp::runtime {
         if (!base || base->empty() || !base->is_absolute()) {
             return std::unexpected{ConfigurationError("--package-dir", "Cannot determine the user data directory; configure --package-dir or DSSP_PACKAGE_DIR")};
         }
+
         return (*base / "OpenVPI" / "DiffScope_packages").lexically_normal();
     }
 
@@ -69,12 +73,14 @@ namespace dssp::runtime {
             }
             return {};
         };
+
         if (const auto text = value("--host", "DSSP_HOST")) {
             config.host = *text;
         }
         if (config.host.empty()) {
             return std::unexpected{ConfigurationError("--host", "Listening host cannot be empty")};
         }
+
         if (const auto text = value("--port", "DSSP_PORT")) {
             unsigned port = 0;
             if (!number(*text, port) || port == 0 || port > 65535) {
@@ -82,16 +88,19 @@ namespace dssp::runtime {
             }
             config.port = static_cast<std::uint16_t>(port);
         }
+
         if (const auto text = value("--max-request-body-size", "DSSP_MAX_REQUEST_BODY_SIZE")) {
             if (!number(*text, config.maxRequestBodySize) || config.maxRequestBodySize == 0) {
                 return std::unexpected{ConfigurationError("--max-request-body-size", "Maximum request body size must be a positive integer in bytes representable by size_t")};
             }
         }
+
         const auto packages = value("--package-dir", "DSSP_PACKAGE_DIR");
         auto packagePath = packages ? resolvePath("--package-dir", *packages) : defaultPackageDir();
         if (!packagePath) {
             return std::unexpected{std::move(packagePath.error())};
         }
+
         std::error_code pathError;
         if (!std::filesystem::is_directory(*packagePath, pathError)) {
             Error::Ptr cause;
@@ -100,6 +109,7 @@ namespace dssp::runtime {
             }
             return std::unexpected{ConfigurationError("--package-dir", "Package root must be an existing directory", std::move(cause))};
         }
+
         config.packageDir = std::move(*packagePath);
         if (const auto text = value("--execution-provider", "DSSP_EXECUTION_PROVIDER")) {
             auto provider = DeviceInfo::executionProviderFromString(*text);
@@ -108,6 +118,7 @@ namespace dssp::runtime {
             }
             config.executionProvider = *provider;
         }
+
         if (const auto text = value("--device-index", "DSSP_DEVICE_INDEX")) {
             if (!number(*text, config.deviceIndex) || config.deviceIndex < 0) {
                 return std::unexpected{ConfigurationError("--device-index", "Device index must be a nonnegative integer")};
@@ -119,14 +130,17 @@ namespace dssp::runtime {
             }
             config.deviceIndex = device->index();
         }
+
         if (config.executionProvider == ExecutionProvider::CPU && config.deviceIndex != 0) {
             return std::unexpected{ConfigurationError("--device-index", "The CPU backend has only device index 0")};
         }
+
         if (const auto text = value("--silence-threshold", "DSSP_SILENCE_THRESHOLD")) {
             if (!number(*text, config.silenceThreshold) || !std::isfinite(config.silenceThreshold) || config.silenceThreshold < 0) {
                 return std::unexpected{ConfigurationError("--silence-threshold", "Silence threshold must be a finite, nonnegative linear RMS value")};
             }
         }
+
         for (const auto &descriptor : InferenceCacheGroups) {
             const auto group = descriptor.id;
             const auto prefix = descriptor.environmentPrefix;
@@ -138,6 +152,7 @@ namespace dssp::runtime {
                     return std::unexpected{ConfigurationError(capacityOption, "Cache capacity must be a nonnegative integer; zero disables the count limit")};
                 }
             }
+
             for (const auto &[suffix, environmentSuffix, duration, allowZero] : {
                 std::tuple{"-idle-timeout", "_IDLE_TIMEOUT", &cache.idleTimeout, true},
                 std::tuple{"-cleanup-interval", "_CLEANUP_INTERVAL", &cache.cleanupInterval, false}
@@ -157,6 +172,7 @@ namespace dssp::runtime {
                 }
             }
         }
+
 #ifdef _WIN32
         constexpr const char *runtimeFile = "onnxruntime.dll";
 #elif defined(__APPLE__)
@@ -167,12 +183,14 @@ namespace dssp::runtime {
         if (!applicationDir.is_absolute()) {
             return std::unexpected{ConfigurationError("application-directory", "Deployment paths require an absolute application directory")};
         }
+
         config.resourceDir = (applicationDir / DSSP_DATA_RELATIVE_DIR).lexically_normal();
         config.pluginDir = (applicationDir / DSSP_PLUGIN_RELATIVE_DIR).lexically_normal();
         auto runtimeDirectory = config.pluginDir / "dsinfer" / "inferencedrivers" / "onnx" / "runtime";
         if (config.executionProvider == ExecutionProvider::CUDA) {
             runtimeDirectory /= "cuda";
         }
+
         config.runtimePath = runtimeDirectory / runtimeFile;
         // The inference environment checks provider/device availability and
         // deployed plugins. Configuration parsing never loads a runtime.

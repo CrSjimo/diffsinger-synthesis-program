@@ -21,6 +21,7 @@ namespace dssp::tests {
         } else {
             result["singer"] = singer;
         }
+
         return result;
     }
 
@@ -149,9 +150,11 @@ namespace dssp::tests {
             json["input"]["audioUrl"] = url;
             EXPECT_TRUE(v1::fromJson<dto::ExtractionRequest>(json));
         }
+
         for (const auto url : {"relative/path", "http://[invalid]/", "https://example.com/%XY", "data:hello world"}) {
             EXPECT_FALSE(http::validateUri(url));
         }
+
         EXPECT_TRUE(http::validateUri("https://[::1]:13711/a%20b?x=1#fragment"));
         EXPECT_TRUE(http::validateUri("urn:dssp:resource"));
     }
@@ -166,6 +169,7 @@ namespace dssp::tests {
             ASSERT_TRUE(decoded);
             EXPECT_EQ(decoded->input.audioUrl, url);
         }
+
         for (const auto url : {"https://example.com/%", "https://example.com/%2", "https://example.com/%GG", "data:audio/wav,%2Z"}) {
             SCOPED_TRACE(url);
             EXPECT_FALSE(http::validateUri(url));
@@ -270,6 +274,7 @@ namespace dssp::tests {
             EXPECT_EQ(error->issues()[0].pointer, "/acceptableFormats/0");
             EXPECT_EQ(error->issues()[0].errorType, "format");
         }
+
         json.removeMember("acceptableFormats");
         for (const auto field : {"acceptableFormats", "acceptableSchemes"}) {
             for (const auto &invalid : {Json::Value{}, Json::Value("audio/wav"), Json::Value(42), Json::Value(Json::objectValue)}) {

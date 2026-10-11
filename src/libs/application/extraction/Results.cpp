@@ -14,6 +14,7 @@ namespace dssp::extraction {
                 return std::unexpected{OperationError("Note analyzer returned an invalid key, timing or confidence")};
             }
         }
+
         std::ranges::stable_sort(notes, {}, &otter::Api::Note::L1::NoteInfo::start);
         NoteOutput output;
         output.notes.reserve(notes.size());
@@ -23,11 +24,13 @@ namespace dssp::extraction {
             if (note.start < previousEnd - tolerance) {
                 return std::unexpected{OperationError("Note analyzer returned overlapping notes at index " + std::to_string(index))};
             }
+
             const auto start = std::clamp(std::max(note.start, previousEnd), 0.0, duration);
             const auto end = std::clamp(note.start + std::max(0.0, note.duration), start, duration);
             output.notes.push_back({start - previousEnd, end - start, static_cast<std::uint32_t>(note.key * 100)});
             previousEnd = end;
         }
+
         return output;
     }
 
@@ -35,6 +38,7 @@ namespace dssp::extraction {
         if (!std::isfinite(interval_) || interval_ <= 0 || !std::isfinite(output_.sampleRate) || !std::isfinite(curve.interval) || curve.interval <= 0 || std::abs(curve.interval - interval_) > interval_ * 1e-9 || !std::isfinite(curve.startTime) || !std::isfinite(spanStart) || !std::isfinite(spanEnd) || spanStart < 0 || spanEnd <= spanStart || audioSampleRate <= 0) {
             return std::unexpected{OperationError("F0 analyzer returned an invalid or inconsistent output frame rate or timeline")};
         }
+
         const auto tolerance = 0.51 / audioSampleRate + 1e-9;
         const auto firstFrame = std::round(curve.startTime / interval_);
         if (std::abs(curve.startTime - spanStart) > tolerance || firstFrame < 0 || firstFrame > static_cast<double>(std::numeric_limits<std::int64_t>::max() / 2) || std::abs(firstFrame * interval_ - curve.startTime) > tolerance) {
@@ -43,12 +47,14 @@ namespace dssp::extraction {
         if (!curve.voiced.empty() && curve.voiced.size() != curve.f0.size()) {
             return std::unexpected{OperationError("F0 analyzer returned different pitch and voiced-mask lengths")};
         }
+
         const auto first = static_cast<std::uint64_t>(firstFrame);
         if (first < consumedEnd_) return std::unexpected{OperationError("F0 analyzer returned overlapping output frames")};
         const auto expected = std::ceil((spanEnd - spanStart) / interval_ - 1e-9);
         if (static_cast<double>(curve.f0.size()) > expected + 1) {
             return std::unexpected{OperationError("F0 analyzer returned frames beyond the input span")};
         }
+
         for (std::size_t index = 0; index < curve.f0.size(); ++index) {
             const auto frame = first + index;
             // A centered model window can return one padded boundary frame.
@@ -69,6 +75,7 @@ namespace dssp::extraction {
             }
             voicedEnd_ = frame + 1;
         }
+
         return {};
     }
 }

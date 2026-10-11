@@ -29,6 +29,7 @@ function(dssp_deploy_inference_plugins target)
             DESTINATION "${_plugin_root}/${_library}"
             SKIP_INSTALL
         )
+
         if(DSSP_INSTALL)
             install(DIRECTORY "${_library_source}/plugins/${_library}/"
                 DESTINATION "${DSSP_INSTALL_PLUGINS_DIR}/${_library}")
@@ -48,6 +49,7 @@ function(dssp_deploy_inference_plugins target)
         COMMENT "Stage project-built srtsepinfer interpreter"
         VERBATIM
     )
+
     add_dependencies(${target} srtsepinfer_deploy_plugins)
 
     set(_beat_destination "${_plugin_root}/srtbeatinfer/inferenceinterpreters/beat-this")
@@ -58,18 +60,22 @@ function(dssp_deploy_inference_plugins target)
         DEPENDS srtbeatinferbeatthis "${SRTBEATINFER_PLUGIN_MANIFEST}"
         COMMENT "Stage project-built srtbeatinfer interpreter"
         VERBATIM)
+
     add_dependencies(${target} srtbeatinfer_deploy_plugins)
 
     set(_ort_destination "${_plugin_root}/dsinfer/inferencedrivers/onnx/runtime")
     set(_ort_install_destination "${DSSP_INSTALL_PLUGINS_DIR}/dsinfer/inferencedrivers/onnx/runtime")
+
     if(NOT IS_DIRECTORY "${ONNXRUNTIME_BUILDS_RUNTIME_DIR}")
         message(FATAL_ERROR "The onnxruntime-builds default runtime payload is missing.")
     endif()
+
     qm_add_copy_command(${target}
         SOURCES "${ONNXRUNTIME_BUILDS_RUNTIME_DIR}/"
         DESTINATION "${_ort_destination}"
         SKIP_INSTALL
     )
+
     if(DSSP_INSTALL)
         install(DIRECTORY "${ONNXRUNTIME_BUILDS_RUNTIME_DIR}/" DESTINATION "${_ort_install_destination}")
     endif()
@@ -80,11 +86,13 @@ function(dssp_deploy_inference_plugins target)
                 "DSSP_ENABLE_CUDA requires vcpkg install --x-feature=cuda12. "
                 "Reinstall synthrt with this feature, or set DSSP_ENABLE_CUDA=OFF.")
         endif()
+
         qm_add_copy_command(${target}
             SOURCES "${ONNXRUNTIME_BUILDS_CUDA_RUNTIME_DIR}/"
             DESTINATION "${_ort_destination}/cuda"
             SKIP_INSTALL
         )
+
         if(DSSP_INSTALL)
             install(DIRECTORY "${ONNXRUNTIME_BUILDS_CUDA_RUNTIME_DIR}/" DESTINATION "${_ort_install_destination}/cuda")
         endif()
@@ -96,14 +104,17 @@ function(dssp_deploy_inference_plugins target)
     if(NOT _language_source AND DEFINED ENV{WOLF_LANG_PACKAGES_SOURCE})
         set(_language_source "$ENV{WOLF_LANG_PACKAGES_SOURCE}")
     endif()
+
     if(_language_source)
         if(NOT IS_DIRECTORY "${_language_source}")
             message(FATAL_ERROR "Wolf language package directory does not exist: ${_language_source}")
         endif()
+
         file(GLOB _manifests CONFIGURE_DEPENDS "${_language_source}/*/desc.json")
         foreach(_manifest IN LISTS _manifests)
             get_filename_component(_package_dir "${_manifest}" DIRECTORY)
             get_filename_component(_package_name "${_package_dir}" NAME)
+
             qm_add_copy_command(${target}
                 SOURCES "${_package_dir}/"
                 DESTINATION "${DSSP_BUILD_DATA_DIR}/wolf/packages/${_package_name}"
@@ -118,6 +129,7 @@ function(dssp_deploy_inference_plugins target)
     if(NOT QMSETUP_CORECMD_EXECUTABLE)
         message(FATAL_ERROR "Inference plugin deployment requires qmsetup's qmcorecmd tool.")
     endif()
+
     add_custom_command(TARGET ${target} POST_BUILD
         COMMAND "${CMAKE_COMMAND}"
             "-Dqmcorecmd=${QMSETUP_CORECMD_EXECUTABLE}"

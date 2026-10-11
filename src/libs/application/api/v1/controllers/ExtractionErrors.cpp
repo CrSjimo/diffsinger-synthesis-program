@@ -5,6 +5,7 @@
 namespace dssp::api_v1 {
     namespace {
         stdc::LogCategory log("dssp.api_v1.ExtractionErrors");
+
         template <class Errors>
         drogon::HttpResponsePtr present(const Errors &errors, const http::RequestLog &context) {
             return errors.visit(Overload{
@@ -25,6 +26,8 @@ namespace dssp::api_v1 {
                 }});
         }
     }
+
     drogon::HttpResponsePtr extractionProblemResponse(const extraction::CatalogErrors &errors, const http::RequestLog &context) { return present(errors, context); }
+
     drogon::HttpResponsePtr extractionProblemResponse(const extraction::ExtractionErrors &errors, const http::RequestLog &context) { return present(errors, context); }
 }

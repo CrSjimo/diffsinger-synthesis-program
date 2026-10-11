@@ -30,8 +30,10 @@ namespace dssp::resource {
             bool listed = true;
             typename Order::iterator position{};
         };
+
         struct State {
             explicit State(CacheOptions options) : options(options) {}
+
             CacheOptions options;
             std::mutex mutex;
             std::map<Key, EntryPtr, Compare> entries;
@@ -43,6 +45,7 @@ namespace dssp::resource {
                 order.erase(entry->position);
                 retired.push_back(entry);
             }
+
             void trim(std::vector<EntryPtr> &retired) {
                 if (!options.capacity) {
                     return;
@@ -56,6 +59,7 @@ namespace dssp::resource {
                     }
                 }
             }
+
             void release(EntryPtr entry) {
                 std::vector<EntryPtr> retired;
                 {
@@ -67,6 +71,7 @@ namespace dssp::resource {
                         trim(retired);
                     }
                 }
+
                 // Destruction may perform I/O or wait for a resource. It must
                 // happen after the cache mutex is released.
             }
@@ -78,6 +83,7 @@ namespace dssp::resource {
             Lease(const Lease &) = delete;
             Lease &operator=(const Lease &) = delete;
             Lease(Lease &&other) noexcept : state_(std::move(other.state_)), entry_(std::move(other.entry_)) {}
+
             Lease &operator=(Lease &&other) noexcept {
                 if (this != &other) {
                     reset();
@@ -86,23 +92,27 @@ namespace dssp::resource {
                 }
                 return *this;
             }
+
             ~Lease() { reset(); }
             Value &value() const noexcept { return entry_->value; }
 
         private:
             friend class LruCache;
             Lease(std::shared_ptr<State> state, EntryPtr entry) : state_(std::move(state)), entry_(std::move(entry)) {}
+
             void reset() {
                 if (entry_) {
                     state_->release(std::move(entry_));
                     state_.reset();
                 }
             }
+
             std::shared_ptr<State> state_;
             EntryPtr entry_;
         };
 
         explicit LruCache(CacheOptions options = {}) : state_(std::make_shared<State>(options)) {}
+
         ~LruCache() { clear(); }
         LruCache(const LruCache &) = delete;
         LruCache &operator=(const LruCache &) = delete;
@@ -113,12 +123,14 @@ namespace dssp::resource {
             if (it == state_->entries.end()) {
                 return {};
             }
+
             const auto &entry = it->second;
             ++entry->leases;
             entry->lastUsed = Clock::now();
             state_->order.splice(state_->order.begin(), state_->order, entry->position);
             return Lease(state_, entry);
         }
+
         Lease insert(Key key, Value value) {
             auto entry = std::make_shared<Entry>(Entry{std::move(key), std::move(value), Clock::now()});
             std::vector<EntryPtr> retired;
@@ -128,13 +140,16 @@ namespace dssp::resource {
                     const auto previous = old->second;
                     state_->remove(previous, retired);
                 }
+
                 state_->order.push_front(entry);
                 entry->position = state_->order.begin();
                 state_->entries.emplace(entry->key, entry);
                 state_->trim(retired);
             }
+
             return Lease(state_, std::move(entry));
         }
+
         void erase(const Key &key) {
             std::vector<EntryPtr> retired;
             {
@@ -145,6 +160,7 @@ namespace dssp::resource {
                 }
             }
         }
+
         void sweep(Clock::time_point now = Clock::now()) {
             std::vector<EntryPtr> retired;
             {
@@ -157,9 +173,11 @@ namespace dssp::resource {
                         }
                     }
                 }
+
                 state_->trim(retired);
             }
         }
+
         void clear() {
             std::vector<EntryPtr> retired;
             {
@@ -170,6 +188,7 @@ namespace dssp::resource {
                 }
             }
         }
+
         std::size_t size() const {
             const std::lock_guard lock(state_->mutex);
             return state_->entries.size();

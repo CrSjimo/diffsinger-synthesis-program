@@ -26,6 +26,7 @@ namespace dssp::tests {
             const auto context = registry->track(*request);
             completed = context.cancellation();
         }
+
         const auto next = registry->track(*request);
         registry->cancelAll();
         EXPECT_FALSE(completed.stop_requested());

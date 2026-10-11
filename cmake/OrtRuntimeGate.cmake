@@ -8,6 +8,7 @@ if(NOT DEFINED expect_cuda OR NOT DEFINED runtime_dir)
 endif()
 
 set(_cuda_dir "${runtime_dir}/cuda")
+
 if(expect_cuda)
     if(NOT IS_DIRECTORY "${_cuda_dir}")
         message(FATAL_ERROR
@@ -19,9 +20,11 @@ elseif(IS_DIRECTORY "${_cuda_dir}")
     file(REAL_PATH "${runtime_dir}" _real_runtime_dir)
     file(REAL_PATH "${_cuda_dir}" _real_cuda_dir)
     file(RELATIVE_PATH _cuda_relative "${_real_runtime_dir}" "${_real_cuda_dir}")
+
     if(NOT _cuda_relative STREQUAL "cuda")
         message(FATAL_ERROR "CUDA payload resolves outside its expected runtime directory")
     endif()
+
     message(STATUS "DSSP_ENABLE_CUDA=OFF: removing stale CUDA payload ${_cuda_dir}")
     file(REMOVE_RECURSE "${_real_cuda_dir}")
 endif()

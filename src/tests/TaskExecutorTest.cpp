@@ -35,6 +35,7 @@ namespace dssp::tests {
             EXPECT_FALSE(result);
             if (!result) EXPECT_NE(result.error().get_if<resource::TaskCancelledError>(), nullptr);
         }
+
         EXPECT_FALSE(ran->load());
         EXPECT_EQ(firstResult.wait_for(0ms), std::future_status::timeout);
         release->set_value();

@@ -19,6 +19,7 @@ namespace dssp::localization {
             std::ranges::replace(text, '_', '-');
             return text;
         }
+
         LocalizationError icuError(UErrorCode code, std::string_view operation) {
             return LocalizationError("CLDR language matching failed", std::make_shared<const ExternalError>(u_errorName(code), NativeDiagnostic{"ICU", std::string(operation), "UErrorCode", code}));
         }
@@ -32,6 +33,7 @@ namespace dssp::localization {
             if (acceptLanguage.size() > static_cast<std::size_t>(std::numeric_limits<int32_t>::max())) {
                 return std::unexpected{LocalizationError("Language preference header exceeds the ICU input limit")};
             }
+
             // ICU parses weights, ordering and duplicates. A wildcard expresses
             // no specific display locale, so it leaves the declaration fallback.
             // Remove only wildcard items, which ICU's public parser rejects.
@@ -43,10 +45,12 @@ namespace dssp::localization {
             if (!wildcard.ok()) {
                 return std::unexpected{LocalizationError("Cannot initialize wildcard compatibility", std::make_shared<const ExternalError>(wildcard.error(), NativeDiagnostic{"RE2", "compile language wildcard pattern", "re2", wildcard.error_code()}))};
             }
+
             std::string preferences(acceptLanguage);
             std::ranges::replace(preferences, '\t', ' ');
             while (re2::RE2::GlobalReplace(&preferences, wildcard, R"(\1\2)")) {}
             UErrorCode status = U_ZERO_ERROR;
+
             std::vector<icu::Locale> locales;
             std::vector<std::size_t> indices;
             for (std::size_t i = 0; i < available.size(); ++i) {
@@ -62,10 +66,12 @@ namespace dssp::localization {
                 indices.push_back(i);
                 locales.push_back(std::move(locale));
             }
+
             auto matcher = icu::LocaleMatcher::Builder().setSupportedLocales(locales.begin(), locales.end()).setNoDefaultLocale().build(status);
             if (U_FAILURE(status)) {
                 return std::unexpected{icuError(status, "build LocaleMatcher")};
             }
+
             const auto *matched = matcher.getBestMatchForListString(icu::StringPiece(preferences.data(), static_cast<int32_t>(preferences.size())), status);
             if (status == U_ILLEGAL_ARGUMENT_ERROR) {
                 return std::optional<std::size_t>{};
@@ -80,6 +86,7 @@ namespace dssp::localization {
                     }
                 }
             }
+
             return std::optional<std::size_t>{};
         } catch (const std::exception &error) {
             return std::unexpected{LocalizationError("Language preference library failed", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"ICU/RE2", "match locale", "exception"}))};

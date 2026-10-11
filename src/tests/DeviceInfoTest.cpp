@@ -41,6 +41,7 @@ namespace dssp::tests {
             Device{Provider::DirectML, 2, "AMD", "12341002", 8 * GiB},
             Device{Provider::DirectML, 0, "Intel", "12348086", 24 * GiB},
         };
+
         for (int i = 0; i < 2; ++i) {
             const auto result = Device::defaultDevice(devices, Provider::DirectML);
             ASSERT_TRUE(result);
@@ -54,6 +55,7 @@ namespace dssp::tests {
             Device{Provider::DirectML, 5, "Other", "12349999", 8 * GiB},
             Device{Provider::DirectML, 0, "Intel", "12348086", 4 * GiB},
         };
+
         auto result = Device::defaultDevice(devices, Provider::DirectML);
         ASSERT_TRUE(result);
         EXPECT_EQ(result->index(), 5);
@@ -70,6 +72,7 @@ namespace dssp::tests {
             Device{Provider::CUDA, 3, "Medium", "uuid-3", 8 * GiB},
             Device{Provider::DirectML, 1, "Other provider", "123410DE", 32 * GiB},
         };
+
         const auto result = Device::defaultDevice(devices, Provider::CUDA);
         ASSERT_TRUE(result);
         EXPECT_EQ(result->index(), 7);
@@ -95,6 +98,7 @@ namespace dssp::tests {
             Device{Provider::DirectML, 7, "NVIDIA", "123410DE", 4 * GiB},
             Device{Provider::DirectML, 3, "AMD", "12341002", 4 * GiB},
         };
+
         for (int i = 0; i < 2; ++i) {
             const auto result = Device::defaultDevice(devices, Provider::DirectML);
             ASSERT_TRUE(result);
@@ -110,6 +114,7 @@ namespace dssp::tests {
             ASSERT_FALSE(result);
             EXPECT_EQ(result.error().kind(), "dssp.device");
         }
+
         EXPECT_FALSE(Device::defaultDevice(std::span<const Device>{}, Provider::CPU));
         const auto cpu = Device::defaultDevice(devices, Provider::CPU);
         ASSERT_TRUE(cpu);

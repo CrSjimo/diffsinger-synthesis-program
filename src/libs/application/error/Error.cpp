@@ -13,15 +13,19 @@ namespace dssp::error {
     const std::string &Error::message() const noexcept {
         return data_->message;
     }
+
     Error::Ptr Error::cause() const noexcept {
         return data_->cause;
     }
+
     std::source_location Error::location() const noexcept {
         return data_->location;
     }
+
     std::string_view Error::kind() const noexcept {
         return "dssp.error";
     }
+
     Error::Ptr Error::clone() const {
         return std::make_shared<const Error>(*this);
     }
@@ -34,6 +38,7 @@ namespace dssp::error {
             }
             text += current->message();
         }
+
         return text;
     }
 

@@ -32,6 +32,7 @@ namespace dssp::api_v1 {
             std::vector<FieldIssue> &issues;
             std::optional<http::HttpBoundaryError> &boundaryError;
             void issue(std::string type, std::string reason) const { issues.push_back({path, std::move(type), std::move(reason)}); }
+
             bool object() const {
                 if (!value) {
                     return false;
@@ -42,6 +43,7 @@ namespace dssp::api_v1 {
                 issue("type", "Expected an object");
                 return false;
             }
+
             Node field(std::string_view name, bool required = true) const {
                 const auto childPath = path + "/" + escapePointer(name);
                 if (!value || !value->isObject()) {
@@ -56,7 +58,9 @@ namespace dssp::api_v1 {
                 }
                 return {&(*value)[key], childPath, issues, boundaryError};
             }
+
             Node element(Json::ArrayIndex i) const { return {&(*value)[i], path + "/" + std::to_string(i), issues, boundaryError}; }
+
             std::string string() const {
                 if (!value) {
                     return {};
@@ -67,6 +71,7 @@ namespace dssp::api_v1 {
                 }
                 return value->asString();
             }
+
             bool boolean() const {
                 if (!value) {
                     return false;
@@ -77,6 +82,7 @@ namespace dssp::api_v1 {
                 }
                 return value->asBool();
             }
+
             double number(std::optional<double> minimum = {}, bool exclusive = false, std::optional<double> maximum = {}) const {
                 if (!value) {
                     return 0;
@@ -95,6 +101,7 @@ namespace dssp::api_v1 {
                 }
                 return result;
             }
+
             std::uint64_t unsignedInteger(std::optional<std::uint64_t> maximum = {}) const {
                 if (!value) {
                     return 0;
@@ -113,6 +120,7 @@ namespace dssp::api_v1 {
                 }
                 return result;
             }
+
             std::optional<std::int64_t> nullableInteger() const {
                 if (!value || value->isNull()) {
                     return {};
@@ -123,6 +131,7 @@ namespace dssp::api_v1 {
                 }
                 return value->asInt64();
             }
+
             bool array(std::size_t minimum = 0) const {
                 if (!value) {
                     return false;
@@ -136,6 +145,7 @@ namespace dssp::api_v1 {
                 }
                 return true;
             }
+
             Json::Value json() const { return value ? *value : Json::Value{}; }
         };
 
@@ -159,6 +169,7 @@ namespace dssp::api_v1 {
             }
             return result;
         }
+
         dto::SingleSingerContext singleContext(const Node &n) {
             dto::SingleSingerContext result;
             if (n.object()) {
@@ -168,6 +179,7 @@ namespace dssp::api_v1 {
             }
             return result;
         }
+
         dto::MultiSingerContext multiContext(const Node &n) {
             dto::MultiSingerContext result;
             if (n.object()) {
@@ -177,6 +189,7 @@ namespace dssp::api_v1 {
             }
             return result;
         }
+
         dto::NotePosition position(const Node &n) {
             dto::NotePosition result;
             if (n.object()) {
@@ -185,6 +198,7 @@ namespace dssp::api_v1 {
             }
             return result;
         }
+
         template <class Phone>
         Phone phone(const Node &n) {
             Phone result;
@@ -198,6 +212,7 @@ namespace dssp::api_v1 {
             }
             return result;
         }
+
         template <class Phone>
         dto::Note<Phone> note(const Node &n) {
             dto::Note<Phone> result;
@@ -217,6 +232,7 @@ namespace dssp::api_v1 {
             }
             return result;
         }
+
         template <class Phone, class Input>
         void piece(const Node &n, Input &result) {
             if (!n.object()) {
@@ -227,6 +243,7 @@ namespace dssp::api_v1 {
             result.notes = array<dto::Note<Phone>>(n.field("notes"), note<Phone>);
             result.mix = array<std::vector<double>>(n.field("mix"), [](const Node &row) { return array<double>(row, [](const Node &v) { return v.number(0, false, 1); }); });
         }
+
         dto::ParameterRetake retake(const Node &n) {
             dto::ParameterRetake result;
             if (n.object()) {
@@ -235,6 +252,7 @@ namespace dssp::api_v1 {
             }
             return result;
         }
+
         template <class Parameter>
         Parameter parameter(const Node &n) {
             Parameter result;
@@ -253,6 +271,7 @@ namespace dssp::api_v1 {
             }
             return result;
         }
+
         template <class Parameter>
         std::map<std::string, Parameter> parameters(const Node &n) {
             std::map<std::string, Parameter> result;
@@ -263,6 +282,7 @@ namespace dssp::api_v1 {
             }
             return result;
         }
+
         std::vector<std::string> strings(const Node &n, bool mediaTypes) {
             return array<std::string>(n, [mediaTypes](const Node &item) {
                 auto text = item.string();
@@ -279,6 +299,7 @@ namespace dssp::api_v1 {
                 return text;
             });
         }
+
         template <class Request>
         void acceptableMedia(const Node &n, Request &result) {
             const auto formats = n.field("acceptableFormats", false), schemes = n.field("acceptableSchemes", false);
@@ -289,6 +310,7 @@ namespace dssp::api_v1 {
                 result.acceptableSchemes = strings(schemes, false);
             }
         }
+
         void extractionRequest(const Node &n, dto::ExtractionRequest &result) {
             result.extractor = n.field("extractor").string();
             const auto input = n.field("input");
@@ -307,6 +329,7 @@ namespace dssp::api_v1 {
                 }
             }
         }
+
         template <class T, class Read>
         std::expected<T, DtoErrors> decode(const Json::Value &json, Read read) {
             std::vector<FieldIssue> issues;
@@ -316,12 +339,14 @@ namespace dssp::api_v1 {
             if (root.object()) {
                 read(root, result);
             }
+
             if (boundaryError) {
                 return fail<DtoErrors>(std::move(*boundaryError));
             }
             if (!issues.empty()) {
                 return fail<DtoErrors>(ValidationError(std::move(issues)));
             }
+
             return result;
         }
     }
@@ -330,6 +355,7 @@ namespace dssp::api_v1 {
     std::expected<dto::EnvTagRequest, DtoErrors> fromJson<dto::EnvTagRequest>(const Json::Value &json) {
         return decode<dto::EnvTagRequest>(json, [](const Node &n, auto &r) { r.context = multiContext(n.field("context")); });
     }
+
     template <>
     std::expected<dto::PronunciationRequest, DtoErrors> fromJson<dto::PronunciationRequest>(const Json::Value &json) {
         return decode<dto::PronunciationRequest>(json, [](const Node &n, auto &r) {
@@ -347,6 +373,7 @@ namespace dssp::api_v1 {
             }
         });
     }
+
     template <>
     std::expected<dto::PhonemeRequest, DtoErrors> fromJson<dto::PhonemeRequest>(const Json::Value &json) {
         return decode<dto::PhonemeRequest>(json, [](const Node &n, auto &r) {
@@ -366,6 +393,7 @@ namespace dssp::api_v1 {
             }
         });
     }
+
     template <>
     std::expected<dto::DurationRequest, DtoErrors> fromJson<dto::DurationRequest>(const Json::Value &json) {
         return decode<dto::DurationRequest>(json, [](const Node &n, auto &r) {
@@ -373,6 +401,7 @@ namespace dssp::api_v1 {
             piece<dto::DurationInputPhoneme>(n.field("input"), r.input);
         });
     }
+
     template <>
     std::expected<dto::ParameterRequest, DtoErrors> fromJson<dto::ParameterRequest>(const Json::Value &json) {
         return decode<dto::ParameterRequest>(json, [](const Node &n, auto &r) {
@@ -384,6 +413,7 @@ namespace dssp::api_v1 {
             }
         });
     }
+
     template <>
     std::expected<dto::AudioRequest, DtoErrors> fromJson<dto::AudioRequest>(const Json::Value &json) {
         return decode<dto::AudioRequest>(json, [](const Node &n, auto &r) {
@@ -396,10 +426,12 @@ namespace dssp::api_v1 {
             acceptableMedia(n, r);
         });
     }
+
     template <>
     std::expected<dto::ExtractionRequest, DtoErrors> fromJson<dto::ExtractionRequest>(const Json::Value &json) {
         return decode<dto::ExtractionRequest>(json, extractionRequest);
     }
+
     template <>
     std::expected<dto::SeparationExtractionRequest, DtoErrors> fromJson<dto::SeparationExtractionRequest>(const Json::Value &json) {
         return decode<dto::SeparationExtractionRequest>(json, [](const Node &n, auto &r) {
@@ -416,6 +448,7 @@ namespace dssp::api_v1 {
             if (request.query().empty()) {
                 return {request.getParameter(name), false};
             }
+
             std::string_view value;
             for (const auto part : stdc::str::split(request.query(), "&")) {
                 const auto equals = part.find('=');
@@ -423,14 +456,17 @@ namespace dssp::api_v1 {
                     value = equals == std::string_view::npos ? std::string_view{} : part.substr(equals + 1);
                 }
             }
+
             return {value, true};
         };
+
         auto read = [&](const char *name, std::vector<std::string> &output, bool mime) -> std::expected<void, http::HttpBoundaryError> {
             const auto [value, encoded] = parameter(name);
             const auto text = stdc::str::trim(value, " \t");
             if (text.empty()) {
                 return {};
             }
+
             std::size_t i = 0;
             // OpenAPI form/explode:false arrays split before percent-decoding;
             // an encoded comma belongs to one item rather than separating two.
@@ -449,17 +485,21 @@ namespace dssp::api_v1 {
                 }
                 ++i;
             }
+
             return {};
         };
+
         if (auto formats = read("acceptableFormats", result.acceptableFormats, true); !formats) {
             return fail<DtoErrors>(std::move(formats.error()));
         }
         if (auto schemes = read("acceptableSchemes", result.acceptableSchemes, false); !schemes) {
             return fail<DtoErrors>(std::move(schemes.error()));
         }
+
         if (!issues.empty()) {
             return fail<DtoErrors>(ValidationError(std::move(issues)));
         }
+
         return result;
     }
 

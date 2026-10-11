@@ -21,6 +21,7 @@ namespace dssp::tests {
             ASSERT_TRUE(*matched);
             EXPECT_EQ(**matched, expected);
         }
+
         for (const auto header : {"", "*", "ja;q=0", "de", "ja;q=wrong"}) {
             SCOPED_TRACE(header);
             const auto matched = localization::matchLocale(locales, header);
@@ -56,6 +57,7 @@ namespace dssp::tests {
             ASSERT_TRUE(value) << (value ? "" : value.error().formatChain());
             EXPECT_EQ(*value, title);
         }
+
         std::atomic<unsigned> failures = 0;
         std::vector<std::jthread> workers;
         for (const auto &[locale, title] : expectations) {
@@ -68,6 +70,7 @@ namespace dssp::tests {
                 }
             });
         }
+
         workers.clear();
         EXPECT_EQ(failures.load(), 0U);
         const auto missing = (*catalog)->text("missing", "ja");

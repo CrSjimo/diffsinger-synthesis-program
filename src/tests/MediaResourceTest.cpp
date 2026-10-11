@@ -35,6 +35,7 @@ namespace dssp::tests {
             const codecutil::Base64DecodingView decoded(encoded);
             EXPECT_EQ(std::string(decoded.begin(), decoded.end()), bytes);
         }
+
         const auto wrongKind = (*resources)->read(files.path() / "image.wav", media::Kind::Audio);
         EXPECT_FALSE(wrongKind);
         files.write("unrecognized", "not a media file");
@@ -57,6 +58,7 @@ namespace dssp::tests {
                 }
             });
         }
+
         workers.clear();
         EXPECT_EQ(failures.load(), 0U);
     }

@@ -14,6 +14,7 @@ namespace dssp::tests {
             result.info.defaultLanguage = "eng";
             return result;
         }
+
         arch::ParameterNote note(double gap, double duration, std::vector<arch::TimedPhoneme> phones) {
             arch::ParameterNote result;
             result.position = {gap, duration};
@@ -87,6 +88,7 @@ namespace dssp::tests {
                 EXPECT_NEAR(arch_diffsinger::normalizedValue(*definition, arch_diffsinger::engineValue(*definition, value)), value, 1e-12) << id;
             }
         }
+
         EXPECT_DOUBLE_EQ(arch_diffsinger::engineValue(*arch_diffsinger::parameterDefinition("pitch"), 0.5390625), 69);
         EXPECT_DOUBLE_EQ(arch_diffsinger::engineValue(*arch_diffsinger::parameterDefinition("velocity"), 0.5), 1);
     }

@@ -10,6 +10,7 @@ namespace dssp::http {
         if (text.empty()) {
             return fail<UriErrors>(UriSyntaxError("Expected a nonempty absolute URI"));
         }
+
         UriUriA uri{};
         const char *position = nullptr;
         const auto code = uriParseSingleUriExA(&uri, text.data(), text.data() + text.size(), &position);
@@ -20,10 +21,12 @@ namespace dssp::http {
         if (code != URI_SUCCESS) {
             return fail<UriErrors>(HttpBoundaryError("URI validation library failed", std::make_shared<const ExternalError>("Cannot parse URI", NativeDiagnostic{"uriparser", "uriParseSingleUriExA", "UriErrorCode", code})));
         }
+
         const auto cleanup = stdc::make_scope_guard([&] { uriFreeUriMembersA(&uri); });
         if (!uri.scheme.first || uri.scheme.first == uri.scheme.afterLast) {
             return fail<UriErrors>(UriSyntaxError("Expected an absolute URI with a scheme"));
         }
+
         return {};
     }
 }

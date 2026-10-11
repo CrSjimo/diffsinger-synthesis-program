@@ -43,6 +43,7 @@ namespace dssp::arch_diffsinger {
             if (!imported->binding() || imported->binding()->state() != srt::ContribImportBinding::Active) {
                 return std::unexpected{inference::ResourceError("Unresolved stage " + std::string(role))};
             }
+
             const auto &target = imported->binding()->target();
             const auto *schema = dynamic_cast<const Schema *>(target.exports());
             const auto *configuration = dynamic_cast<const Configuration *>(target.configuration());
@@ -50,6 +51,7 @@ namespace dssp::arch_diffsinger {
             if (!schema || !configuration || !options || target.interface() != schema->interface() || target.variant() != schema->variant() || target.level() != schema->level()) {
                 return std::unexpected{inference::ResourceError("Unsupported typed stage contract for " + std::string(role))};
             }
+
             StageRecord result;
             result.spec = &target;
             result.options = options;
@@ -67,9 +69,11 @@ namespace dssp::arch_diffsinger {
                     }
                 }
             }
+
             if (log.isLevelEnabled(stdc::Logger::Trace)) {
                 log.stdcTrace("Singer %1 stage %2 resolves to %3 (speaker embeddings=%4, valid embeddings=%5)", inference::resourceReference(singer), role, inference::resourceReference(target), result.usesSpeakers, result.embeddedSpeakers.size());
             }
+
             return result;
         }
 
@@ -87,6 +91,7 @@ namespace dssp::arch_diffsinger {
             if (!stage.spec) {
                 return;
             }
+
             const auto *configuration = dynamic_cast<const Configuration *>(stage.spec->configuration());
             std::set<std::string> available;
             for (const auto &[token, index] : configuration->phonemes) {
@@ -105,10 +110,12 @@ namespace dssp::arch_diffsinger {
             if (!srt::ContribSpecExtension::findFromSpec<Ds::DiffSingerPipelineExecutive>(singer)) {
                 return std::unexpected{inference::ResourceError("The DiffSinger pipeline provider is unavailable")};
             }
+
             const auto *configuration = dynamic_cast<const Ds::DiffSingerConfiguration *>(singer.configuration());
             if (!configuration) {
                 return std::unexpected{inference::ResourceError("The DiffSinger configuration is unavailable")};
             }
+
             auto duration = readStage<Du::DurationSchema, Du::DurationConfiguration, Du::DurationImportOptions>(singer, "singer/duration", false);
             auto pitch = readStage<Pi::PitchSchema, Pi::PitchConfiguration, Pi::PitchImportOptions>(singer, "singer/pitch", false);
             auto variance = readStage<Va::VarianceSchema, Va::VarianceConfiguration, Va::VarianceImportOptions>(singer, "singer/variance", false);
@@ -119,6 +126,7 @@ namespace dssp::arch_diffsinger {
                     return std::unexpected{stage->error()};
                 }
             }
+
             SingerRecord record;
             record.package = singer.package();
             record.spec = &singer;
@@ -131,6 +139,7 @@ namespace dssp::arch_diffsinger {
                 const auto found = declaration.find(std::string(field));
                 return found == declaration.end() ? std::expected<srt::DisplayText, inference::ResourceError>{resolved} : inference::preserveEmptyMediaPaths(resolved, found->second);
             };
+
             auto avatar = readMediaPath("avatar", singer.avatar());
             auto background = readMediaPath("background", singer.background());
             auto demoAudio = readMediaPath("demoAudio", singer.demoAudio());
@@ -139,6 +148,7 @@ namespace dssp::arch_diffsinger {
                     return std::unexpected{path->error()};
                 }
             }
+
             record.avatar = std::move(*avatar);
             record.background = std::move(*background);
             record.demoAudio = std::move(*demoAudio);
@@ -148,6 +158,7 @@ namespace dssp::arch_diffsinger {
             if (needsSpeakers && record.speakers.empty()) {
                 return std::unexpected{inference::ResourceError("No logical speaker is valid across the singer's effective stages")};
             }
+
             record.permitsMixing = singerMetadata(*configuration).permitsMixing;
 
             std::optional<std::set<std::string>> phonemes;
@@ -171,10 +182,12 @@ namespace dssp::arch_diffsinger {
                 if (!route) {
                     return std::unexpected{std::move(route.error())};
                 }
+
                 const auto *exports = dynamic_cast<const wolf::Api::Linguist::L1::LinguistExports *>(route->spec->exports());
                 if (!exports) {
                     return std::unexpected{inference::ResourceError("Missing linguist exports for " + handle)};
                 }
+
                 // Preserve Wolf's complete-inventory zero-coverage verdict.
                 // Unknown and open inventories do not justify dropping a route.
                 if (phonemes && !exports->openSet && !exports->phonemes.empty() && std::ranges::none_of(exports->phonemes, [&](const auto &token) { return phonemes->contains(token); })) {
@@ -182,6 +195,7 @@ namespace dssp::arch_diffsinger {
                     completeLanguagePipeline = false;
                     continue;
                 }
+
                 log.stdcTrace("Singer %1 language %2 supports depth %3", record.info.id, handle, depthName(route->depth));
                 completeLanguagePipeline = completeLanguagePipeline && route->depth == Depth::Onsets;
                 auto metadata = inference::languageMetadata(*route->spec);
@@ -191,6 +205,7 @@ namespace dssp::arch_diffsinger {
                 languageDepths.emplace(handle, route->depth);
                 record.languages.emplace(handle, std::move(*route));
             }
+
             if (group.languages.empty()) {
                 log.stdcDebug("Singer %1 has no usable language declarations; pronunciation and phoneme stages will be skipped", record.info.id);
                 completeLanguagePipeline = false;
@@ -198,6 +213,7 @@ namespace dssp::arch_diffsinger {
                 if (!group.languages.contains(singer.defaultLanguage())) {
                     return std::unexpected{inference::ResourceError("The declared default language is unavailable: " + singer.defaultLanguage())};
                 }
+
                 record.info.defaultLanguage = singer.defaultLanguage();
             }
 
@@ -208,6 +224,7 @@ namespace dssp::arch_diffsinger {
                 const ds::ParamTag tag{std::string(parameter)};
                 return acousticConfiguration->parameters.contains(tag) && (acousticSchema->varianceControls.contains(tag) || acousticSchema->transitionControls.contains(tag));
             };
+
             bool expressiveness = false;
             if (pitch->spec) {
                 const auto *schema = dynamic_cast<const Pi::PitchSchema *>(pitch->spec->exports());
@@ -221,6 +238,7 @@ namespace dssp::arch_diffsinger {
             if (expressiveness) {
                 group.parameterPipeline.emplace("expressiveness", arch::DirectParameter{});
             }
+
             std::map<std::string, srt::JsonValue> effectiveOptions;
             for (const auto role : {"singer/duration", "singer/pitch", "singer/acoustic", "singer/vocoder"}) {
                 effectiveOptions.emplace(role, srt::JsonObject{});
@@ -231,6 +249,7 @@ namespace dssp::arch_diffsinger {
                 if (options->predictions.empty()) {
                     return std::unexpected{inference::ResourceError("The variance import must select a nonempty prediction subset")};
                 }
+
                 srt::JsonArray predictions;
                 for (const auto &prediction : schema->predictions) {
                     if (options->predictions.contains(prediction)) {
@@ -242,6 +261,7 @@ namespace dssp::arch_diffsinger {
                 }
                 effectiveOptions.emplace("singer/variance", srt::JsonObject{{"predictions", std::move(predictions)}});
             }
+
             for (const char *parameter : {"energy", "breathiness", "voicing", "tension", "mouth_opening", "gender", "velocity"}) {
                 if (!supported(parameter)) {
                     continue;
@@ -257,10 +277,12 @@ namespace dssp::arch_diffsinger {
                 }
                 group.audioDependencies.push_back(parameter);
             }
+
             if (vocoderConfiguration->pitchControllable) {
                 group.parameterPipeline.emplace("tone_shift", arch::DirectParameter{});
                 group.audioDependencies.push_back("tone_shift");
             }
+
             record.technicallyMixable = completeLanguagePipeline && duration->spec && pitch->spec && variance->spec && duration->usesSpeakers && variance->usesSpeakers && acoustic->usesSpeakers && !record.speakers.empty();
             group.mixable = record.technicallyMixable && record.permitsMixing;
 
@@ -272,6 +294,7 @@ namespace dssp::arch_diffsinger {
                 roleNames.emplace(role, "language/" + handle);
                 effectiveOptions.emplace(role, srt::JsonObject{});
             }
+
             // The pinned provider retains dict but does not consume it. Wolf's
             // effective language resources already occur in the binding graph.
             const auto description = srt::JsonValue(srt::JsonObject{{"pipeline", inference::describeImports(singer, effectiveOptions, roleNames)}, {"reservedPhonemes", srt::JsonArray{}}});
@@ -281,16 +304,19 @@ namespace dssp::arch_diffsinger {
             for (const auto &token : reservedTokens) {
                 reserved.push_back(token);
             }
+
             identity["reservedPhonemes"] = std::move(reserved);
             srt::JsonObject languages;
             for (const auto &[handle, depth] : languageDepths) {
                 languages.emplace(handle, depthName(depth));
             }
+
             identity["languages"] = std::move(languages);
             auto digest = inference::fingerprint(srt::JsonValue(std::move(identity)).toJson());
             if (!digest) {
                 return std::unexpected{std::move(digest.error())};
             }
+
             group.id = "g1." + *digest;
             record.info.group = group.id;
             record.info.archSpecificInfo = Json::Value(Json::objectValue);
@@ -298,6 +324,7 @@ namespace dssp::arch_diffsinger {
             for (const auto &speaker : record.speakers) {
                 record.info.archSpecificInfo["speakers"].append(speaker);
             }
+
             record.info.defaultExtra = Json::Value(Json::objectValue);
             record.info.defaultExtra["speaker"] = record.speakers.empty() ? std::string{} : record.speakers.front();
             log.stdcDebug("Cached singer %1 in group %2 (%3 languages, %4 speakers, %5 parameters, technical mixing=%6, mixing permission=%7)", record.info.id, group.id, group.languages.size(), record.speakers.size(), group.parameterPipeline.size(), record.technicallyMixable, record.permitsMixing);
@@ -311,6 +338,7 @@ namespace dssp::arch_diffsinger {
             if (!stage.usesSpeakers) {
                 continue;
             }
+
             std::vector<std::string> available;
             if (stage.speakerMapping.empty()) {
                 for (const auto &speaker : stage.speakers) {
@@ -325,12 +353,14 @@ namespace dssp::arch_diffsinger {
                     }
                 }
             }
+
             if (!result) {
                 result = std::move(available);
             } else {
                 std::erase_if(*result, [&](const auto &speaker) { return std::ranges::find(available, speaker) == available.end(); });
             }
         }
+
         return result.value_or(std::vector<std::string>{});
     }
 
@@ -340,6 +370,7 @@ namespace dssp::arch_diffsinger {
         if (!name) {
             return fail<arch::CatalogErrors>(arch::OperationError("Cannot localize singer name", name.error().clone()));
         }
+
         result.name = std::move(*name);
         return result;
     }
@@ -351,12 +382,14 @@ namespace dssp::arch_diffsinger {
             if (name == record.languageNames.end()) {
                 return fail<arch::CatalogErrors>(arch::OperationError("The cached group has no language name for " + handle));
             }
+
             auto title = inference::localize(name->second, display.acceptLanguage, handle);
             if (!title) {
                 return fail<arch::CatalogErrors>(arch::OperationError("Cannot localize language name", title.error().clone()));
             }
             language.name = std::move(*title);
         }
+
         return result;
     }
 
@@ -364,6 +397,7 @@ namespace dssp::arch_diffsinger {
         if (!environment) {
             return std::unexpected{inference::ResourceError("Singer discovery requires an inference environment")};
         }
+
         try {
             auto catalog = std::shared_ptr<SingerCatalog>(new SingerCatalog(std::move(environment)));
             std::size_t skipped = 0;
@@ -373,28 +407,33 @@ namespace dssp::arch_diffsinger {
                         log.stdcTrace("Ignoring singer contribution %1 in package %2 with a different architecture contract", contribution->locator().contributionId(), package.id());
                         continue;
                     }
+
                     const auto *singer = dynamic_cast<const srt::SingerSpec *>(contribution);
                     if (!singer) {
                         ++skipped;
                         log.stdcWarning("Skipping an invalid singer category declaration in %1", package.id());
                         continue;
                     }
+
                     auto found = readSinger(*singer);
                     if (!found) {
                         ++skipped;
                         log.stdcWarning("Skipping DiffSinger singer %1 in %2@%3: %4", singer->locator().contributionId(), package.id(), package.version().toString(), found.error().formatChain());
                         continue;
                     }
+
                     auto [record, group] = std::move(*found);
                     const bool mixable = group.info.mixable;
                     const auto [existing, inserted] = catalog->groups_.try_emplace(record.info.group, std::move(group));
                     if (!inserted) {
                         existing->second.info.mixable = existing->second.info.mixable && mixable;
                     }
+
                     const auto id = record.info.id;
                     catalog->singers_.emplace(id, std::move(record));
                 }
             }
+
             log.stdcInfo("DiffSinger singer catalogue ready: %1 singers, %2 groups, %3 rejected declarations", catalog->singers_.size(), catalog->groups_.size(), skipped);
             return std::shared_ptr<const SingerCatalog>(std::move(catalog));
         } catch (const std::exception &error) {

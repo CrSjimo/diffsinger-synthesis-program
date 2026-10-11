@@ -90,6 +90,7 @@ inline constexpr SpectrumPoint spectralReference[] = {
     {1, 1, 2047, 4, -1.62981450558e-09},
     {1, 1, 2047, 8, 0.000527113676071},
 };
+
 struct AudioPoint {
     int channel, sample;
     double value;

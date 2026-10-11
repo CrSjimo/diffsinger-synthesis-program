@@ -11,6 +11,7 @@
 
 namespace dssp::media {
     enum class Kind { Image, Audio };
+
     struct Resource {
         std::string mime;
         std::string dataUrl;

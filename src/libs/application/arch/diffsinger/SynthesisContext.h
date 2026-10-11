@@ -12,10 +12,12 @@ namespace dssp::arch_diffsinger {
         const SingerRecord *singer = nullptr;
         std::string speaker;
     };
+
     struct SynthesisOptions {
         std::int64_t steps = 20;
         float depth = 1;
     };
+
     struct SynthesisContext {
         SynthesisOptions options;
         std::vector<SingerSource> sources;

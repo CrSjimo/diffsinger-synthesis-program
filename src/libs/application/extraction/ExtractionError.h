@@ -9,21 +9,25 @@ namespace dssp::extraction {
         using ErrorType::ErrorType;
         std::string_view kind() const noexcept override { return "dssp.extraction.not_found"; }
     };
+
     class InvalidInputError final : public ErrorType<InvalidInputError> {
     public:
         using ErrorType::ErrorType;
         std::string_view kind() const noexcept override { return "dssp.extraction.invalid_input"; }
     };
+
     class OperationError final : public ErrorType<OperationError> {
     public:
         using ErrorType::ErrorType;
         std::string_view kind() const noexcept override { return "dssp.extraction.operation"; }
     };
+
     class CancelledError final : public ErrorType<CancelledError> {
     public:
         using ErrorType::ErrorType;
         std::string_view kind() const noexcept override { return "dssp.extraction.cancelled"; }
     };
+
     using CatalogErrors = ErrorSet<ResourceNotFoundError, OperationError>;
     using ExtractionErrors = ErrorSet<InvalidInputError, OperationError, CancelledError>;
     template <class T> using CatalogResult = std::expected<T, CatalogErrors>;

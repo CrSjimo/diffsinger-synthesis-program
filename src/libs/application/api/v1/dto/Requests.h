@@ -17,16 +17,19 @@ namespace dssp::api_v1::dto {
         std::string id;
         Json::Value extra;
     };
+
     struct SingleSingerContext {
         std::string arch;
         Json::Value archExtra;
         Singer singer;
     };
+
     struct MultiSingerContext {
         std::string arch;
         Json::Value archExtra;
         std::vector<Singer> singers;
     };
+
     struct EnvTagRequest {
         MultiSingerContext context;
     };
@@ -35,22 +38,27 @@ namespace dssp::api_v1::dto {
         std::string lyric;
         std::string language;
     };
+
     struct PronunciationInput {
         std::vector<Lyric> notes;
     };
+
     struct PronunciationRequest {
         SingleSingerContext context;
         PronunciationInput input;
     };
+
     struct PronunciationNote {
         std::string pronunciation;
         std::string language;
         std::optional<std::int64_t> syllableSliceStart;
         std::optional<std::int64_t> syllableSliceEnd;
     };
+
     struct PhonemeInput {
         std::vector<PronunciationNote> notes;
     };
+
     struct PhonemeRequest {
         SingleSingerContext context;
         PhonemeInput input;
@@ -60,18 +68,22 @@ namespace dssp::api_v1::dto {
         Normal,
         Slur
     };
+
     struct NotePosition {
         double gap = 0;
         double duration = 0;
     };
+
     struct DurationInputPhoneme {
         std::string token;
         bool onset = false;
         std::string language;
     };
+
     struct ParameterInputPhoneme : DurationInputPhoneme {
         double start = 0;
     };
+
     template <class Phoneme>
     struct Note {
         NotePosition position;
@@ -81,6 +93,7 @@ namespace dssp::api_v1::dto {
         std::vector<Phoneme> phonemes;
         NoteKind kind = NoteKind::Normal;
     };
+
     using DurationNote = Note<DurationInputPhoneme>;
     using ParameterNote = Note<ParameterInputPhoneme>;
     using Mix = std::vector<std::vector<double>>;
@@ -91,6 +104,7 @@ namespace dssp::api_v1::dto {
         Mix mix;
         double mixSampleRate = 1;
     };
+
     using DurationInput = PieceInput<DurationNote>;
     struct DurationRequest {
         MultiSingerContext context;
@@ -101,25 +115,31 @@ namespace dssp::api_v1::dto {
         std::uint64_t position = 0;
         std::uint64_t length = 0;
     };
+
     struct Parameter {
         std::vector<double> values;
         double sampleRate = 1;
         std::optional<ParameterRetake> retake;
     };
+
     struct AudioParameter {
         double sampleRate = 1;
         std::optional<std::vector<double>> values;
     };
+
     struct ParameterInput : PieceInput<ParameterNote> {
         std::map<std::string, Parameter> parameters;
     };
+
     struct AudioInput : PieceInput<ParameterNote> {
         std::map<std::string, AudioParameter> parameters;
     };
+
     struct ParameterRequest {
         MultiSingerContext context;
         ParameterInput input;
     };
+
     struct AudioRequest {
         MultiSingerContext context;
         AudioInput input;
@@ -130,14 +150,17 @@ namespace dssp::api_v1::dto {
     struct ExtractionInput {
         std::string audioUrl;
     };
+
     struct ExtractionRequest {
         std::string extractor;
         ExtractionInput input;
     };
+
     struct SeparationExtractionRequest : ExtractionRequest {
         std::optional<std::vector<std::string>> acceptableFormats;
         std::optional<std::vector<std::string>> acceptableSchemes;
     };
+
     struct MediaQuery {
         std::vector<std::string> acceptableFormats;
         std::vector<std::string> acceptableSchemes;

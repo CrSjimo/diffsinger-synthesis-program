@@ -1,15 +1,22 @@
 find_package(synthrt CONFIG REQUIRED)
 find_package(dsinfer CONFIG REQUIRED)
 find_package(stdcorelib CONFIG REQUIRED)
+
 include(GenerateExportHeader)
 
 add_library(srtbeatinfer SHARED src/BeatApiL1.cpp src/BeatError.cpp src/BeatTask.cpp)
 add_library(srtbeatinfer::srtbeatinfer ALIAS srtbeatinfer)
+
 target_compile_features(srtbeatinfer PUBLIC cxx_std_23)
 target_link_libraries(srtbeatinfer PUBLIC synthrt::synthrt)
 target_include_directories(srtbeatinfer PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>")
+
 generate_export_header(srtbeatinfer EXPORT_FILE_NAME "include/srtbeatinfer/export.h")
-set_target_properties(srtbeatinfer PROPERTIES OUTPUT_NAME synthrt-srtbeatinfer RUNTIME_OUTPUT_DIRECTORY "${DSSP_BUILD_RUNTIME_DIR}" LIBRARY_OUTPUT_DIRECTORY "${DSSP_BUILD_LIBRARY_DIR}")
+set_target_properties(srtbeatinfer PROPERTIES
+    OUTPUT_NAME synthrt-srtbeatinfer
+    RUNTIME_OUTPUT_DIRECTORY "${DSSP_BUILD_RUNTIME_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${DSSP_BUILD_LIBRARY_DIR}"
+)
 
 add_library(srtbeatinfer_dsp STATIC src/BeatFeatures.cpp)
 target_compile_features(srtbeatinfer_dsp PUBLIC cxx_std_23)
@@ -20,9 +27,15 @@ set_target_properties(srtbeatinfer_dsp PROPERTIES POSITION_INDEPENDENT_CODE ON C
 add_library(srtbeatinferbeatthis MODULE plugins/beat-this/main.cpp)
 target_compile_features(srtbeatinferbeatthis PRIVATE cxx_std_23)
 target_link_libraries(srtbeatinferbeatthis PRIVATE srtbeatinfer_dsp dsinfer::dsinfer stdcorelib::stdcorelib)
-set_target_properties(srtbeatinferbeatthis PROPERTIES PREFIX "" DEBUG_POSTFIX "" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins/$<CONFIG>/beat-this" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins/$<CONFIG>/beat-this")
+set_target_properties(srtbeatinferbeatthis PROPERTIES
+    PREFIX "" DEBUG_POSTFIX ""
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins/$<CONFIG>/beat-this"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins/$<CONFIG>/beat-this"
+)
+
 stdc_add_plugin_metadata(TARGET srtbeatinferbeatthis IID org.openvpi.synthrt.plugin.InferenceInterpreter)
 set(SRTBEATINFER_PLUGIN_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/plugins/beat-this/plugin.json" CACHE INTERNAL "srtbeatinfer plugin manifest")
+
 if(DSSP_INSTALL)
     install(TARGETS srtbeatinfer RUNTIME DESTINATION "${DSSP_INSTALL_RUNTIME_DIR}" LIBRARY DESTINATION "${DSSP_INSTALL_LIBRARY_DIR}")
     install(TARGETS srtbeatinferbeatthis RUNTIME DESTINATION "${DSSP_INSTALL_PLUGINS_DIR}/srtbeatinfer/inferenceinterpreters/beat-this" LIBRARY DESTINATION "${DSSP_INSTALL_PLUGINS_DIR}/srtbeatinfer/inferenceinterpreters/beat-this")

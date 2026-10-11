@@ -87,6 +87,7 @@ namespace dssp::tests {
             ASSERT_TRUE(created) << (created ? "" : created.error().formatChain());
             implementation = *created;
         }
+
         TestFiles files;
         std::shared_ptr<inference::Environment> environment;
         arch::ArchitecturePtr implementation;
@@ -141,6 +142,7 @@ namespace dssp::tests {
             ASSERT_TRUE(*japanese);
             EXPECT_EQ((**japanese).languages.at("eng").name, "英語");
         }
+
         EXPECT_EQ(ids, (std::set<std::string>{"example/singers=1.0:singer/first", "example/singers=1.0:singer/second", "example/singers=2.0:singer/first", "example/singers=2.0:singer/second"}));
         const auto repeated = arch_diffsinger::SingerCatalog::discover(environment);
         ASSERT_TRUE(repeated);
@@ -288,6 +290,7 @@ namespace dssp::tests {
                 }
             });
         }
+
         workers.clear();
         EXPECT_EQ(failures.load(), 0U);
     }

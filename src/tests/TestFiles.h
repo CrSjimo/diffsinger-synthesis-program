@@ -20,14 +20,17 @@ namespace dssp::tests {
             EXPECT_TRUE(std::filesystem::create_directory(path_, error));
             EXPECT_FALSE(error);
         }
+
         ~TestFiles() {
             std::error_code error;
             std::filesystem::remove_all(path_, error);
             EXPECT_FALSE(error);
         }
+
         TestFiles(const TestFiles &) = delete;
         TestFiles &operator=(const TestFiles &) = delete;
         const std::filesystem::path &path() const { return path_; }
+
         void write(const std::filesystem::path &relative, std::string_view bytes) const {
             const auto file = path_ / relative;
             std::error_code error;
@@ -38,6 +41,7 @@ namespace dssp::tests {
             stream.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
             ASSERT_TRUE(stream);
         }
+
     private:
         std::filesystem::path path_;
     };

@@ -22,14 +22,18 @@ namespace dssp::tests {
         std::string_view id() const noexcept override { return id_; }
         arch::CatalogResult<arch::ArchitectureMetadata> metadata(const arch::CatalogOptions &) const override { return arch::ArchitectureMetadata{id_, "test architecture", {}}; }
         arch::CatalogResult<std::vector<arch::SingerInfo>> singers(const arch::CatalogOptions &) const override { return std::vector<arch::SingerInfo>{}; }
+
         arch::CatalogResult<std::optional<arch::SingerInfo>> singer(const arch::ResourceQuery &query) const override { return onSinger ? onSinger(query) : arch::CatalogResult<std::optional<arch::SingerInfo>>{std::optional<arch::SingerInfo>{}}; }
         arch::CatalogResult<std::string> avatar(const arch::SingerMediaQuery &query) const override { return onAvatar ? onAvatar(query) : arch::CatalogResult<std::string>{std::string{}}; }
         arch::CatalogResult<std::string> background(const arch::SingerMediaQuery &query) const override { return onBackground ? onBackground(query) : arch::CatalogResult<std::string>{std::string{}}; }
         arch::CatalogResult<std::vector<arch::SingerDemoAudio>> demoAudio(const arch::SingerMediaQuery &query) const override { return onDemoAudio ? onDemoAudio(query) : arch::CatalogResult<std::vector<arch::SingerDemoAudio>>{std::vector<arch::SingerDemoAudio>{}}; }
+
         arch::CatalogResult<std::vector<arch::GroupMetadata>> groups(const arch::CatalogOptions &options) const override { return onGroups ? onGroups(options) : arch::CatalogResult<std::vector<arch::GroupMetadata>>{std::vector<arch::GroupMetadata>{}}; }
         arch::CatalogResult<std::optional<arch::GroupMetadata>> group(const arch::ResourceQuery &query) const override { return onGroup ? onGroup(query) : arch::CatalogResult<std::optional<arch::GroupMetadata>>{std::optional<arch::GroupMetadata>{}}; }
         arch::CatalogResult<std::vector<arch::SingerInfo>> groupSingers(const arch::ResourceQuery &) const override { return std::vector<arch::SingerInfo>{}; }
+
         std::expected<std::string, arch::EnvironmentErrors> envTag(arch::MultiSingerContext) const override { return std::string{}; }
+
         void pronunciation(arch::PronunciationInput input, std::stop_token stop, arch::Completion<arch::PronunciationOutput> completion) const override {
             if (onPronunciation) {
                 onPronunciation(std::move(input), stop, std::move(completion));
@@ -37,6 +41,7 @@ namespace dssp::tests {
             }
             complete(stop, std::move(completion));
         }
+
         void phoneme(arch::PhonemeInput, std::stop_token stop, arch::Completion<arch::PhonemeOutput> completion) const override { complete(stop, std::move(completion)); }
         void duration(arch::DurationInput, std::stop_token stop, arch::Completion<arch::DurationOutput> completion) const override { complete(stop, std::move(completion)); }
         void parameter(arch::ParameterInput, std::stop_token stop, arch::Completion<arch::ParameterOutput> completion) const override { complete(stop, std::move(completion)); }
@@ -59,6 +64,7 @@ namespace dssp::tests {
                 completion(Output{});
             }
         }
+
         const std::string id_;
     };
 

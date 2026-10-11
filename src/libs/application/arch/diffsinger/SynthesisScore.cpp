@@ -9,6 +9,7 @@ namespace dssp::arch_diffsinger {
         bool reserved(const SingerRecord &singer, std::string_view token) {
             return std::ranges::find(singer.reservedPhonemes, token) != singer.reservedPhonemes.end();
         }
+
         template <class Phoneme>
         double startOf(const Phoneme &phone) {
             if constexpr (requires { phone.start; }) {
@@ -16,11 +17,13 @@ namespace dssp::arch_diffsinger {
             }
             return 0;
         }
+
         template <class Note>
         arch::SynthesisResult<SynthesisScore> buildScore(const SingerRecord &singer, const arch::Piece<Note> &piece) {
             if (!std::isfinite(piece.pieceDuration) || piece.pieceDuration < 0) {
                 return fail<arch::SynthesisErrors>(arch::InvalidInputError("Piece duration must be finite and nonnegative"));
             }
+
             SynthesisScore result;
             double end = 0;
             const auto appendRest = [&](double start, double duration, const std::string &language) {
@@ -30,17 +33,20 @@ namespace dssp::arch_diffsinger {
                 result.words.push_back(std::move(word));
                 result.origins.push_back({start, {std::nullopt}});
             };
+
             for (std::size_t i = 0; i < piece.notes.size(); ++i) {
                 const auto &note = piece.notes[i];
                 const auto label = "Note " + std::to_string(i);
                 if (!std::isfinite(note.position.gap) || note.position.gap < 0 || !std::isfinite(note.position.duration) || note.position.duration < 0 || note.cent > 12800) {
                     return fail<arch::SynthesisErrors>(arch::InvalidInputError(label + " requires finite nonnegative gap/duration and cent in [0,12800]"));
                 }
+
                 const double start = end + note.position.gap;
                 const double nextEnd = start + note.position.duration;
                 if (!std::isfinite(nextEnd) || nextEnd > piece.pieceDuration + 1e-9 * std::max(1.0, piece.pieceDuration)) {
                     return fail<arch::SynthesisErrors>(arch::InvalidInputError(label + " ends beyond piece duration " + std::to_string(piece.pieceDuration)));
                 }
+
                 result.noteStarts.push_back(start);
                 result.phonemeCounts.push_back(note.phonemes.size());
                 const bool rest = reserved(singer, note.pronunciation);
@@ -57,19 +63,23 @@ namespace dssp::arch_diffsinger {
                 if (note.kind != arch::NoteKind::Normal) {
                     return fail<arch::SynthesisErrors>(arch::InvalidInputError(label + " has an unknown note kind"));
                 }
+
                 const auto language = note.language.empty() ? singer.info.defaultLanguage : note.language;
                 if (note.position.gap > 0) {
                     appendRest(end, note.position.gap, language);
                 }
+
                 const auto onset = std::ranges::find_if(note.phonemes, [](const auto &phone) { return phone.onset; });
                 if (!rest && (note.phonemes.empty() || onset == note.phonemes.end())) {
                     return fail<arch::SynthesisErrors>(arch::InvalidInputError(label + " has no singing phoneme group marked with onset"));
                 }
+
                 const std::size_t header = rest ? 0 : static_cast<std::size_t>(onset - note.phonemes.begin());
                 if (header && result.words.empty()) {
                     // A zero-length head word carries anticipation without adding time.
                     appendRest(0, 0, language);
                 }
+
                 Common::InputWordInfo word;
                 word.notes.push_back(nativeNote);
                 WordOrigins origins{start, {}};
@@ -88,6 +98,7 @@ namespace dssp::arch_diffsinger {
                         origins.phonemes.push_back(PhonemeOrigin{i, j});
                     }
                 }
+
                 if (rest && word.phones.empty()) {
                     word.phones.push_back({note.pronunciation, language, 0, 0, {}});
                     origins.phonemes.push_back(std::nullopt);
@@ -100,15 +111,19 @@ namespace dssp::arch_diffsinger {
                 result.origins.push_back(std::move(origins));
                 end = nextEnd;
             }
+
             if (end < piece.pieceDuration) {
                 appendRest(end, piece.pieceDuration - end, singer.info.defaultLanguage);
             }
+
             return result;
         }
+
         std::vector<double> weightsAt(std::span<const std::vector<double>> mix, double rate, std::size_t sources, double time) {
             if (sources == 1) {
                 return {1};
             }
+
             const double position = std::clamp(time * rate, 0.0, static_cast<double>(mix.size() - 1));
             const auto left = static_cast<std::size_t>(position);
             const auto right = std::min(left + 1, mix.size() - 1);
@@ -118,18 +133,21 @@ namespace dssp::arch_diffsinger {
                 result[i] = std::lerp(mix[left][i], mix[right][i], position - static_cast<double>(left));
                 sum += result[i];
             }
+
             result.back() = 1 - sum;
             return result;
         }
     }
 
     arch::SynthesisResult<SynthesisScore> synthesisScore(const SingerRecord &singer, const arch::Piece<arch::DurationNote> &piece) { return buildScore(singer, piece); }
+
     arch::SynthesisResult<SynthesisScore> synthesisScore(const SingerRecord &singer, const arch::Piece<arch::ParameterNote> &piece) { return buildScore(singer, piece); }
 
     arch::SynthesisResult<void> validateMix(const SynthesisContext &context, std::span<const std::vector<double>> mix, double rate) {
         if (!std::isfinite(rate) || rate <= 0 || !std::isfinite(1 / rate) || context.sources.empty() || (context.sources.size() > 1 && mix.empty())) {
             return fail<arch::SynthesisErrors>(arch::InvalidInputError("Speaker mix requires a finite positive rate and samples for multiple sources"));
         }
+
         for (std::size_t i = 0; i < mix.size(); ++i) {
             const auto &row = mix[i];
             const double sum = std::accumulate(row.begin(), row.end(), 0.0);
@@ -137,6 +155,7 @@ namespace dssp::arch_diffsinger {
                 return fail<arch::SynthesisErrors>(arch::InvalidInputError("Speaker mix row " + std::to_string(i) + " must contain N-1 finite weights in [0,1] with sum at most 1"));
             }
         }
+
         return {};
     }
 
@@ -145,6 +164,7 @@ namespace dssp::arch_diffsinger {
         if (!valid) {
             return std::unexpected{std::move(valid.error())};
         }
+
         StageScore result{score.words, {}};
         std::vector<std::string> targets;
         for (const auto &source : context.sources) {
@@ -156,6 +176,7 @@ namespace dssp::arch_diffsinger {
             if (!record.usesSpeakers) {
                 return result;
             }
+
             auto target = source.speaker;
             if (!record.speakerMapping.empty()) {
                 const auto mapping = record.speakerMapping.find(target);
@@ -169,6 +190,7 @@ namespace dssp::arch_diffsinger {
             }
             targets.push_back(std::move(target));
         }
+
         const auto mappedWeights = [&](double time) {
             const auto weights = weightsAt(mix, rate, targets.size(), time);
             std::map<std::string, double> mapped;
@@ -177,6 +199,7 @@ namespace dssp::arch_diffsinger {
             }
             return mapped;
         };
+
         for (std::size_t i = 0; i < result.words.size(); ++i) {
             for (auto &phone : result.words[i].phones) {
                 for (const auto &[speaker, weight] : mappedWeights(score.origins[i].start + phone.start)) {
@@ -184,6 +207,7 @@ namespace dssp::arch_diffsinger {
                 }
             }
         }
+
         const auto rows = std::max<std::size_t>(mix.size(), 1);
         std::map<std::string, std::vector<double>> curves;
         for (std::size_t i = 0; i < rows; ++i) {
@@ -191,9 +215,11 @@ namespace dssp::arch_diffsinger {
                 curves[speaker].push_back(weight);
             }
         }
+
         for (auto &[speaker, values] : curves) {
             result.speakers.push_back({std::move(speaker), 1 / rate, std::move(values)});
         }
+
         return result;
     }
 
@@ -205,10 +231,12 @@ namespace dssp::arch_diffsinger {
         if (durations.size() != count || std::ranges::any_of(durations, [](double value) { return !std::isfinite(value) || value < 0; })) {
             return fail<arch::SynthesisErrors>(arch::OperationError("Duration inference returned invalid durations or a phoneme count different from " + std::to_string(count)));
         }
+
         arch::DurationOutput result;
         for (const auto count : score.phonemeCounts) {
             result.notes.push_back({std::vector<arch::DurationOutputPhoneme>(count)});
         }
+
         std::size_t index = 0;
         for (std::size_t i = 0; i < score.words.size(); ++i) {
             double start = score.origins[i].start;
@@ -222,6 +250,7 @@ namespace dssp::arch_diffsinger {
                 }
             }
         }
+
         return result;
     }
 }

@@ -12,6 +12,7 @@ namespace dssp::http {
         using ErrorType::ErrorType;
         std::string_view kind() const noexcept override { return "dssp.http.uri-syntax"; }
     };
+
     using UriErrors = ErrorSet<UriSyntaxError, HttpBoundaryError>;
 
     // RFC 3986 syntax and presence of a scheme only. Scheme negotiation and

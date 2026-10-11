@@ -5,12 +5,14 @@
 namespace dssp::http {
     namespace {
         stdc::LogCategory log("dssp.http.Response");
+
         drogon::HttpResponsePtr problem(int status, std::string_view type, std::string_view title, std::string detail, const RequestLog &context, const std::vector<FieldIssue> *issues = nullptr) {
             Json::Value body;
             body["type"] = std::string("urn:dssp:error:") + std::string(type);
             body["title"] = std::string(title);
             body["status"] = status;
             body["detail"] = std::move(detail);
+
             if (issues) {
                 body["errors"] = Json::Value(Json::arrayValue);
                 for (const auto &issue : *issues) {
@@ -21,16 +23,19 @@ namespace dssp::http {
                     body["errors"].append(std::move(value));
                 }
             }
+
             auto response = jsonResponse(body, context);
             if (response->statusCode() != drogon::k200OK) {
                 return response;
             }
+
             response->setStatusCode(static_cast<drogon::HttpStatusCode>(status));
             response->setContentTypeString("application/problem+json");
             context.problem(type, title);
             return response;
         }
     }
+
     drogon::HttpResponsePtr jsonResponse(const Json::Value &body, const RequestLog &context) {
         try {
             auto response = drogon::HttpResponse::newHttpJsonResponse(body);
@@ -49,6 +54,7 @@ namespace dssp::http {
             return response;
         }
     }
+
     drogon::HttpResponsePtr problemResponse(const ValidationError &error, const RequestLog &context) {
         auto response = problem(422, "validation", "Invalid request", error.message(), context, &error.issues());
         if (response->statusCode() == drogon::k422UnprocessableEntity) {
@@ -65,8 +71,10 @@ namespace dssp::http {
             }
             context.problem("validation", reason);
         }
+
         return response;
     }
+
     drogon::HttpResponsePtr problemResponse(const RequestErrors &errors, const RequestLog &context) {
         const auto visitor = Overload{
             [&context](const MalformedJsonError &e) {
@@ -84,8 +92,10 @@ namespace dssp::http {
                 log.stdcCritical("%1 HTTP adapter failed: %2", context.description(), quoteLogValue(e.formatChain(), 8192));
                 return problem(500, "http-boundary", "Internal server error", "HTTP payload processing failed", context);
             }};
+
         return errors.visit(visitor);
     }
+
     drogon::HttpResponsePtr problemResponse(int status, std::string_view type, std::string_view title, std::string detail, const RequestLog &context) {
         return problem(status, type, title, std::move(detail), context);
     }

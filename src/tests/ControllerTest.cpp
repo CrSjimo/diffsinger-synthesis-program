@@ -134,6 +134,7 @@ namespace dssp::tests {
             api_v1::SynthesisController controller(lifetime, testCatalog({implementation}));
             startCoroutine(controller.pronunciation(jsonRequest(R"({"context":{"arch":"injected","archExtra":null,"singer":{"id":"singer-A","extra":null}},"input":{"notes":[]}})"), [&](const auto &value) { response = value; }));
         }
+
         ASSERT_TRUE(pending);
         EXPECT_EQ(response, nullptr);
         EXPECT_FALSE(observed.expired());
@@ -169,6 +170,7 @@ namespace dssp::tests {
             EXPECT_TRUE(response->getJsonObject()->isArray());
             EXPECT_TRUE(response->getJsonObject()->empty());
         }
+
         for (const auto handler : {&api_v1::CatalogController::groupSingers, &api_v1::CatalogController::demoAudio}) {
             response.reset();
             (controller.*handler)(request, [&](const auto &r) { response = r; }, "diffsinger", "unknown");
@@ -177,6 +179,7 @@ namespace dssp::tests {
             EXPECT_TRUE(response->getJsonObject()->isArray());
             EXPECT_TRUE(response->getJsonObject()->empty());
         }
+
         controller.background(request, [&](const auto &r) { response = r; }, "diffsinger", "unknown");
         ASSERT_NE(response, nullptr);
         EXPECT_EQ(response->statusCode(), drogon::k200OK);
@@ -191,6 +194,7 @@ namespace dssp::tests {
             startCoroutine(controller.audio(request, [&](const auto &r) { response = r; }));
             return response->statusCode();
         };
+
         EXPECT_EQ(status(jsonRequest("{")), drogon::k400BadRequest);
         EXPECT_EQ(status(jsonRequest("")), drogon::k400BadRequest);
         EXPECT_EQ(status(jsonRequest("{}")), drogon::k422UnprocessableEntity);
@@ -258,6 +262,7 @@ namespace dssp::tests {
             EXPECT_NE(response, nullptr);
             return response;
         };
+
         const auto envTag = call(&api_v1::SynthesisController::envTag, multi, nullptr);
         ASSERT_NE(envTag, nullptr);
         EXPECT_EQ((*envTag->getJsonObject())["envTag"].asString(), "");
@@ -269,6 +274,7 @@ namespace dssp::tests {
             EXPECT_TRUE((*response->getJsonObject())["output"]["notes"].isArray());
             EXPECT_TRUE((*response->getJsonObject())["output"]["notes"].empty());
         }
+
         const auto parameters = call(&api_v1::SynthesisController::parameter, multi, piece);
         ASSERT_NE(parameters, nullptr);
         EXPECT_EQ(parameters->statusCode(), drogon::k200OK);

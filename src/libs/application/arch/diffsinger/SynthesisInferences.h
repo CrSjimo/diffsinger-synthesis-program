@@ -11,6 +11,7 @@ namespace dssp::arch_diffsinger {
         Acoustic,
         Vocoder
     };
+
     std::string_view stageName(SynthesisStage);
     std::string synthesisCacheGroup(SynthesisStage);
     std::expected<std::string, inference::ExecutionError> synthesisInferenceKey(const SingerRecord &, SynthesisStage);

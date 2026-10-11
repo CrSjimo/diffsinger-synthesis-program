@@ -9,10 +9,12 @@ endforeach()
 # Only binaries beside plugin metadata are inputs. In particular, the ONNX
 # Runtime payload is a separate bundle and must retain its own layout.
 set(_plugins)
+
 foreach(_family IN ITEMS dsinfer wolf otter srtsepinfer srtbeatinfer)
     if(NOT IS_DIRECTORY "${plugin_root}/${_family}")
         message(FATAL_ERROR "Inference plugin directory is missing: ${plugin_root}/${_family}")
     endif()
+
     file(GLOB_RECURSE _manifests LIST_DIRECTORIES FALSE "${plugin_root}/${_family}/plugin.json")
     foreach(_manifest IN LISTS _manifests)
         get_filename_component(_directory "${_manifest}" DIRECTORY)
@@ -25,6 +27,7 @@ foreach(_family IN ITEMS dsinfer wolf otter srtsepinfer srtbeatinfer)
         list(APPEND _plugins ${_binaries})
     endforeach()
 endforeach()
+
 if(NOT _plugins)
     message(FATAL_ERROR "No inference plugin binaries found under ${plugin_root}")
 endif()

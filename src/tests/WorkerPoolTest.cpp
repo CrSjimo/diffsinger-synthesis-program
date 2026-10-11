@@ -13,6 +13,7 @@ namespace dssp::tests {
         for (unsigned i = 0; i < 128; ++i) {
             ASSERT_TRUE(pool->dispatch([&] { ++completed; }));
         }
+
         pool->shutdown();
         EXPECT_EQ(completed.load(), 128U);
         EXPECT_FALSE(pool->dispatch([&] { ++completed; }));
@@ -29,6 +30,7 @@ namespace dssp::tests {
                 ASSERT_TRUE((*created)->dispatch([&] { ++completed; }));
             }
         }
+
         EXPECT_EQ(completed.load(), 128U);
     }
 }

@@ -20,6 +20,7 @@ namespace dssp::inference {
                     return selected;
                 }
             }
+
             const auto &defaultText = text.text();
             return defaultText.empty() ? std::string(fallback) : defaultText;
         } catch (const std::exception &error) {

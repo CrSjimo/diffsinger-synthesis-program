@@ -20,6 +20,7 @@ namespace dssp::arch_diffsinger {
             }
             return "UnrecognizedError";
         }
+
         std::size_t sliceEndpoint(std::optional<std::int64_t> endpoint, std::size_t count, std::size_t fallback) {
             if (!endpoint) {
                 return fallback;
@@ -27,6 +28,7 @@ namespace dssp::arch_diffsinger {
             if (*endpoint >= 0) {
                 return std::min(static_cast<std::uint64_t>(*endpoint), static_cast<std::uint64_t>(count));
             }
+
             // This also handles INT64_MIN without overflowing its negation.
             const auto distance = static_cast<std::uint64_t>(-(*endpoint + 1)) + 1;
             return distance > count ? 0 : count - distance;
@@ -37,6 +39,7 @@ namespace dssp::arch_diffsinger {
         if (word.error == G2PError::InvalidInput || word.error == G2PError::PhonemeGenerationFailed) {
             return arch::Pronunciation{lyric, {lyric}};
         }
+
         if (word.error != G2PError::None) {
             return fail<arch::SynthesisErrors>(arch::OperationError("Pronunciation inference failed", std::make_shared<const ExternalError>(std::string(errorCode(word.error)), NativeDiagnostic{"wolf", "G2P word conversion", std::string(errorCode(word.error))})));
         }
@@ -47,6 +50,7 @@ namespace dssp::arch_diffsinger {
         if (word.mode != Mode::Copy && word.mode != Mode::Convert) {
             return fail<arch::SynthesisErrors>(arch::OperationError("Pronunciation inference returned an invalid conversion mode"));
         }
+
         arch::Pronunciation result{word.pronunciation, {}};
         for (const auto &candidate : word.candidates) {
             const auto trimmed = stdc::str::trim(candidate);
@@ -54,6 +58,7 @@ namespace dssp::arch_diffsinger {
                 result.candidates.emplace_back(trimmed);
             }
         }
+
         // The editor treats dictionary phoneme fragments as one complete
         // pronunciation, rather than offering individual phonemes as alternatives.
         const auto tokens = stdc::str::split(std::string_view(result.pronunciation), " ");
@@ -68,12 +73,15 @@ namespace dssp::arch_diffsinger {
             }
             result.candidates.insert(result.candidates.begin(), result.pronunciation);
         }
+
         return result;
     }
+
     std::vector<arch::Phoneme> slicePhonemes(std::vector<arch::Phoneme> phonemes, const arch::PronunciationNote &note) {
         if (phonemes.empty() || (!note.syllableSliceStart && !note.syllableSliceEnd)) {
             return phonemes;
         }
+
         std::vector<std::size_t> boundaries{0};
         bool foundOnset = false;
         for (std::size_t i = 0; i < phonemes.size(); ++i) {
@@ -84,6 +92,7 @@ namespace dssp::arch_diffsinger {
                 foundOnset = true;
             }
         }
+
         const auto count = boundaries.size();
         boundaries.push_back(phonemes.size());
         const auto start = sliceEndpoint(note.syllableSliceStart, count, 0);
@@ -91,11 +100,13 @@ namespace dssp::arch_diffsinger {
         if (start >= end) {
             return {};
         }
+
         std::vector<arch::Phoneme> result;
         result.reserve(boundaries[end] - boundaries[start]);
         for (auto i = boundaries[start]; i < boundaries[end]; ++i) {
             result.push_back(std::move(phonemes[i]));
         }
+
         return result;
     }
 }

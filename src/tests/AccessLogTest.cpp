@@ -32,6 +32,7 @@ namespace dssp::tests {
             EXPECT_NE(message.find("client="), std::string::npos);
             EXPECT_NE(message.find("outcome=response"), std::string::npos);
         }
+
         EXPECT_EQ(capture.accessRecords().size(), 3U);
     }
 

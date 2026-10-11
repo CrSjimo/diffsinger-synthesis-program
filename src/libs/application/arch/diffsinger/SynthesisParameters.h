@@ -14,6 +14,7 @@ namespace dssp::arch_diffsinger {
         double minimum;
         double maximum;
     };
+
     const ParameterDefinition *parameterDefinition(std::string_view);
     double engineValue(const ParameterDefinition &, double normalized);
     double normalizedValue(const ParameterDefinition &, double engine);

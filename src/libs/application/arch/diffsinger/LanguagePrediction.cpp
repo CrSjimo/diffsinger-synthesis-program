@@ -28,24 +28,30 @@ namespace dssp::arch_diffsinger {
             }
             return arch::SynthesisErrors{arch::OperationError("Language inference failed", error.asError().clone())};
         }
+
         arch::SynthesisResult<const SingerRecord *> contextSinger(const SingerCatalog &catalog, const arch::SingleSingerContext &context) {
             auto options = synthesisOptions(context.archExtra);
             if (!options) {
                 return std::unexpected{std::move(options.error())};
             }
+
             auto source = singerSource(catalog, context.singer);
             if (!source) {
                 return std::unexpected{std::move(source.error())};
             }
+
             return source->singer;
         }
+
         bool reserved(const SingerRecord &singer, const std::string &word) {
             return std::ranges::find(singer.reservedPhonemes, word) != singer.reservedPhonemes.end();
         }
+
         const inference::LanguageRoute *routeFor(const SingerRecord &singer, const std::string &language) {
             const auto found = singer.languages.find(language.empty() ? singer.info.defaultLanguage : language);
             return found == singer.languages.end() ? nullptr : &found->second;
         }
+
         template <class Executive, class InitArgs, class RuntimeOptions>
         std::expected<inference::InferenceHandle, inference::ExecutionError> bind(inference::InferencePool &pool, const srt::ContribImport &imported, const inference::LanguageRoute &route) {
             try {
@@ -53,12 +59,14 @@ namespace dssp::arch_diffsinger {
                 if (!binding || binding->state() != srt::ContribImportBinding::Active) {
                     return std::unexpected{inference::ExecutionError("Language inference import is not active")};
                 }
+
                 auto options = std::make_shared<RuntimeOptions>(binding->target().variant());
                 srt::JsonObject effective;
                 if constexpr (requires { options->binding; }) {
                     options->binding = route.binding;
                     effective = {{"language", route.binding.language}, {"scheme", route.binding.scheme}};
                 }
+
                 return pool.bindImport<Executive, InitArgs>(imported, std::move(options), effective);
             } catch (const std::exception &error) {
                 return std::unexpected{inference::ExecutionError("Cannot read language inference binding", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"wolf/synthrt", "read inference runtime options", "exception"}))};
@@ -72,6 +80,7 @@ namespace dssp::arch_diffsinger {
             Request(std::shared_ptr<const SingerCatalog> catalog, std::stop_token external, arch::Completion<Output> complete, Output output, std::size_t pending)
                 : catalog(std::move(catalog)), complete(std::move(complete)), output(std::move(output)), pending(pending), cancellation(external, [source = stop]() mutable { source.request_stop(); }) {}
             std::shared_ptr<const SingerCatalog> catalog;
+
             arch::Completion<Output> complete;
             Output output;
             std::size_t pending;
@@ -102,20 +111,24 @@ namespace dssp::arch_diffsinger {
                     }
                     done = reply.has_value();
                 }
+
                 if (reply) {
                     if (!*reply) {
                         stop.request_stop();
                     }
+
                     complete(std::move(*reply));
                 }
             }
         };
+
         struct PronunciationBatch {
             const inference::LanguageRoute *route;
             inference::InferenceHandle handle;
             std::vector<std::size_t> indices;
             std::shared_ptr<G2P::G2PStartInput> input = std::make_shared<G2P::G2PStartInput>();
         };
+
         struct PhonemeTask {
             const inference::LanguageRoute *route;
             inference::InferenceHandle s2p;
@@ -123,6 +136,7 @@ namespace dssp::arch_diffsinger {
             std::size_t index;
             arch::PronunciationNote note;
         };
+
         using PhonemeRequest = Request<arch::PhonemeOutput>;
 
         void finishPhoneme(const std::shared_ptr<PhonemeRequest> &request, const PhonemeTask &task, std::vector<std::string> tokens, std::vector<bool> onsets) {
@@ -133,12 +147,14 @@ namespace dssp::arch_diffsinger {
             }
             request->finish<arch::PhonemeNote>({task.index}, std::vector<arch::PhonemeNote>{{slicePhonemes(std::move(phones), task.note)}});
         }
+
         drogon::Task<> predictOnset(inference::InferencePool &pool, std::shared_ptr<PhonemeRequest> request, PhonemeTask task, std::vector<std::string> tokens) {
             if (tokens.empty() || !task.onset) {
                 auto onsets = std::vector<bool>(tokens.size(), false);
                 finishPhoneme(request, task, std::move(tokens), std::move(onsets));
                 co_return;
             }
+
             auto input = std::make_shared<Onset::OnsetStartInput>();
             input->phonemes.push_back(std::move(tokens));
             const auto handle = task.onset;
@@ -158,16 +174,19 @@ namespace dssp::arch_diffsinger {
             complete(fail<arch::SynthesisErrors>(arch::CancelledError("Pronunciation request was cancelled")));
             return;
         }
+
         const auto singer = contextSinger(*catalog, input.context);
         if (!singer) {
             complete(std::unexpected{singer.error()});
             return;
         }
+
         const auto pool = catalog->environment()->inferences("diffsinger-pronunciation");
         if (!pool) {
             complete(fail<arch::SynthesisErrors>(arch::OperationError("Language cache group is unavailable", pool.error().clone())));
             return;
         }
+
         arch::PronunciationOutput output;
         output.notes.resize(input.notes.size());
         std::vector<PronunciationBatch> batches;
@@ -178,6 +197,7 @@ namespace dssp::arch_diffsinger {
             if (note.lyric.empty()) {
                 continue;
             }
+
             const auto *route = routeFor(**singer, note.language);
             if (reserved(**singer, note.lyric)) {
                 output.notes[i] = {note.lyric, {note.lyric}};
@@ -188,6 +208,7 @@ namespace dssp::arch_diffsinger {
                 ++fallbackCount;
                 continue;
             }
+
             auto [group, inserted] = groups.emplace(route, batches.size());
             if (inserted) {
                 auto handle = bind<G2P::G2PExecutive, G2P::G2PInitArgs, G2P::G2PRuntimeOptions>(**pool, *route->g2p, *route);
@@ -201,11 +222,13 @@ namespace dssp::arch_diffsinger {
             batch.indices.push_back(i);
             batch.input->lyrics.push_back(note.lyric);
         }
+
         log.stdcTrace("Pronunciation singer=%1 notes=%2 batches=%3 unavailable_language_fallbacks=%4", (*singer)->info.id, input.notes.size(), batches.size(), fallbackCount);
         if (batches.empty()) {
             complete(stop.stop_requested() ? arch::SynthesisResult<arch::PronunciationOutput>{fail<arch::SynthesisErrors>(arch::CancelledError("Pronunciation request was cancelled"))} : arch::SynthesisResult<arch::PronunciationOutput>{std::move(output)});
             return;
         }
+
         const auto request = std::make_shared<Request<arch::PronunciationOutput>>(std::move(catalog), stop, std::move(complete), std::move(output), batches.size());
         for (auto &batch : batches) {
             const auto nativeInput = batch.input;
@@ -220,6 +243,7 @@ namespace dssp::arch_diffsinger {
                     request->finish<arch::Pronunciation>(batch.indices, fail<arch::SynthesisErrors>(arch::OperationError("Pronunciation inference returned an incomplete result")));
                     co_return;
                 }
+
                 std::vector<arch::Pronunciation> notes;
                 notes.reserve(batch.indices.size());
                 std::size_t fallbackCount = 0;
@@ -233,32 +257,38 @@ namespace dssp::arch_diffsinger {
                     fallbackCount += word.error != G2P::Error::None;
                     notes.push_back(std::move(*converted));
                 }
+
                 log.stdcTrace("Pronunciation language=%1 batch completed notes=%2 word_fallbacks=%3", batch.route->binding.language, notes.size(), fallbackCount);
                 request->finish<arch::Pronunciation>(batch.indices, std::move(notes));
             });
         }
     }
+
     void predictPhoneme(std::shared_ptr<const SingerCatalog> catalog, arch::PhonemeInput input, std::stop_token stop, arch::Completion<arch::PhonemeOutput> complete) {
         if (stop.stop_requested()) {
             complete(fail<arch::SynthesisErrors>(arch::CancelledError("Phoneme request was cancelled")));
             return;
         }
+
         const auto singer = contextSinger(*catalog, input.context);
         if (!singer) {
             complete(std::unexpected{singer.error()});
             return;
         }
+
         const auto pool = catalog->environment()->inferences("diffsinger-phoneme");
         if (!pool) {
             complete(fail<arch::SynthesisErrors>(arch::OperationError("Language cache group is unavailable", pool.error().clone())));
             return;
         }
+
         arch::PhonemeOutput output;
         const auto onsetPool = catalog->environment()->inferences("diffsinger-onset");
         if (!onsetPool) {
             complete(fail<arch::SynthesisErrors>(arch::OperationError("Onset cache group is unavailable", onsetPool.error().clone())));
             return;
         }
+
         output.notes.resize(input.notes.size());
         std::vector<PhonemeTask> tasks;
         std::size_t fallbackCount = 0;
@@ -271,16 +301,19 @@ namespace dssp::arch_diffsinger {
                 output.notes[i].phonemes = slicePhonemes({{note.pronunciation, true}}, note);
                 continue;
             }
+
             const auto *route = routeFor(**singer, note.language);
             if (!route || !route->s2p) {
                 ++fallbackCount;
                 continue;
             }
+
             auto s2p = bind<S2P::S2PExecutive, S2P::S2PInitArgs, S2P::S2PRuntimeOptions>(**pool, *route->s2p, *route);
             if (!s2p) {
                 complete(fail<arch::SynthesisErrors>(arch::OperationError("Cannot bind phoneme inference", s2p.error().clone())));
                 return;
             }
+
             inference::InferenceHandle onset;
             if (route->onset) {
                 auto handle = bind<Onset::OnsetExecutive, Onset::OnsetInitArgs, Onset::OnsetRuntimeOptions>(**onsetPool, *route->onset, *route);
@@ -292,11 +325,13 @@ namespace dssp::arch_diffsinger {
             }
             tasks.push_back({route, std::move(*s2p), std::move(onset), i, note});
         }
+
         log.stdcTrace("Phoneme singer=%1 notes=%2 inference_items=%3 unavailable_language_fallbacks=%4", (*singer)->info.id, input.notes.size(), tasks.size(), fallbackCount);
         if (tasks.empty()) {
             complete(stop.stop_requested() ? arch::SynthesisResult<arch::PhonemeOutput>{fail<arch::SynthesisErrors>(arch::CancelledError("Phoneme request was cancelled"))} : arch::SynthesisResult<arch::PhonemeOutput>{std::move(output)});
             return;
         }
+
         const auto request = std::make_shared<PhonemeRequest>(std::move(catalog), stop, std::move(complete), std::move(output), tasks.size());
         for (auto &task : tasks) {
             auto nativeInput = std::make_shared<S2P::S2PStartInput>();
@@ -312,6 +347,7 @@ namespace dssp::arch_diffsinger {
                     if ((*result)->phonemes[0].empty()) {
                         log.stdcTrace("Phoneme language=%1 conversion returned an empty sequence", task.route->binding.language);
                     }
+
                     co_await predictOnset(*onsetPool, request, std::move(task), std::move((*result)->phonemes[0]));
                 }
             });

@@ -29,12 +29,15 @@ namespace dssp::api_v1::detail {
     inline std::string unknownArchitecture(std::string_view id) {
         return "Unsupported architecture: " + std::string(id);
     }
+
     inline drogon::HttpResponsePtr unknownProcessArchitecture(std::string_view id, const http::RequestLog &context = {}) {
         return http::problemResponse(http::ValidationError({{"/context/arch", "unsupported", unknownArchitecture(id)}}), context);
     }
+
     inline arch::CatalogOptions catalogOptions(const drogon::HttpRequest &request) {
         return {request.getHeader("accept-language")};
     }
+
     struct DtoPresenter {
         template <class T>
         auto operator()(T value) const { return toDto(std::move(value)); }
@@ -46,8 +49,10 @@ namespace dssp::api_v1::detail {
             callback(architectureProblemResponse(result.error(), context));
             return;
         }
+
         callback(http::jsonResponse(toJson(present(std::move(*result))), context));
     }
+
     template <class Parameters, class Method, class Present = DtoPresenter>
     void catalog(const arch::ArchitectureCatalog &architectures, const http::Callback &callback, std::string_view id, Parameters parameters, Method method, Present present = {}, const http::RequestLog &context = {}) {
         const auto selected = architectures.find(id);
@@ -55,8 +60,10 @@ namespace dssp::api_v1::detail {
             callback(architectureProblemResponse(arch::CatalogErrors{arch::ResourceNotFoundError(unknownArchitecture(id))}, context));
             return;
         }
+
         respond(std::invoke(method, *selected, parameters), callback, std::move(present), context);
     }
+
     template <class Method, class Present = DtoPresenter>
     void catalogMedia(const arch::ArchitectureCatalog &architectures, const drogon::HttpRequestPtr &request, const http::Callback &callback, std::string_view id, std::string singer, Method method, Present present = {}) {
         auto query = mediaQuery(*request);
@@ -64,6 +71,7 @@ namespace dssp::api_v1::detail {
             callback(http::problemResponse(widen_errors<http::RequestErrors>(std::move(query.error())), http::requestLog(*request)));
             return;
         }
+
         catalog(architectures, callback, id, arch::SingerMediaQuery{{std::move(singer), catalogOptions(*request)}, toArchitecture(std::move(*query))}, method, std::move(present), http::requestLog(*request));
     }
 
@@ -75,11 +83,13 @@ namespace dssp::api_v1::detail {
             if (!reply->claim()) {
                 return;
             }
+
             try {
                 if (!result) {
                     reply->send(architectureProblemResponse(result.error(), logContext));
                     return;
                 }
+
                 reply->send(http::jsonResponse(toJson(Response{toDto(std::move(*result))}), logContext));
             } catch (const std::exception &error) {
                 const http::RequestErrors failure{http::HttpBoundaryError("Cannot encode an asynchronous HTTP response", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"Drogon/JsonCpp", "encode asynchronous response", "exception"}))};
@@ -87,12 +97,14 @@ namespace dssp::api_v1::detail {
             }
         };
     }
+
     template <class Request, class Response, class Output, class Start>
     drogon::Task<> process(drogon::HttpRequestPtr request, http::Callback callback, std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::shared_ptr<const arch::ArchitectureCatalog> architectures, Start start, std::string_view operation = "synthesis") {
         const auto context = lifetime->track(*request);
         if (context.stopRequested()) {
             co_return;
         }
+
         auto input = request->as<Decoded<Request>>();
         if (context.stopRequested()) {
             co_return;
@@ -101,15 +113,18 @@ namespace dssp::api_v1::detail {
             callback(http::problemResponse(input.error(), context.logContext()));
             co_return;
         }
+
         const auto selected = architectures->find(input->context.arch);
         if (!selected) {
             callback(unknownProcessArchitecture(input->context.arch, context.logContext()));
             co_return;
         }
+
         auto parameters = toArchitecture(std::move(*input));
         if (context.stopRequested()) {
             co_return;
         }
+
         dispatchLog.stdcTrace("%1 operation=%2 dispatching to architecture=%3", context.logContext().description(), operation, selected->id());
         const auto reply = std::make_shared<AsyncReply>(std::move(callback), context, selected, operation);
         auto result = co_await resource::awaitCallback<arch::SynthesisResult<Output>>([selected, parameters = std::move(parameters), context, start](auto complete) mutable {

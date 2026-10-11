@@ -48,6 +48,7 @@ namespace dssp::tests {
             EXPECT_EQ(cache.size(), 0U);
             EXPECT_FALSE(weakOld.expired());
         }
+
         EXPECT_TRUE(weakOld.expired());
     }
 
@@ -62,6 +63,7 @@ namespace dssp::tests {
         for (int i = 0; i < 100; ++i) {
             auto lease = unlimited.insert(i, i);
         }
+
         unlimited.sweep(std::chrono::steady_clock::now() + 24h);
         EXPECT_EQ(unlimited.size(), 100U);
     }
@@ -89,6 +91,7 @@ namespace dssp::tests {
             auto entry = cache->insert(2, std::make_shared<int>(2));
             idle = entry.value();
         }
+
         cache.reset();
         EXPECT_TRUE(idle.expired());
         EXPECT_FALSE(pinned.expired());

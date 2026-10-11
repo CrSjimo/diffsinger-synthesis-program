@@ -17,6 +17,7 @@ namespace dssp {
         inference::EnvironmentOptions options;
         options.cacheGroups = config.inferenceCaches;
         options.packageRoots.push_back(config.packageDir);
+
         // The independently deployed language packages share the same unit and
         // participate in dependency resolution with installed user packages.
         const auto languagePackages = config.resourceDir / "wolf" / "packages";
@@ -31,6 +32,7 @@ namespace dssp {
         } else {
             log.stdcDebug("No optional deployed Wolf package directory; using configured user packages");
         }
+
         options.pluginPaths = {
             {"inference", config.pluginDir / "dsinfer" / "inferenceinterpreters"},
             {"inference", config.pluginDir / "wolf" / "inferenceinterpreters"},
@@ -42,6 +44,7 @@ namespace dssp {
         for (auto &path : architecturePaths) {
             options.pluginPaths.push_back(std::move(path));
         }
+
         options.onnx = inference::OnnxOptions{config.pluginDir / "dsinfer" / "inferencedrivers", config.runtimePath, config.executionProvider, config.deviceIndex};
         return inference::Environment::create(options);
     }

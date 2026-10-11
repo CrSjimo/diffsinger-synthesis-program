@@ -10,10 +10,12 @@ namespace dssp::tests {
             ASSERT_TRUE(result);
             EXPECT_TRUE(*result);
         }
+
         const auto longest = http::matchesMediaTypeName(std::string(127, 'a') + "/" + std::string(127, 'b'));
         ASSERT_TRUE(longest);
         EXPECT_TRUE(*longest);
         const auto tooLong = http::matchesMediaTypeName("audio/" + std::string(128, 'b'));
+
         ASSERT_TRUE(tooLong);
         EXPECT_FALSE(*tooLong);
     }
@@ -25,6 +27,7 @@ namespace dssp::tests {
             ASSERT_TRUE(result);
             EXPECT_FALSE(*result);
         }
+
         const auto nul = http::matchesMediaTypeName(std::string("audio/wav\0ignored", 17));
         ASSERT_TRUE(nul);
         EXPECT_FALSE(*nul);
@@ -37,6 +40,7 @@ namespace dssp::tests {
             ASSERT_TRUE(result);
             EXPECT_TRUE(*result);
         }
+
         for (const auto text : {"", "text/plain", "application/jsonp", "application/json; charset", "application/json;=x", "application/json; note=\"unclosed", "application/json; note=\"bad\nvalue\"", "application/json\r\n"}) {
             SCOPED_TRACE(text);
             const auto result = http::matchesJsonContentType(text);

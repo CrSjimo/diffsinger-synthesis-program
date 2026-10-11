@@ -41,14 +41,17 @@ namespace dssp::inference {
                 for (auto &item : array) {
                     item = resourcePaths(item, spec);
                 }
+
                 return array;
             } else if (value.isObject()) {
                 auto object = value.toObject();
                 for (auto &[key, item] : object) {
                     item = resourcePaths(item, spec);
                 }
+
                 return object;
             }
+
             return value;
         }
 
@@ -58,6 +61,7 @@ namespace dssp::inference {
                 if (!entry.binding()) {
                     continue;
                 }
+
                 const auto &target = entry.binding()->target();
                 const auto id = resourceId(target);
                 srt::JsonValue options = entry.manifestOptions();
@@ -69,6 +73,7 @@ namespace dssp::inference {
                     value.erase("speakerMapping");
                     options = std::move(value);
                 }
+
                 const auto renamed = roleNames.find(entry.role());
                 imports.push_back(srt::JsonObject{{"role", renamed == roleNames.end() ? entry.role() : renamed->second}, {"target", id}, {"options", std::move(options)}});
                 if (!nodes.contains(id)) {
@@ -81,6 +86,7 @@ namespace dssp::inference {
                     };
                 }
             }
+
             std::ranges::sort(imports, [](const auto &left, const auto &right) { return left.toObject().find("role")->second.toString() < right.toObject().find("role")->second.toString(); });
             return imports;
         }
@@ -114,6 +120,7 @@ namespace dssp::inference {
             ERR_error_string_n(code, message.data(), message.size());
             return std::unexpected{ResourceError("Cannot compute the resource fingerprint", std::make_shared<const ExternalError>(message.data(), NativeDiagnostic{"OpenSSL", "EVP_Digest(SHA256)", "OpenSSL", static_cast<std::int64_t>(code)}))};
         }
+
         const codecutil::HexEncodingView encoded(std::span(digest.data(), length));
         return std::string(encoded.begin(), encoded.end());
     }

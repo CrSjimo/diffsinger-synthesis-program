@@ -46,6 +46,7 @@ namespace dssp::http {
             std::weak_ptr<trantor::TcpConnection> connection;
             std::weak_ptr<RequestContext::State> state;
         };
+
         std::mutex mutex_;
         std::map<std::uint64_t, Entry> requests_;
         std::uint64_t nextId_ = 0;

@@ -20,6 +20,7 @@ namespace dssp::api_v1::detail {
     class AsyncReply {
     public:
         AsyncReply(http::Callback callback, http::RequestContext context, std::shared_ptr<const void> implementation, std::string_view operation) : callback_(std::move(callback)), context_(std::move(context)), implementation_(std::move(implementation)), operation_(operation) {}
+
         bool claim() {
             if (completed_.test_and_set(std::memory_order_acq_rel)) {
                 replyLog.stdcWarning("%1 operation=%2 discarded a duplicate backend completion", context_.logContext().description(), operation_);
@@ -30,6 +31,7 @@ namespace dssp::api_v1::detail {
             }
             return true;
         }
+
         void send(const drogon::HttpResponsePtr &response) const {
             if (!context_.stopRequested()) {
                 // This callback now runs on an inference worker. Drogon's

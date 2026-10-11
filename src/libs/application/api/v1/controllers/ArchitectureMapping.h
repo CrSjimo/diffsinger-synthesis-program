@@ -52,8 +52,10 @@ namespace dssp::api_v1 {
         for (auto &value : values) {
             result.push_back(toArchitecture(std::move(value)));
         }
+
         return result;
     }
+
     template <class T>
     auto toDto(std::vector<T> values) {
         std::vector<decltype(toDto(std::declval<T>()))> result;
@@ -61,21 +63,26 @@ namespace dssp::api_v1 {
         for (auto &value : values) {
             result.push_back(toDto(std::move(value)));
         }
+
         return result;
     }
+
     template <class T>
     auto toDto(std::optional<T> value) {
         using Result = std::optional<decltype(toDto(std::declval<T>()))>;
         return value ? Result{toDto(std::move(*value))} : Result{};
     }
+
     template <class T>
     auto toDto(std::map<std::string, T> values) {
         std::map<std::string, decltype(toDto(std::declval<T>()))> result;
         for (auto &[key, value] : values) {
             result.emplace(key, toDto(std::move(value)));
         }
+
         return result;
     }
+
     template <class T>
     auto toDto(arch::NotesOutput<T> output) {
         return dto::NotesOutput<decltype(toDto(std::declval<T>()))>{toDto(std::move(output.notes))};

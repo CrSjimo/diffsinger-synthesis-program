@@ -24,6 +24,7 @@ set(DSSP_INSTALL_LIBRARY_DIR lib)
 set(DSSP_INSTALL_PLUGINS_DIR "${DSSP_INSTALL_LIBRARY_DIR}/plugins")
 set(DSSP_INSTALL_SHARE_DIR share)
 set(DSSP_INSTALL_DATA_DIR "${DSSP_INSTALL_SHARE_DIR}")
+
 # Each library publishes its own complete flatcase prefix.
 set(DSSP_INSTALL_INCLUDE_DIR include)
 

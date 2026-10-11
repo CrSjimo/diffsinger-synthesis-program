@@ -50,17 +50,20 @@ namespace dssp::inference {
             if (!extension.runtimeApi.ortApi || extension.runtimeApi.ortApiVersion != ORT_API_VERSION) {
                 return std::unexpected{InitializationError("The ONNX driver exposes an incompatible runtime API")};
             }
+
             const auto &api = *extension.runtimeApi.ortApi;
             char **providers = nullptr;
             int count = 0;
             if (auto *status = api.GetAvailableProviders(&providers, &count)) {
                 return std::unexpected{InitializationError("Cannot query ONNX Runtime execution providers", ortError(api, status, "GetAvailableProviders"))};
             }
+
             auto releaseProviders = stdc::make_scope_guard([&] {
                 if (auto *status = api.ReleaseAvailableProviders(providers, count)) {
                     api.ReleaseStatus(status);
                 }
             });
+
             const char *wanted = "CPUExecutionProvider";
             switch (options.executionProvider) {
                 case runtime::ExecutionProvider::CPU: break;
@@ -68,11 +71,13 @@ namespace dssp::inference {
                 case runtime::ExecutionProvider::DirectML: wanted = "DmlExecutionProvider"; break;
                 case runtime::ExecutionProvider::CoreML: wanted = "CoreMLExecutionProvider"; break;
             }
+
             bool found = false;
             for (int i = 0; i < count; ++i) {
                 log.stdcTrace("ONNX Runtime advertises execution provider %1", providers[i]);
                 found = found || std::string_view(providers[i]) == wanted;
             }
+
             auto *released = api.ReleaseAvailableProviders(providers, count);
             releaseProviders.dismiss();
             if (released) {
@@ -84,12 +89,14 @@ namespace dssp::inference {
             if (options.deviceIndex < 0 || (options.executionProvider == runtime::ExecutionProvider::CPU && options.deviceIndex != 0)) {
                 return std::unexpected{InitializationError("Invalid execution provider device index")};
             }
+
             // Verify provider options without opening any model session. This also
             // diagnoses a missing CUDA provider DLL instead of waiting for synthesis.
             OrtSessionOptions *sessionOptions = nullptr;
             if (auto *status = api.CreateSessionOptions(&sessionOptions)) {
                 return std::unexpected{InitializationError("Cannot create ONNX provider options", ortError(api, status, "CreateSessionOptions"))};
             }
+
             const auto releaseSessionOptions = stdc::make_scope_guard([&] { api.ReleaseSessionOptions(sessionOptions); });
             OrtStatus *status = nullptr;
             const auto releaseProviderStatus = stdc::make_scope_guard([&] {
@@ -97,6 +104,7 @@ namespace dssp::inference {
                     api.ReleaseStatus(status);
                 }
             });
+
             if (options.executionProvider == runtime::ExecutionProvider::CUDA) {
                 OrtCUDAProviderOptionsV2 *cudaOptions = nullptr;
                 status = api.CreateCUDAProviderOptions(&cudaOptions);
@@ -155,6 +163,7 @@ namespace dssp::inference {
             std::filesystem::path path;
             std::size_t rootIndex;
         };
+
         std::expected<std::vector<DiscoveredPackage>, InitializationError> discover(const std::vector<std::filesystem::path> &roots, std::vector<PackageProblem> &problems) {
             namespace fs = std::filesystem;
             std::set<fs::path> visited;
@@ -164,12 +173,14 @@ namespace dssp::inference {
                 if (log.isLevelEnabled(stdc::Logger::Trace)) {
                     log.stdcTrace("Scanning package root %1 (priority %2)", stdc::path::to_utf8(root), rootIndex);
                 }
+
                 const auto previousCount = directories.size();
                 std::set<fs::path> found;
                 std::error_code error;
                 if (!fs::is_directory(root, error)) {
                     return std::unexpected{InitializationError("Package discovery root is not a directory: " + stdc::path::to_utf8(root), error ? nativeError(error, "is_directory") : Error::Ptr{})};
                 }
+
                 std::vector<fs::path> pending{root};
                 while (!pending.empty()) {
                     auto directory = std::move(pending.back());
@@ -181,6 +192,7 @@ namespace dssp::inference {
                         problems.push_back({directory, std::move(problem)});
                         continue;
                     }
+
                     error.clear();
                     if (manifest) {
                         auto canonical = fs::canonical(directory, error);
@@ -196,6 +208,7 @@ namespace dssp::inference {
                         found.insert(std::move(canonical));
                         continue;
                     }
+
                     fs::directory_iterator iterator(directory, error), end;
                     while (!error && iterator != end) {
                         const auto status = iterator->symlink_status(error);
@@ -214,6 +227,7 @@ namespace dssp::inference {
                         problems.push_back({directory, std::move(problem)});
                     }
                 }
+
                 for (const auto &directory : found) {
                     if (visited.insert(directory).second) {
                         directories.push_back({directory, rootIndex});
@@ -221,8 +235,10 @@ namespace dssp::inference {
                         log.stdcTrace("Ignoring package directory already discovered in an earlier root: %1", stdc::path::to_utf8(directory));
                     }
                 }
+
                 log.stdcDebug("Package root %1 contributed %2 new declarations (%3 candidates)", rootIndex, directories.size() - previousCount, found.size());
             }
+
             return directories;
         }
     }
@@ -280,6 +296,7 @@ namespace dssp::inference {
                 if (onnx.runtimePath.filename() != runtimeFile) {
                     return std::unexpected{InitializationError("The ONNX driver requires a runtime library named " + std::string(runtimeFile))};
                 }
+
                 const std::filesystem::path driverPaths[] = {onnx.driverPath};
                 if (log.isLevelEnabled(stdc::Logger::Debug)) {
                     log.stdcDebug("ONNX driver directory: %1; runtime library: %2", stdc::path::to_utf8(onnx.driverPath), stdc::path::to_utf8(onnx.runtimePath));
@@ -289,10 +306,12 @@ namespace dssp::inference {
                 if (!loader) {
                     return std::unexpected{InitializationError("The ONNX inference driver plugin was not found")};
                 }
+
                 auto created = impl->drivers.create(loader);
                 if (!created) {
                     return std::unexpected{InitializationError("Cannot create the ONNX inference driver", nativeError(created.error(), "InferenceDriverFactory::create"))};
                 }
+
                 auto driver = created.take();
                 ds::Api::Onnx::DriverInitArgs args;
                 args.ep = providerFor(onnx.executionProvider);
@@ -302,26 +321,32 @@ namespace dssp::inference {
                 if (!initialized) {
                     return std::unexpected{InitializationError("Cannot initialize the ONNX inference driver", nativeError(initialized.error(), "InferenceDriver::initialize"))};
                 }
+
                 const auto *extension = dynamic_cast<const ds::Api::Onnx::DriverExtension *>(driver->extension());
                 if (!extension || extension->ep != args.ep || extension->deviceIndex != args.deviceIndex) {
                     return std::unexpected{InitializationError("The ONNX driver did not retain the requested provider/device")};
                 }
+
                 auto checked = checkProvider(*extension, onnx);
                 if (!checked) {
                     return std::unexpected{std::move(checked.error())};
                 }
+
                 auto added = impl->unit.addRuntimeService(std::move(driver));
                 if (!added) {
                     return std::unexpected{InitializationError("Cannot register the ONNX runtime service", nativeError(added.error(), "SynthUnit::addRuntimeService"))};
                 }
+
                 log.stdcInfo("Initialized inference provider %1 on device %2", runtime::DeviceInfo::executionProviderToString(onnx.executionProvider), onnx.deviceIndex);
             } else {
                 log.stdcDebug("Creating a declaration-only environment without an ONNX runtime service");
             }
+
             auto directories = discover(options.packageRoots, impl->problems);
             if (!directories) {
                 return std::unexpected{std::move(directories.error())};
             }
+
             std::vector<srt::PackageHandle> declarations;
             std::map<std::pair<std::string, stdc::VersionNumber>, std::filesystem::path> identities;
             std::map<std::pair<std::size_t, std::string>, std::filesystem::path> packageParents;
@@ -339,14 +364,17 @@ namespace dssp::inference {
                     impl->problems.push_back({directory, std::move(problem)});
                     continue;
                 }
+
                 auto package = parsed.take();
                 if (log.isLevelEnabled(stdc::Logger::Trace)) {
                     log.stdcTrace("Parsed package %1@%2 from root %3", package.id(), package.version().toString(), entry.rootIndex);
                 }
+
                 const auto identity = std::make_pair(package.id(), package.version());
                 if (const auto [it, inserted] = identities.emplace(identity, directory); !inserted) {
                     return std::unexpected{InitializationError("Duplicate package " + package.id() + "@" + package.version().toString() + " in " + stdc::path::to_utf8(it->second) + " and " + stdc::path::to_utf8(directory))};
                 }
+
                 // SynthUnit gives search path precedence over version selection.
                 // Preserve the configured root precedence. Within one root, all
                 // versions of an ID share a parent so the loader can select the
@@ -359,6 +387,7 @@ namespace dssp::inference {
                 }
                 declarations.push_back(std::move(package));
             }
+
             impl->unit.setPackagePaths(searchPaths);
             log.stdcDebug("Resolving %1 package declarations using %2 dependency search directories", declarations.size(), searchPaths.size());
             if (log.isLevelEnabled(stdc::Logger::Trace)) {
@@ -366,6 +395,7 @@ namespace dssp::inference {
                     log.stdcTrace("Dependency search directory: %1", stdc::path::to_utf8(path));
                 }
             }
+
             for (const auto &declaration : declarations) {
                 // An earlier root may already have committed this dependency.
                 if (auto loaded = impl->unit.findLoadedPackage(declaration.id(), declaration.version())) {
@@ -387,15 +417,18 @@ namespace dssp::inference {
                 }
                 impl->packages.push_back(loaded.take());
             }
+
             // Keep dependencies that were committed even if they were not direct roots.
             impl->packages = impl->unit.loadedPackages();
             std::ranges::sort(impl->packages, [](const auto &left, const auto &right) { return std::make_pair(left.id(), left.version()) < std::make_pair(right.id(), right.version()); });
+
             if (options.onnx && options.onnx->executionProvider == runtime::ExecutionProvider::DirectML) {
                 auto gate = resource::ExecutionGate::create("dssp-inference/directml");
                 if (!gate) return std::unexpected{InitializationError("Cannot create DirectML execution admission", gate.error().clone())};
                 impl->serialExecution = std::move(*gate);
                 log.stdcInfo("DirectML inference execution is serialized; whitelisted backend-free tasks may run concurrently");
             }
+
             for (const auto &[group, cache] : impl->cacheOptions) {
                 auto pool = InferencePool::create(group, cache, impl->serialExecution);
                 if (!pool) {
@@ -403,6 +436,7 @@ namespace dssp::inference {
                 }
                 impl->pools.emplace(group, std::move(*pool));
             }
+
             log.stdcInfo("Package catalogue ready: %1 available packages, %2 rejected entries", impl->packages.size(), impl->problems.size());
             return std::shared_ptr<Environment>(new Environment(std::move(impl)));
         } catch (const std::exception &error) {
@@ -411,39 +445,50 @@ namespace dssp::inference {
     }
 
     Environment::Environment(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+
     Environment::~Environment() { shutdown(); }
+
     srt::SynthUnit &Environment::unit() const noexcept { return impl_->unit; }
+
     std::expected<InferencePool *, InitializationError> Environment::inferences(std::string_view group) {
         const std::lock_guard lock(impl_->poolsMutex);
         if (impl_->stopped) {
             return std::unexpected{InitializationError("Inference environment has been shut down")};
         }
+
         const auto found = impl_->pools.find(std::string(group));
         if (found != impl_->pools.end()) {
             return found->second.get();
         }
+
         auto pool = InferencePool::create(std::string(group), {}, impl_->serialExecution);
         if (!pool) {
             return std::unexpected{std::move(pool.error())};
         }
+
         auto *result = pool->get();
         impl_->pools.emplace(group, std::move(*pool));
         return result;
     }
+
     void Environment::shutdown() {
         std::call_once(impl_->shutdownOnce, [&] {
             {
                 const std::lock_guard lock(impl_->poolsMutex);
                 impl_->stopped = true;
             }
+
             if (impl_->serialExecution) impl_->serialExecution->close();
             for (const auto &[group, pool] : impl_->pools) {
                 pool->shutdown();
             }
+
             if (impl_->serialExecution) impl_->serialExecution->shutdown();
         });
     }
+
     const std::vector<srt::PackageHandle> &Environment::packages() const noexcept { return impl_->packages; }
+
     const std::vector<PackageProblem> &Environment::problems() const noexcept { return impl_->problems; }
 
 }

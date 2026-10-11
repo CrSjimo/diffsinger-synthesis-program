@@ -19,6 +19,7 @@ namespace dssp::http {
                 if (!pattern->ok()) {
                     return std::unexpected{HttpBoundaryError("Media type validator initialization failed", std::make_shared<ExternalError>(pattern->error(), NativeDiagnostic{"re2", "compile media type pattern", "re2", pattern->error_code()}))};
                 }
+
                 return pattern;
             } catch (const std::exception &error) {
                 return std::unexpected{HttpBoundaryError("Media type validator initialization failed", std::make_shared<ExternalError>(error.what(), NativeDiagnostic{"re2", "compile media type pattern", "exception"}))};
@@ -29,6 +30,7 @@ namespace dssp::http {
             if (!pattern) {
                 return std::unexpected{pattern.error()};
             }
+
             try {
                 return re2::RE2::FullMatch(absl::string_view(text.data(), text.size()), **pattern);
             } catch (const std::exception &error) {

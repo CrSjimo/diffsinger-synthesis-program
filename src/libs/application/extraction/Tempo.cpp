@@ -9,6 +9,7 @@ namespace dssp::extraction {
         struct Request {
             Request(std::shared_ptr<const ExtractorCatalog> catalog, const ExtractorRecord &record, std::shared_ptr<resource::TaskExecutor> tasks, std::stop_token externalStop, Completion<TempoOutput> complete)
                 : catalog(std::move(catalog)), record(record), tasks(std::move(tasks)), complete(std::move(complete)), cancel(externalStop, [this] { stop.request_stop(); }) {}
+
             std::shared_ptr<const ExtractorCatalog> catalog;
             const ExtractorRecord &record;
             std::shared_ptr<resource::TaskExecutor> tasks;
@@ -22,6 +23,7 @@ namespace dssp::extraction {
                 complete(std::move(result));
             }
         };
+
         drogon::Task<bool> background(std::shared_ptr<Request> request) {
             auto ready = co_await request->tasks->resume(request->stop.get_token());
             if (!ready) {
@@ -33,9 +35,11 @@ namespace dssp::extraction {
                 request->finish(fail<ExtractionErrors>(CancelledError("Tempo extraction was cancelled")));
                 co_return false;
             }
+
             co_return true;
         }
     }
+
     void extractTempo(std::shared_ptr<const ExtractorCatalog> catalog, const ExtractorRecord &record, std::shared_ptr<resource::TaskExecutor> tasks, Input input, std::stop_token stop, Completion<TempoOutput> complete) {
         const auto request = std::make_shared<Request>(std::move(catalog), record, std::move(tasks), stop, std::move(complete));
         drogon::async_run([request, input = std::move(input)]() mutable -> drogon::Task<> {
@@ -52,6 +56,7 @@ namespace dssp::extraction {
                 request->finish(fail<ExtractionErrors>(InvalidInputError("Tempo extractor requires " + std::to_string(request->record.sampleRate) + " Hz audio")));
                 co_return;
             }
+
             const auto frames = audio->samples.size() / audio->channelCount;
             const auto duration = static_cast<double>(frames) / audio->sampleRate;
             Beat::BeatStartInput native;
@@ -63,6 +68,7 @@ namespace dssp::extraction {
                 for (int channel = 0; channel < audio->channelCount; ++channel) value += audio->samples[frame * audio->channelCount + channel];
                 native.audio.samples[frame] = static_cast<float>(value / audio->channelCount);
             }
+
             audio->samples.clear();
             // Beat tracking uses uninterrupted audio; silence slicing would lose measure context.
             auto result = co_await request->record.pool->useCoro<Beat::BeatExecutive>(request->record.resource, request->stop.get_token(), [&native](Beat::BeatExecutive &executive, std::stop_token token) -> inference::ExecutionResult<std::unique_ptr<Beat::BeatResult>> {
@@ -79,6 +85,7 @@ namespace dssp::extraction {
                 else request->finish(fail<ExtractionErrors>(OperationError("Tempo inference failed for " + request->record.id, result.error().asError().clone())));
                 co_return;
             }
+
             TempoOutput output;
             double previous = -1;
             for (const auto &beat : (*result)->beats) {
@@ -89,6 +96,7 @@ namespace dssp::extraction {
                 output.beats.push_back({beat.time, beat.downbeat});
                 previous = beat.time;
             }
+
             request->finish(std::move(output));
         });
     }

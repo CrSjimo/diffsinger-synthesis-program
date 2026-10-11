@@ -23,10 +23,12 @@ namespace dssp::arch_diffsinger {
             ParameterDefinition{"tone_shift", "tone_shift", 0.5, -1200, 1200}
         };
     }
+
     const ParameterDefinition *parameterDefinition(std::string_view id) {
         const auto found = std::ranges::find(definitions, id, &ParameterDefinition::id);
         return found == definitions.end() ? nullptr : &*found;
     }
+
     double engineValue(const ParameterDefinition &definition, double value) {
         if (definition.id == "pitch") {
             return value * 128;
@@ -49,6 +51,7 @@ namespace dssp::arch_diffsinger {
         }
         return value;
     }
+
     double normalizedValue(const ParameterDefinition &definition, double value) {
         if (definition.id == "pitch") {
             return value / 128;
@@ -70,18 +73,22 @@ namespace dssp::arch_diffsinger {
         }
         return value;
     }
+
     arch::SynthesisResult<std::size_t> sampleCount(double duration, double rate) {
         const double count = std::ceil(duration * rate);
         if (!std::isfinite(duration) || duration < 0 || !std::isfinite(rate) || rate <= 0 || !std::isfinite(1 / rate) || !std::isfinite(count) || count >= static_cast<double>(std::numeric_limits<std::int64_t>::max()) || count >= static_cast<double>(std::vector<double>{}.max_size())) {
             return fail<arch::SynthesisErrors>(arch::InvalidInputError("Curve duration and sample rate do not define an addressable sampling grid"));
         }
+
         return static_cast<std::size_t>(count);
     }
+
     arch::SynthesisResult<Common::InputParameterInfo> parameterCurve(std::string_view id, std::span<const double> values, double rate, double duration) {
         const auto *definition = parameterDefinition(id);
         if (!definition) {
             return fail<arch::SynthesisErrors>(arch::InvalidInputError("Unknown DiffSinger parameter: " + std::string(id)));
         }
+
         auto count = sampleCount(duration, rate);
         if (!count) {
             return std::unexpected{std::move(count.error())};
@@ -89,6 +96,7 @@ namespace dssp::arch_diffsinger {
         if (std::ranges::any_of(values, [](double value) { return !std::isfinite(value) || value < 0 || value > 1; })) {
             return fail<arch::SynthesisErrors>(arch::InvalidInputError("Parameter " + std::string(id) + " requires finite normalized values in [0,1]"));
         }
+
         Common::InputParameterInfo result;
         result.tag = ds::ParamTag(std::string(definition->tag));
         result.interval = 1 / rate;
@@ -101,11 +109,14 @@ namespace dssp::arch_diffsinger {
             // Include the endpoint needed to interpolate the last model frame.
             result.values.resize(*count + 1, definition->defaultValue);
         }
+
         for (auto &value : result.values) {
             value = engineValue(*definition, value);
         }
+
         return result;
     }
+
     arch::SynthesisResult<Common::InputParameterInfo::RetakeRange> parameterRetake(const arch::ParameterRetake &retake, double rate, double duration, const arch::IndirectParameter *capability) {
         auto count = sampleCount(duration, rate);
         if (!count) {
@@ -120,17 +131,21 @@ namespace dssp::arch_diffsinger {
         if (retake.length && capability->retakeMode == arch::ParameterRetakeMode::Full && (retake.position != 0 || retake.length != *count)) {
             return fail<arch::SynthesisErrors>(arch::InvalidInputError("This parameter supports only a full-piece retake"));
         }
+
         return Common::InputParameterInfo::RetakeRange{static_cast<double>(retake.position) / rate, static_cast<double>(retake.position + retake.length) / rate};
     }
+
     arch::SynthesisResult<arch::ParameterOutputParameter> parameterOutput(std::string_view id, std::span<const double> values, double interval, double duration) {
         const auto *definition = parameterDefinition(id);
         if (!definition || !std::isfinite(interval) || interval <= 0 || !std::isfinite(1 / interval)) {
             return fail<arch::SynthesisErrors>(arch::OperationError("Inference returned an unknown parameter or invalid interval for " + std::string(id)));
         }
+
         const double frames = std::round(duration / interval);
         if (!std::isfinite(frames) || frames < 0 || frames != static_cast<double>(values.size())) {
             return fail<arch::SynthesisErrors>(arch::OperationError("Inference returned an incorrect full-curve length for parameter " + std::string(id)));
         }
+
         arch::ParameterOutputParameter result{{}, 1 / interval};
         result.values.reserve(values.size());
         std::size_t clipped = 0;
@@ -142,11 +157,14 @@ namespace dssp::arch_diffsinger {
             clipped += bounded != value;
             result.values.push_back(std::clamp(normalizedValue(*definition, bounded), 0.0, 1.0));
         }
+
         if (clipped) {
             log.stdcWarning("Clipped %1 of %2 predicted values for parameter %3 to its public range", clipped, values.size(), id);
         }
+
         return result;
     }
+
     double curveValue(const Common::InputParameterInfo &curve, double time, bool preserveVoicing) {
         const double position = std::clamp(time / curve.interval, 0.0, static_cast<double>(curve.values.size() - 1));
         const auto left = static_cast<std::size_t>(position);
@@ -157,11 +175,13 @@ namespace dssp::arch_diffsinger {
         }
         return std::lerp(curve.values[left], curve.values[right], position - static_cast<double>(left));
     }
+
     arch::SynthesisResult<Common::InputParameterInfo> effectivePitch(const Common::InputParameterInfo &pitch, const Common::InputParameterInfo *toneShift, double duration, double interval) {
         auto count = sampleCount(duration, 1 / interval);
         if (!count) {
             return std::unexpected{std::move(count.error())};
         }
+
         Common::InputParameterInfo result;
         result.tag = Common::Tags::Pitch;
         result.interval = interval;
@@ -174,15 +194,19 @@ namespace dssp::arch_diffsinger {
             const double original = curveValue(pitch, time, true);
             result.values.push_back(original <= 0 ? 0 : original + (toneShift ? curveValue(*toneShift, time) / 100 : 0));
         }
+
         if (result.values.empty()) {
             result.values.push_back(0);
         }
+
         return result;
     }
+
     arch::SynthesisResult<std::vector<float>> vocoderF0(const Common::InputParameterInfo &pitch, std::size_t frames, double interval) {
         if (!std::isfinite(interval) || interval <= 0 || pitch.values.empty() || !std::isfinite(pitch.interval) || pitch.interval <= 0) {
             return fail<arch::SynthesisErrors>(arch::OperationError("Cannot align original singing pitch to the acoustic frame grid"));
         }
+
         std::vector<float> result;
         result.reserve(frames);
         for (std::size_t i = 0; i < frames; ++i) {
@@ -193,6 +217,7 @@ namespace dssp::arch_diffsinger {
             }
             result.push_back(static_cast<float>(hz));
         }
+
         return result;
     }
 }

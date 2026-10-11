@@ -18,6 +18,7 @@ namespace dssp::extraction {
         struct Request {
             Request(std::shared_ptr<const ExtractorCatalog> catalog, const ExtractorRecord &record, std::shared_ptr<resource::TaskExecutor> tasks, std::stop_token externalStop, Completion<SeparationOutput> complete)
                 : catalog(std::move(catalog)), record(record), tasks(std::move(tasks)), complete(std::move(complete)), cancel(externalStop, [this] { stop.request_stop(); }) {}
+
             std::shared_ptr<const ExtractorCatalog> catalog;
             const ExtractorRecord &record;
             std::shared_ptr<resource::TaskExecutor> tasks;
@@ -33,6 +34,7 @@ namespace dssp::extraction {
                 complete(std::move(result));
             }
         };
+
         drogon::Task<bool> background(std::shared_ptr<Request> request) {
             auto ready = co_await request->tasks->resume(request->stop.get_token());
             if (!ready) {
@@ -46,8 +48,10 @@ namespace dssp::extraction {
                 request->finish(fail<ExtractionErrors>(CancelledError("Audio separation was cancelled")));
                 co_return false;
             }
+
             co_return true;
         }
+
         std::expected<std::string, OperationError> encode(const Sep::AudioSegment &audio) {
             const drwav_data_format format{drwav_container_riff, DR_WAVE_FORMAT_IEEE_FLOAT, static_cast<drwav_uint32>(audio.channelCount), static_cast<drwav_uint32>(audio.sampleRate), 32};
             if (audio.samples.size() > (std::numeric_limits<std::uint32_t>::max() - 128) / sizeof(float))
@@ -60,6 +64,7 @@ namespace dssp::extraction {
                     drwav_free(bytes, nullptr);
                 return std::unexpected{OperationError("Cannot initialize separation WAV encoder")};
             }
+
             const auto frames = audio.samples.size() / audio.channelCount;
             const auto written = drwav_write_pcm_frames(&writer, frames, audio.samples.data());
             const auto finished = drwav_uninit(&writer);
@@ -70,6 +75,7 @@ namespace dssp::extraction {
             return "data:audio/wav;base64," + std::string(encoded.begin(), encoded.end());
         }
     }
+
     void extractSeparation(std::shared_ptr<const ExtractorCatalog> catalog, const ExtractorRecord &record, std::shared_ptr<resource::TaskExecutor> tasks, SeparationInput input, std::stop_token stop, Completion<SeparationOutput> complete) {
         auto request = std::make_shared<Request>(std::move(catalog), record, std::move(tasks), stop, std::move(complete));
         drogon::async_run([request, input = std::move(input)]() mutable -> drogon::Task<> {
@@ -83,6 +89,7 @@ namespace dssp::extraction {
                 request->finish(fail<ExtractionErrors>(InvalidInputError("acceptableFormats does not accept the separated audio format audio/wav")));
                 co_return;
             }
+
             auto audio = media::readWaveDataUrl(input.audioUrl, request->stop.get_token());
             input.audioUrl.clear();
             if (request->stop.stop_requested()) {
@@ -100,6 +107,7 @@ namespace dssp::extraction {
                 request->finish(fail<ExtractionErrors>(InvalidInputError("Extractor " + request->record.id + " requires " + std::to_string(request->record.sampleRate) + " Hz, " + std::to_string(request->record.channelCount) + " channel audio")));
                 co_return;
             }
+
             const auto expectedSamples = audio->samples.size();
             Sep::SeparationStartInput native;
             native.audio = {audio->sampleRate, audio->channelCount, std::move(audio->samples), 0};
@@ -128,6 +136,7 @@ namespace dssp::extraction {
                 request->finish(fail<ExtractionErrors>(OperationError("Separator returned an unexpected track count")));
                 co_return;
             }
+
             SeparationOutput output;
             for (std::size_t i = 0; i < (*result)->tracks.size(); ++i) {
                 if (request->stop.stop_requested()) {
@@ -146,6 +155,7 @@ namespace dssp::extraction {
                 }
                 output.tracks.push_back({std::move(track.id), std::move(*url)});
             }
+
             request->finish(std::move(output));
         });
     }

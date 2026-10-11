@@ -44,12 +44,15 @@ namespace dssp::api_v1 {
     inline Json::Value toJson(const std::string &value) {
         return value;
     }
+
     inline Json::Value toJson(double value) {
         return value;
     }
+
     inline Json::Value toJson(bool value) {
         return value;
     }
+
     template <std::integral T>
         requires(!std::same_as<T, bool>)
     Json::Value toJson(T value) {
@@ -59,6 +62,7 @@ namespace dssp::api_v1 {
             return Json::UInt64(value);
         }
     }
+
     template <class T>
     Json::Value toJson(const std::vector<T> &values);
     template <class T>
@@ -76,26 +80,32 @@ namespace dssp::api_v1 {
         for (const auto &value : values) {
             result.append(toJson(value));
         }
+
         return result;
     }
+
     template <class T>
     Json::Value toJson(const std::map<std::string, T> &values) {
         Json::Value result(Json::objectValue);
         for (const auto &[key, value] : values) {
             result[key] = toJson(value);
         }
+
         return result;
     }
+
     template <class T>
     Json::Value toJson(const std::optional<T> &value) {
         return value ? toJson(*value) : Json::Value{};
     }
+
     template <class T>
     Json::Value toJson(const dto::Response<T> &value) {
         Json::Value result(Json::objectValue);
         result["output"] = toJson(value.output);
         return result;
     }
+
     template <class T>
     Json::Value toJson(const dto::NotesOutput<T> &value) {
         Json::Value result(Json::objectValue);

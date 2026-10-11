@@ -29,28 +29,43 @@ namespace dssp::tests {
         class TestExecutive final : public Executive {
         public:
             using Hook = std::function<std::unique_ptr<Result>(const Input &)>;
+
             TestExecutive(srt::InferenceSpec &spec, Hook hook) : Executive(spec), hook_(std::move(hook)) {}
+
             srt::Expected<void> initialize(const Init &) override { return {}; }
+
             srt::Expected<std::unique_ptr<Result>> start(const Input &input) override {
                 state_ = srt::ITask::Running;
                 auto result = hook_(input);
                 state_ = srt::ITask::Succeeded;
                 return result;
             }
-            srt::Expected<void> startAsync(std::shared_ptr<const Input> input, typename Executive::AsyncCallback callback) override { callback(start(*input)); return {}; }
+
+            srt::Expected<void> startAsync(std::shared_ptr<const Input> input, typename Executive::AsyncCallback callback) override {
+                callback(start(*input));
+                return {};
+            }
+
             srt::ITask::State state() const noexcept override { return state_; }
-            srt::Expected<void> stop() override { state_ = srt::ITask::Canceled; return {}; }
+
+            srt::Expected<void> stop() override {
+                state_ = srt::ITask::Canceled;
+                return {};
+            }
+
             srt::Expected<void> waitForFinished() override { return {}; }
 
         private:
             Hook hook_;
             std::atomic<srt::ITask::State> state_ = srt::ITask::Idle;
         };
+
         using DurationExecutive = TestExecutive<Du::DurationExecutive, Du::DurationInitArgs, Du::DurationStartInput, Du::DurationResult>;
         using PitchExecutive = TestExecutive<Pi::PitchExecutive, Pi::PitchInitArgs, Pi::PitchStartInput, Pi::PitchResult>;
         using VarianceExecutive = TestExecutive<Va::VarianceExecutive, Va::VarianceInitArgs, Va::VarianceStartInput, Va::VarianceResult>;
         using AcousticExecutive = TestExecutive<Ac::AcousticExecutive, Ac::AcousticInitArgs, Ac::AcousticStartInput, Ac::AcousticResult>;
         using VocoderExecutive = TestExecutive<Vo::VocoderExecutive, Vo::VocoderInitArgs, Vo::VocoderStartInput, Vo::VocoderResult>;
+
         const Common::InputParameterInfo *curve(const std::vector<Common::InputParameterInfo> &parameters, std::string_view tag) {
             const auto found = std::ranges::find_if(parameters, [&](const auto &value) { return value.tag.name() == tag; });
             return found == parameters.end() ? nullptr : &*found;
@@ -88,10 +103,12 @@ namespace dssp::tests {
             singer = &typed->catalog().singers().begin()->second;
             context = {Json::Value(Json::objectValue), {{singer->info.id, Json::Value(Json::objectValue)}}};
         }
+
         void TearDown() override {
             implementation.reset();
             if (environment) environment->shutdown();
         }
+
         template <class Executive>
         void install(Stage stage, typename Executive::Hook hook) {
             const auto key = arch_diffsinger::synthesisInferenceKey(*singer, stage);
@@ -106,6 +123,7 @@ namespace dssp::tests {
             }});
             ASSERT_TRUE(handle);
         }
+
         template <class Output, class Submit>
         arch::SynthesisResult<Output> await(Submit submit) {
             const auto promise = std::make_shared<std::promise<arch::SynthesisResult<Output>>>();
@@ -117,6 +135,7 @@ namespace dssp::tests {
             }
             return future.get();
         }
+
         arch::Piece<arch::ParameterNote> piece() const {
             arch::Piece<arch::ParameterNote> result;
             result.pieceDuration = 0.5;
@@ -129,6 +148,7 @@ namespace dssp::tests {
             result.notes.push_back(note);
             return result;
         }
+
         arch::ParameterInput parameterInput() const {
             arch::ParameterInput input;
             input.context = context;
@@ -138,6 +158,7 @@ namespace dssp::tests {
             input.parameters.emplace("tone_shift", arch::Parameter{{1}, 100, std::nullopt});
             return input;
         }
+
         TestFiles files;
         std::shared_ptr<inference::Environment> environment;
         arch::ArchitecturePtr implementation;
@@ -177,7 +198,11 @@ namespace dssp::tests {
             EXPECT_EQ(input.steps, 20);
             const auto *pitch = curve(input.parameters, "pitch");
             EXPECT_NE(pitch, nullptr);
-            if (pitch && pitch->retake) { EXPECT_DOUBLE_EQ(pitch->retake->start, 0.2); EXPECT_DOUBLE_EQ(pitch->retake->end, 0.4); }
+            if (pitch && pitch->retake) {
+                EXPECT_DOUBLE_EQ(pitch->retake->start, 0.2);
+                EXPECT_DOUBLE_EQ(pitch->retake->end, 0.4);
+            }
+
             auto result = std::make_unique<Pi::PitchResult>();
             result->interval = 0.01;
             result->pitch.assign(50, 80);
@@ -281,6 +306,7 @@ namespace dssp::tests {
             ASSERT_TRUE(pool);
             EXPECT_EQ((*pool)->residentCount(), 1U);
         }
+
         const auto duration = environment->inferences("diffsinger-duration");
         ASSERT_TRUE(duration);
         EXPECT_EQ((*duration)->residentCount(), 0U);

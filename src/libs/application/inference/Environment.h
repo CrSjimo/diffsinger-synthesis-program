@@ -23,12 +23,14 @@ namespace dssp::inference {
         std::string category;
         std::filesystem::path path;
     };
+
     struct OnnxOptions {
         std::filesystem::path driverPath;
         std::filesystem::path runtimePath;
         runtime::ExecutionProvider executionProvider = runtime::ExecutionProvider::CPU;
         int deviceIndex = 0;
     };
+
     struct EnvironmentOptions {
         std::vector<std::filesystem::path> packageRoots;
         std::vector<PluginSearchPath> pluginPaths;
@@ -36,6 +38,7 @@ namespace dssp::inference {
         std::optional<OnnxOptions> onnx;
         std::map<std::string, resource::CacheOptions> cacheGroups;
     };
+
     struct PackageProblem {
         std::filesystem::path path;
         ResourceError error;

@@ -26,6 +26,7 @@ namespace dssp::extraction {
         inference::InferencePool *pool = nullptr;
         inference::InferenceHandle resource;
     };
+
     class ExtractorCatalog final {
     public:
         static std::expected<std::shared_ptr<const ExtractorCatalog>, inference::InitializationError> discover(std::shared_ptr<inference::Environment>);
@@ -36,6 +37,7 @@ namespace dssp::extraction {
 
     private:
         explicit ExtractorCatalog(std::shared_ptr<inference::Environment> environment) : environment_(std::move(environment)) {}
+
         std::shared_ptr<inference::Environment> environment_;
         std::map<std::string, ExtractorRecord, std::less<>> records_;
     };

@@ -18,6 +18,7 @@ namespace dssp::extraction {
         if (samples.empty() || sampleRate <= 0 || !std::isfinite(threshold) || threshold < 0 || !std::isfinite(maximumDuration) || maximumDuration < 0 || !std::isfinite(outputInterval) || outputInterval < 0) {
             return fail<ExtractionErrors>(OperationError("Invalid audio slicing configuration"));
         }
+
         const auto hop = std::max<std::size_t>(1, static_cast<std::size_t>(std::llround(0.010 * sampleRate)));
         const auto window = std::max<std::size_t>(1, static_cast<std::size_t>(std::llround(0.040 * sampleRate)));
         const auto frames = (samples.size() - 1) / hop + 1;
@@ -36,6 +37,7 @@ namespace dssp::extraction {
                 if (stop.stop_requested()) {
                     return fail<ExtractionErrors>(CancelledError("Audio slicing was cancelled"));
                 }
+
                 const auto center = frame * hop;
                 const auto begin = center > window / 2 ? center - window / 2 : 0;
                 const auto end = center + std::min(window - window / 2, samples.size() - center);
@@ -49,6 +51,7 @@ namespace dssp::extraction {
                 }
                 levels.push_back(std::sqrt(std::max(0.0, energy) / static_cast<double>(window)));
             }
+
             std::vector<SampleSpan> silences;
             std::optional<std::size_t> silenceStart;
             std::size_t clipStart = 0;
@@ -75,35 +78,42 @@ namespace dssp::extraction {
                 }
                 silenceStart.reset();
             }
+
             if (silenceStart && frames - *silenceStart >= minInterval) {
                 const auto at = minimum(levels, *silenceStart, std::min(frames, *silenceStart + maxSilence + 1));
                 silences.push_back({at, frames});
             }
+
             std::size_t begin = 0;
             for (const auto &silence : silences) {
                 const auto end = std::min(samples.size(), silence.begin * hop);
                 if (end > begin) spans.push_back({begin, end});
                 begin = std::min(samples.size(), silence.end * hop);
             }
+
             // Preserve the final partial hop unless an actual trailing silence
             // was selected. Analysis frames are not the PCM length.
             if (begin < samples.size() && (silences.empty() || silences.back().end < frames)) {
                 spans.push_back({begin, samples.size()});
             }
         }
+
         if (spans.empty()) spans.push_back({0, samples.size()});
 
         const double grid = outputInterval > 0 ? outputInterval * sampleRate : 1.0;
         if (!std::isfinite(grid) || grid <= 0 || static_cast<double>(samples.size()) / grid > static_cast<double>(std::numeric_limits<std::int64_t>::max() / 2)) {
             return fail<ExtractionErrors>(OperationError("Output frame grid cannot represent this audio"));
         }
+
         const auto boundary = [&](std::uint64_t index) {
             return static_cast<std::size_t>(std::clamp(std::round(static_cast<double>(index) * grid), 0.0, static_cast<double>(samples.size())));
         };
+
         const double limit = maximumDuration > 0 ? std::floor(maximumDuration * sampleRate) : static_cast<double>(samples.size());
         if (!std::isfinite(limit) || limit < 1) {
             return fail<ExtractionErrors>(OperationError("Analyzer maximum duration does not allow a PCM frame"));
         }
+
         const auto maxUnits = static_cast<std::uint64_t>(std::floor(std::min(limit, static_cast<double>(samples.size())) / grid + 1e-10));
         std::vector<SampleSpan> result;
         for (const auto &span : spans) {
@@ -121,6 +131,7 @@ namespace dssp::extraction {
             if (!maxUnits || last <= first) {
                 return fail<ExtractionErrors>(OperationError("Analyzer maximum duration cannot accommodate an aligned output frame"));
             }
+
             const auto units = last - first;
             const auto pieces = (units - 1) / maxUnits + 1;
             auto at = begin;
@@ -135,6 +146,7 @@ namespace dssp::extraction {
                 at = to;
             }
         }
+
         if (result.empty()) return fail<ExtractionErrors>(OperationError("Audio slicing produced no nonempty spans"));
         return result;
     }

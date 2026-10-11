@@ -18,7 +18,9 @@ namespace dssp::resource {
     class ExecutionPermit final {
     public:
         ExecutionPermit(std::function<void()> release, std::stop_token stop) : release_(std::move(release)), stop_(stop) {}
+
         ExecutionPermit(ExecutionPermit &&other) noexcept : release_(std::exchange(other.release_, {})), stop_(other.stop_) {}
+
         ExecutionPermit &operator=(ExecutionPermit &&other) noexcept {
             if (this != &other) {
                 release();
@@ -27,6 +29,7 @@ namespace dssp::resource {
             }
             return *this;
         }
+
         ~ExecutionPermit() { release(); }
         std::stop_token cancellation() const noexcept { return stop_; }
 
@@ -35,6 +38,7 @@ namespace dssp::resource {
         std::function<void()> release_;
         std::stop_token stop_;
     };
+
     using PermitResult = std::expected<ExecutionPermit, TaskCancelledError>;
 
     // Resource-agnostic FIFO admission. Waiters suspend instead of occupying

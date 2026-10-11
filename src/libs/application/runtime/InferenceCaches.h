@@ -14,6 +14,7 @@ namespace dssp::runtime {
         std::string_view environmentPrefix;
         std::string_view description;
     };
+
     inline constexpr std::array InferenceCacheGroups{
         InferenceCacheGroup{"diffsinger-pronunciation", "DSSP_DIFFSINGER_PRONUNCIATION", "DiffSinger pronunciation"},
         InferenceCacheGroup{"diffsinger-phoneme", "DSSP_DIFFSINGER_PHONEME", "DiffSinger phoneme"},
@@ -28,11 +29,13 @@ namespace dssp::runtime {
         InferenceCacheGroup{"extraction-tempo", "DSSP_EXTRACTION_TEMPO", "Tempo extraction"},
         InferenceCacheGroup{"extraction-separation", "DSSP_EXTRACTION_SEPARATION", "Audio separation"}
     };
+
     inline std::map<std::string, resource::CacheOptions> defaultInferenceCaches() {
         std::map<std::string, resource::CacheOptions> result;
         for (const auto &group : InferenceCacheGroups) {
             result.emplace(group.id, resource::CacheOptions{});
         }
+
         return result;
     }
 }

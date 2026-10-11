@@ -26,6 +26,7 @@ namespace dssp::extraction {
         struct Request {
             Request(std::shared_ptr<const ExtractorCatalog> catalog, const ExtractorRecord &record, std::shared_ptr<resource::TaskExecutor> tasks, std::stop_token externalStop, Completion<Output> complete)
                 : catalog(std::move(catalog)), record(record), tasks(std::move(tasks)), complete(std::move(complete)), externalCancel(externalStop, [this] { stop.request_stop(); }) {}
+
             std::shared_ptr<const ExtractorCatalog> catalog;
             const ExtractorRecord &record;
             std::shared_ptr<resource::TaskExecutor> tasks;
@@ -41,6 +42,7 @@ namespace dssp::extraction {
                 if (stop.stop_requested()) result = fail<ExtractionErrors>(CancelledError("Extraction request was cancelled for extractor " + record.id));
                 complete(std::move(result));
             }
+
             void failExecution(const inference::ExecutionErrors &errors) {
                 if (errors.get_if<inference::CancelledError>()) {
                     finish(fail<ExtractionErrors>(CancelledError("Extraction was cancelled for extractor " + record.id, errors.asError().clone())));
@@ -49,6 +51,7 @@ namespace dssp::extraction {
                 }
             }
         };
+
         template <class Output>
         drogon::Task<bool> background(std::shared_ptr<Request<Output>> request) {
             auto ready = co_await request->tasks->resume(request->stop.get_token());
@@ -61,8 +64,10 @@ namespace dssp::extraction {
                 request->finish(fail<ExtractionErrors>(CancelledError("Extraction request was cancelled")));
                 co_return false;
             }
+
             co_return true;
         }
+
         template <class Output>
         bool prepare(const std::shared_ptr<Request<Output>> &request, std::string_view url, double threshold) {
             auto decoded = media::readWaveDataUrl(url, request->stop.get_token());
@@ -82,6 +87,7 @@ namespace dssp::extraction {
                 request->finish(fail<ExtractionErrors>(InvalidInputError("Extractor " + request->record.id + " requires " + std::to_string(request->record.sampleRate) + " Hz audio; received " + std::to_string(decoded->sampleRate) + " Hz")));
                 return false;
             }
+
             otter::Api::Common::L1::AudioSegment audio;
             audio.sampleRate = decoded->sampleRate;
             audio.channelCount = decoded->channelCount;
@@ -95,6 +101,7 @@ namespace dssp::extraction {
                 request->finish(fail<ExtractionErrors>(InvalidInputError("Audio channel averaging produced a nonfinite sample for extractor " + request->record.id)));
                 return false;
             }
+
             // PreparedSamples borrows mono audio and owns downmixed audio. Consume
             // its view before audio is destroyed or its sample buffer is moved.
             if (audio.channelCount == 1) {
@@ -102,6 +109,7 @@ namespace dssp::extraction {
             } else {
                 request->samples.assign(mono->begin(), mono->end());
             }
+
             auto spans = sliceAudio(request->samples, request->record.sampleRate, request->record.maximumDuration, request->record.outputInterval, threshold, request->stop.get_token());
             if (!spans) {
                 if (spans.error().template get_if<CancelledError>()) {
@@ -111,10 +119,12 @@ namespace dssp::extraction {
                 }
                 return false;
             }
+
             request->spans = std::move(*spans);
             log.stdcTrace("Prepared extraction extractor=%1 pcm_frames=%2 sample_rate=%3 spans=%4", request->record.id, request->samples.size(), request->record.sampleRate, request->spans.size());
             return true;
         }
+
         template <class Executive, class InputType, class ResultType, class Output, class Convert>
         void extract(std::shared_ptr<const ExtractorCatalog> catalog, const ExtractorRecord &record, std::shared_ptr<resource::TaskExecutor> tasks, Input input, double threshold, std::stop_token stop, Completion<Output> complete, Convert convert) {
             const auto request = std::make_shared<Request<Output>>(std::move(catalog), record, std::move(tasks), stop, std::move(complete));
@@ -141,6 +151,7 @@ namespace dssp::extraction {
                         if (executive.state() == srt::ITask::Canceled) return fail<inference::ExecutionErrors>(inference::CancelledError("Otter analyzer was cancelled"));
                         results.push_back(std::move(*result));
                     }
+
                     return results;
                 });
                 if (!(co_await background(request))) co_return;
@@ -148,6 +159,7 @@ namespace dssp::extraction {
                     request->failExecution(result.error());
                     co_return;
                 }
+
                 auto output = convert(*request, *result);
                 if (!output) request->finish(fail<ExtractionErrors>(OperationError("Invalid model result from extractor " + request->record.id, output.error().clone())));
                 else request->finish(std::move(*output));
@@ -160,6 +172,7 @@ namespace dssp::extraction {
         std::shared_ptr<resource::TaskExecutor> tasks;
         double threshold = 0.02;
     };
+
     std::expected<std::shared_ptr<Service>, inference::InitializationError> Service::create(std::shared_ptr<inference::Environment> environment, double threshold) {
         if (!std::isfinite(threshold) || threshold < 0) return std::unexpected{inference::InitializationError("Invalid extraction silence threshold")};
         auto catalog = ExtractorCatalog::discover(std::move(environment));
@@ -172,25 +185,33 @@ namespace dssp::extraction {
         impl->threshold = threshold;
         return std::shared_ptr<Service>(new Service(std::move(impl)));
     }
+
     Service::Service(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+
     Service::~Service() = default;
     void Service::shutdown() { impl_->tasks->shutdown(); }
+
     void Service::tempo(Input input, std::stop_token stop, Completion<TempoOutput> complete) const {
         const auto *record = impl_->catalog->find(Kind::Tempo, input.extractor);
         if (!record) {
             complete(fail<ExtractionErrors>(InvalidInputError("Tempo extractor does not exist: " + input.extractor)));
             return;
         }
+
         extractTempo(impl_->catalog, *record, impl_->tasks, std::move(input), stop, std::move(complete));
     }
+
     CatalogResult<ExtractorList> Service::extractors(std::string_view language) const { return impl_->catalog->list(language); }
+
     CatalogResult<ExtractorInfo> Service::extractor(Kind kind, std::string_view id, std::string_view language) const { return impl_->catalog->metadata(kind, id, language); }
+
     void Service::note(Input input, std::stop_token stop, Completion<NoteOutput> complete) const {
         const auto *record = impl_->catalog->find(Kind::Note, input.extractor);
         if (!record) {
             complete(fail<ExtractionErrors>(InvalidInputError("Note extractor does not exist: " + input.extractor)));
             return;
         }
+
         extract<Note::NoteExecutive, Note::NoteStartInput, Note::NoteResult>(impl_->catalog, *record, impl_->tasks, std::move(input), impl_->threshold, stop, std::move(complete), [](const auto &request, const auto &results) -> std::expected<NoteOutput, OperationError> {
             std::vector<Note::NoteInfo> notes;
             for (std::size_t index = 0; index < results.size(); ++index) {
@@ -201,15 +222,18 @@ namespace dssp::extraction {
                     notes.push_back(note);
                 }
             }
+
             return noteOutput(std::move(notes), static_cast<double>(request.samples.size()) / request.record.sampleRate);
         });
     }
+
     void Service::pitch(Input input, std::stop_token stop, Completion<PitchOutput> complete) const {
         const auto *record = impl_->catalog->find(Kind::Pitch, input.extractor);
         if (!record) {
             complete(fail<ExtractionErrors>(InvalidInputError("Pitch extractor does not exist: " + input.extractor)));
             return;
         }
+
         extract<F0::F0Executive, F0::F0StartInput, F0::F0Result>(impl_->catalog, *record, impl_->tasks, std::move(input), impl_->threshold, stop, std::move(complete), [](const auto &request, const auto &results) -> std::expected<PitchOutput, OperationError> {
             PitchBuilder builder(request.record.outputInterval);
             for (std::size_t index = 0; index < results.size(); ++index) {
@@ -218,15 +242,18 @@ namespace dssp::extraction {
                 auto appended = builder.append(*results[index], start, end, request.record.sampleRate);
                 if (!appended) return std::unexpected{std::move(appended.error())};
             }
+
             return builder.take();
         });
     }
+
     void Service::separation(SeparationInput input, std::stop_token stop, Completion<SeparationOutput> complete) const {
         const auto *record = impl_->catalog->find(Kind::Separation, input.extractor);
         if (!record) {
             complete(fail<ExtractionErrors>(InvalidInputError("Separation extractor does not exist: " + input.extractor)));
             return;
         }
+
         extractSeparation(impl_->catalog, *record, impl_->tasks, std::move(input), stop, std::move(complete));
     }
 }

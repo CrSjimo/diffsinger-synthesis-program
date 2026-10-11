@@ -35,11 +35,13 @@ namespace dssp::arch_diffsinger {
         std::set<std::string> embeddedSpeakers;
         std::map<std::string, std::string> speakerMapping;
     };
+
     struct GroupRecord {
         arch::GroupMetadata info;
         // DisplayText stays immutable; names are selected for each HTTP response.
         std::map<std::string, srt::DisplayText> languageNames;
     };
+
     struct SingerRecord {
         srt::PackageHandle package;
         const srt::SingerSpec *spec = nullptr;
@@ -69,6 +71,7 @@ namespace dssp::arch_diffsinger {
 
     private:
         explicit SingerCatalog(std::shared_ptr<inference::Environment> environment) : environment_(std::move(environment)) {}
+
         // Retains the unit until all borrowed specs and package handles are gone.
         std::shared_ptr<inference::Environment> environment_;
         std::map<std::string, SingerRecord> singers_;

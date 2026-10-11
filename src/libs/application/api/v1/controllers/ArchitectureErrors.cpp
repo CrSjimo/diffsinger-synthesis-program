@@ -37,9 +37,11 @@ namespace dssp::api_v1 {
     drogon::HttpResponsePtr architectureProblemResponse(const arch::CatalogErrors &errors, const http::RequestLog &context) {
         return present(errors, context);
     }
+
     drogon::HttpResponsePtr architectureProblemResponse(const arch::EnvironmentErrors &errors, const http::RequestLog &context) {
         return present(errors, context);
     }
+
     drogon::HttpResponsePtr architectureProblemResponse(const arch::SynthesisErrors &errors, const http::RequestLog &context) {
         return present(errors, context);
     }

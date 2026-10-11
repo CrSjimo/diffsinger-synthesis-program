@@ -12,6 +12,7 @@ namespace dssp::api_v1 {
         const dto::ApplicationInfoResponse info{{apiVersion}};
         cb(http::jsonResponse(toJson(info), http::requestLog(*req)));
     }
+
     void CatalogController::architectures(const drogon::HttpRequestPtr &req, http::Callback &&cb) const {
         std::vector<dto::ArchitectureMetadata> result;
         for (const auto &implementation : architectures_->entries()) {
@@ -22,11 +23,14 @@ namespace dssp::api_v1 {
             }
             result.push_back(toDto(std::move(*metadata)));
         }
+
         cb(http::jsonResponse(toJson(result), http::requestLog(*req)));
     }
+
     void CatalogController::architecture(const drogon::HttpRequestPtr &req, http::Callback &&cb, std::string id) const {
         detail::catalog(*architectures_, cb, id, detail::catalogOptions(*req), &arch::Architecture::metadata, detail::DtoPresenter{}, http::requestLog(*req));
     }
+
     void CatalogController::singers(const drogon::HttpRequestPtr &req, http::Callback &&cb) const {
         std::vector<dto::SingerInfo> result;
         for (const auto &implementation : architectures_->entries()) {
@@ -39,29 +43,38 @@ namespace dssp::api_v1 {
                 result.push_back(toDto(std::move(singer)));
             }
         }
+
         cb(http::jsonResponse(toJson(result), http::requestLog(*req)));
     }
+
     void CatalogController::archSingers(const drogon::HttpRequestPtr &req, http::Callback &&cb, std::string id) const {
         detail::catalog(*architectures_, cb, id, detail::catalogOptions(*req), &arch::Architecture::singers, detail::DtoPresenter{}, http::requestLog(*req));
     }
+
     void CatalogController::singer(const drogon::HttpRequestPtr &req, http::Callback &&cb, std::string id, std::string singer) const {
         detail::catalog(*architectures_, cb, id, arch::ResourceQuery{std::move(singer), detail::catalogOptions(*req)}, &arch::Architecture::singer, detail::DtoPresenter{}, http::requestLog(*req));
     }
+
     void CatalogController::avatar(const drogon::HttpRequestPtr &req, http::Callback &&cb, std::string id, std::string singer) const {
         detail::catalogMedia(*architectures_, req, cb, id, std::move(singer), &arch::Architecture::avatar, [](std::string url) { return dto::SingerAvatarResponse{std::move(url)}; });
     }
+
     void CatalogController::background(const drogon::HttpRequestPtr &req, http::Callback &&cb, std::string id, std::string singer) const {
         detail::catalogMedia(*architectures_, req, cb, id, std::move(singer), &arch::Architecture::background, [](std::string url) { return dto::SingerBackgroundResponse{std::move(url)}; });
     }
+
     void CatalogController::demoAudio(const drogon::HttpRequestPtr &req, http::Callback &&cb, std::string id, std::string singer) const {
         detail::catalogMedia(*architectures_, req, cb, id, std::move(singer), &arch::Architecture::demoAudio);
     }
+
     void CatalogController::groups(const drogon::HttpRequestPtr &req, http::Callback &&cb, std::string id) const {
         detail::catalog(*architectures_, cb, id, detail::catalogOptions(*req), &arch::Architecture::groups, detail::DtoPresenter{}, http::requestLog(*req));
     }
+
     void CatalogController::group(const drogon::HttpRequestPtr &req, http::Callback &&cb, std::string id, std::string group) const {
         detail::catalog(*architectures_, cb, id, arch::ResourceQuery{std::move(group), detail::catalogOptions(*req)}, &arch::Architecture::group, detail::DtoPresenter{}, http::requestLog(*req));
     }
+
     void CatalogController::groupSingers(const drogon::HttpRequestPtr &req, http::Callback &&cb, std::string id, std::string group) const {
         detail::catalog(*architectures_, cb, id, arch::ResourceQuery{std::move(group), detail::catalogOptions(*req)}, &arch::Architecture::groupSingers, detail::DtoPresenter{}, http::requestLog(*req));
     }
@@ -72,25 +85,32 @@ namespace dssp::api_v1 {
             callback(http::problemResponse(input.error(), http::requestLog(*request)));
             return;
         }
+
         const auto selected = architectures_->find(input->context.arch);
         if (!selected) {
             callback(detail::unknownProcessArchitecture(input->context.arch, http::requestLog(*request)));
             return;
         }
+
         detail::respond(selected->envTag(toArchitecture(std::move(*input))), callback, [](std::string tag) { return dto::EnvTagResponse{std::move(tag)}; }, http::requestLog(*request));
     }
+
     drogon::Task<> SynthesisController::pronunciation(drogon::HttpRequestPtr request, http::Callback callback) const {
         co_await detail::process<dto::PronunciationRequest, dto::PronunciationResponse, arch::PronunciationOutput>(request, std::move(callback), lifetime_, architectures_, &arch::Architecture::pronunciation, "pronunciation");
     }
+
     drogon::Task<> SynthesisController::phoneme(drogon::HttpRequestPtr request, http::Callback callback) const {
         co_await detail::process<dto::PhonemeRequest, dto::PhonemeResponse, arch::PhonemeOutput>(request, std::move(callback), lifetime_, architectures_, &arch::Architecture::phoneme, "phoneme");
     }
+
     drogon::Task<> SynthesisController::duration(drogon::HttpRequestPtr request, http::Callback callback) const {
         co_await detail::process<dto::DurationRequest, dto::DurationResponse, arch::DurationOutput>(request, std::move(callback), lifetime_, architectures_, &arch::Architecture::duration, "duration");
     }
+
     drogon::Task<> SynthesisController::parameter(drogon::HttpRequestPtr request, http::Callback callback) const {
         co_await detail::process<dto::ParameterRequest, dto::ParameterResponse, arch::ParameterOutput>(request, std::move(callback), lifetime_, architectures_, &arch::Architecture::parameter, "parameter");
     }
+
     drogon::Task<> SynthesisController::audio(drogon::HttpRequestPtr request, http::Callback callback) const {
         co_await detail::process<dto::AudioRequest, dto::AudioResponse, arch::AudioOutput>(request, std::move(callback), lifetime_, architectures_, &arch::Architecture::audio, "audio");
     }
@@ -98,15 +118,19 @@ namespace dssp::api_v1 {
     void ExtractionController::extractors(const drogon::HttpRequestPtr &req, http::Callback &&cb) const {
         detail::extractionCatalog(service_->extractors(req->getHeader("accept-language")), cb, http::requestLog(*req));
     }
+
     void ExtractionController::noteExtractor(const drogon::HttpRequestPtr &request, http::Callback &&callback, std::string id) const {
         detail::extractionCatalog(service_->extractor(extraction::Kind::Note, id, request->getHeader("accept-language")), callback, http::requestLog(*request));
     }
+
     void ExtractionController::tempoExtractor(const drogon::HttpRequestPtr &request, http::Callback &&callback, std::string id) const {
         detail::extractionCatalog(service_->extractor(extraction::Kind::Tempo, id, request->getHeader("accept-language")), callback, http::requestLog(*request));
     }
+
     void ExtractionController::pitchExtractor(const drogon::HttpRequestPtr &request, http::Callback &&callback, std::string id) const {
         detail::extractionCatalog(service_->extractor(extraction::Kind::Pitch, id, request->getHeader("accept-language")), callback, http::requestLog(*request));
     }
+
     void ExtractionController::separationExtractor(const drogon::HttpRequestPtr &request, http::Callback &&callback, std::string id) const {
         detail::extractionCatalog(service_->extractor(extraction::Kind::Separation, id, request->getHeader("accept-language")), callback, http::requestLog(*request), toSeparationDto);
     }
@@ -114,12 +138,15 @@ namespace dssp::api_v1 {
     drogon::Task<> ExtractionController::note(drogon::HttpRequestPtr request, http::Callback callback) const {
         co_await detail::extract<dto::NoteExtractionResponse, extraction::NoteOutput>(request, std::move(callback), lifetime_, service_, &extraction::Service::note, "note extraction");
     }
+
     drogon::Task<> ExtractionController::pitch(drogon::HttpRequestPtr request, http::Callback callback) const {
         co_await detail::extract<dto::PitchExtractionResponse, extraction::PitchOutput>(request, std::move(callback), lifetime_, service_, &extraction::Service::pitch, "pitch extraction");
     }
+
     drogon::Task<> ExtractionController::tempo(drogon::HttpRequestPtr request, http::Callback callback) const {
         co_await detail::extract<dto::TempoExtractionResponse, extraction::TempoOutput>(request, std::move(callback), lifetime_, service_, &extraction::Service::tempo, "tempo extraction");
     }
+
     drogon::Task<> ExtractionController::separation(drogon::HttpRequestPtr request, http::Callback callback) const {
         co_await detail::extract<dto::SeparationExtractionResponse, extraction::SeparationOutput, dto::SeparationExtractionRequest>(request, std::move(callback), lifetime_, service_, &extraction::Service::separation, "audio separation");
     }

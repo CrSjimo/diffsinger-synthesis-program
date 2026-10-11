@@ -13,10 +13,12 @@ namespace dssp::api_v1 {
             }
             return arch::NoteKind::Normal;
         }
+
         template <class Target, class Source>
         Target note(Source value) {
             return {{value.position.gap, value.position.duration}, value.cent, std::move(value.pronunciation), std::move(value.language), toArchitecture(std::move(value.phonemes)), noteKind(value.kind)};
         }
+
         template <class TargetNote, class SourceNote>
         arch::Piece<TargetNote> piece(dto::PieceInput<SourceNote> value) {
             return {value.pieceDuration, toArchitecture(std::move(value.notes)), std::move(value.mix), value.mixSampleRate};
@@ -26,42 +28,55 @@ namespace dssp::api_v1 {
     arch::Singer toArchitecture(dto::Singer value) {
         return {std::move(value.id), std::move(value.extra)};
     }
+
     arch::SingleSingerContext toArchitecture(dto::SingleSingerContext value) {
         return {std::move(value.archExtra), toArchitecture(std::move(value.singer))};
     }
+
     arch::MultiSingerContext toArchitecture(dto::MultiSingerContext value) {
         return {std::move(value.archExtra), toArchitecture(std::move(value.singers))};
     }
+
     arch::Lyric toArchitecture(dto::Lyric value) {
         return {std::move(value.lyric), std::move(value.language)};
     }
+
     arch::PronunciationNote toArchitecture(dto::PronunciationNote value) {
         return {std::move(value.pronunciation), std::move(value.language), value.syllableSliceStart, value.syllableSliceEnd};
     }
+
     arch::DurationInputPhoneme toArchitecture(dto::DurationInputPhoneme value) {
         return {std::move(value.token), value.onset, std::move(value.language)};
     }
+
     arch::TimedPhoneme toArchitecture(dto::ParameterInputPhoneme value) {
         return {toArchitecture(static_cast<dto::DurationInputPhoneme &&>(value)), value.start};
     }
+
     arch::DurationNote toArchitecture(dto::DurationNote value) {
         return note<arch::DurationNote>(std::move(value));
     }
+
     arch::ParameterNote toArchitecture(dto::ParameterNote value) {
         return note<arch::ParameterNote>(std::move(value));
     }
+
     arch::MultiSingerContext toArchitecture(dto::EnvTagRequest value) {
         return toArchitecture(std::move(value.context));
     }
+
     arch::PronunciationInput toArchitecture(dto::PronunciationRequest value) {
         return {toArchitecture(std::move(value.context)), toArchitecture(std::move(value.input.notes))};
     }
+
     arch::PhonemeInput toArchitecture(dto::PhonemeRequest value) {
         return {toArchitecture(std::move(value.context)), toArchitecture(std::move(value.input.notes))};
     }
+
     arch::DurationInput toArchitecture(dto::DurationRequest value) {
         return {toArchitecture(std::move(value.context)), piece<arch::DurationNote>(std::move(value.input))};
     }
+
     arch::ParameterInput toArchitecture(dto::ParameterRequest value) {
         arch::ParameterInput result{toArchitecture(std::move(value.context)), piece<arch::ParameterNote>(static_cast<dto::PieceInput<dto::ParameterNote> &&>(value.input)), {}};
         for (auto &[key, parameter] : value.input.parameters) {
@@ -71,8 +86,10 @@ namespace dssp::api_v1 {
             }
             result.parameters.emplace(key, arch::Parameter{std::move(parameter.values), parameter.sampleRate, retake});
         }
+
         return result;
     }
+
     arch::AudioInput toArchitecture(dto::AudioRequest value) {
         arch::AudioInput result{
             toArchitecture(std::move(value.context)),
@@ -83,8 +100,10 @@ namespace dssp::api_v1 {
         for (auto &[key, parameter] : value.input.parameters) {
             result.parameters.emplace(key, arch::AudioParameter{parameter.sampleRate, std::move(parameter.values)});
         }
+
         return result;
     }
+
     arch::MediaPreferences toArchitecture(dto::MediaQuery value) {
         return {std::move(value.acceptableFormats), std::move(value.acceptableSchemes)};
     }
@@ -92,6 +111,7 @@ namespace dssp::api_v1 {
     dto::AST toDto(arch::AST value) {
         return std::visit(Overload{[](double number) -> dto::AST { return {number}; }, [](arch::AST::Operation operation) -> dto::AST { return {dto::AST::Operation{std::move(operation.op), toDto(std::move(operation.operands))}}; }}, std::move(value.value));
     }
+
     dto::ParameterPresentation toDto(arch::ParameterPresentation value) {
         dto::ParameterPresentation result;
         result.name = std::move(value.name);
@@ -112,9 +132,11 @@ namespace dssp::api_v1 {
         result.displayValueDecimalPlaces = value.displayValueDecimalPlaces;
         return result;
     }
+
     dto::ArchitectureMetadata toDto(arch::ArchitectureMetadata value) {
         return {std::move(value.id), std::move(value.name), toDto(std::move(value.parameters))};
     }
+
     dto::GroupMetadata toDto(arch::GroupMetadata value) {
         dto::GroupMetadata result;
         result.id = std::move(value.id);
@@ -124,6 +146,7 @@ namespace dssp::api_v1 {
             case arch::DurationMode::Full: result.durationMode = dto::DurationMode::Full; break;
             case arch::DurationMode::Skip: result.durationMode = dto::DurationMode::Skip; break;
         }
+
         using Pipeline = std::variant<dto::DirectParameter, dto::IndirectParameter>;
         const auto visitor = Overload{
             [](arch::DirectParameter) -> Pipeline { return dto::DirectParameter{}; },
@@ -144,6 +167,7 @@ namespace dssp::api_v1 {
         result.defaultArchExtra = std::move(value.defaultArchExtra);
         return result;
     }
+
     dto::GroupLanguageInfo toDto(arch::GroupLanguageInfo value) {
         dto::GroupLanguageInfo result;
         result.name = std::move(value.name);
@@ -159,33 +183,43 @@ namespace dssp::api_v1 {
         }
         return result;
     }
+
     dto::SingerInfo toDto(arch::SingerInfo value) {
         return {std::move(value.id), std::move(value.name), std::move(value.arch), std::move(value.group), std::move(value.defaultLanguage), std::move(value.archSpecificInfo), std::move(value.defaultExtra)};
     }
+
     dto::SingerDemoAudio toDto(arch::SingerDemoAudio value) {
         return {std::move(value.name), std::move(value.audioUrl)};
     }
+
     dto::Pronunciation toDto(arch::Pronunciation value) {
         return {std::move(value.pronunciation), std::move(value.candidates)};
     }
+
     dto::Phoneme toDto(arch::Phoneme value) {
         return {std::move(value.token), value.onset};
     }
+
     dto::PhonemeNote toDto(arch::PhonemeNote value) {
         return {toDto(std::move(value.phonemes))};
     }
+
     dto::DurationOutputPhoneme toDto(arch::DurationOutputPhoneme value) {
         return {value.start};
     }
+
     dto::DurationOutputNote toDto(arch::DurationOutputNote value) {
         return {toDto(std::move(value.phonemes))};
     }
+
     dto::ParameterOutputParameter toDto(arch::ParameterOutputParameter value) {
         return {std::move(value.values), value.sampleRate};
     }
+
     dto::ParameterOutput toDto(arch::ParameterOutput value) {
         return {toDto(std::move(value.parameters))};
     }
+
     dto::AudioOutput toDto(arch::AudioOutput value) {
         return {std::move(value.audioUrl)};
     }

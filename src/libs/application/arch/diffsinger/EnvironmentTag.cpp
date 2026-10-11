@@ -15,6 +15,7 @@ namespace dssp::arch_diffsinger {
             if (!visited.insert(inference::resourceId(spec)).second) {
                 return;
             }
+
             const auto package = spec.package();
             const auto key = package.id() + '=' + package.version().toString();
             // TODO: replace package identity/version with the content hash supplied
@@ -27,6 +28,7 @@ namespace dssp::arch_diffsinger {
             }
         }
     }
+
     std::expected<std::string, arch::EnvironmentErrors> synthesisEnvironmentTag(const SingerCatalog &catalog, const arch::MultiSingerContext &input) {
         auto context = synthesisContext(catalog, input);
         if (!context) {
@@ -35,6 +37,7 @@ namespace dssp::arch_diffsinger {
             }
             return fail<arch::EnvironmentErrors>(arch::OperationError("Cannot resolve the synthesis environment", context.error().asError().clone()));
         }
+
         try {
             srt::JsonArray sources;
             std::set<std::string> visited;
@@ -51,10 +54,12 @@ namespace dssp::arch_diffsinger {
                 }
                 sources.push_back(srt::JsonObject{{"singer", source.singer->info.id}, {"speaker", source.speaker}, {"group", source.singer->info.group}, {"speakerMappings", std::move(mappings)}});
             }
+
             srt::JsonObject packageIdentities;
             for (auto &[id, value] : packages) {
                 packageIdentities.emplace(id, std::move(value));
             }
+
             const srt::JsonValue effective(srt::JsonObject{
                 {"contract", "dssp.diffsinger.synthesis.1;pitch=128;normalized-controls;seconds;native-retake-ranges"},
                 {"programVersion", DSSP_PROGRAM_VERSION}, {"synthrtRevision", DSSP_SYNTHRT_REVISION}, {"wolfRevision", DSSP_WOLF_REVISION},
@@ -65,6 +70,7 @@ namespace dssp::arch_diffsinger {
             if (!digest) {
                 return fail<arch::EnvironmentErrors>(arch::OperationError("Cannot compute the synthesis environment tag", digest.error().clone()));
             }
+
             return "ds1." + *digest;
         } catch (const std::exception &error) {
             return fail<arch::EnvironmentErrors>(arch::OperationError("Cannot read the synthesis environment resource graph", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"synthrt metadata", "serialize effective synthesis environment", "exception"})));

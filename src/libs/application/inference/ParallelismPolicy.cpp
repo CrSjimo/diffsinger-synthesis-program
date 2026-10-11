@@ -40,6 +40,7 @@ namespace dssp::inference {
     bool isParallelLeaf(std::string_view interfaceId, int level, std::string_view variant) {
         return std::ranges::find(parallelLeaves, std::tuple{interfaceId, level, variant}) != parallelLeaves.end();
     }
+
     bool permitsParallelExecution(const srt::ContribSpec &spec) {
         std::set<const srt::ContribSpec *> visiting;
         return inspect(spec, visiting);

@@ -19,16 +19,19 @@ namespace dssp::inference {
                 }
                 return std::optional<srt::ContribImport>{};
             }
+
             const auto *binding = imported->binding();
             if (!binding || binding->state() != srt::ContribImportBinding::Active) {
                 return std::unexpected{ResourceError("Unresolved language stage " + std::string(role))};
             }
+
             const auto &target = binding->target();
             const auto *exports = dynamic_cast<const Exports *>(target.exports());
             const auto *options = dynamic_cast<const Options *>(imported->options());
             if (!exports || !options || target.locator().category() != "inference" || target.interface() != exports->interface() || target.variant() != exports->variant() || target.level() != exports->level()) {
                 return std::unexpected{ResourceError("Unsupported language stage contract for " + std::string(role))};
             }
+
             return imported;
         }
     }
@@ -43,19 +46,23 @@ namespace dssp::inference {
             if (!pipeline || !pipeline->locate(handle) || !pipeline->binding(handle)) {
                 return std::unexpected{ResourceError("Singer has no resolved Wolf language metadata for " + std::string(handle))};
             }
+
             const auto role = singer.languages().find(std::string(handle));
             if (role == singer.languages().end()) {
                 return std::unexpected{ResourceError("Singer does not declare language " + std::string(handle))};
             }
+
             const auto imported = singer.findImport(role->second);
             if (!imported || !imported->binding() || imported->binding()->state() != srt::ContribImportBinding::Active) {
                 return std::unexpected{ResourceError("Singer language has no active binding: " + std::string(handle))};
             }
+
             const auto &target = imported->binding()->target();
             const auto *spec = dynamic_cast<const wolf::LinguistSpec *>(&target);
             if (!spec || target.interface() != Linguist::API_INTERFACE || target.variant() != Linguist::API_VARIANT || target.level() != Linguist::API_LEVEL) {
                 return std::unexpected{ResourceError("Unsupported linguist composition for " + std::string(handle))};
             }
+
             auto g2p = stage<G2p::G2PExports, G2p::G2PImportOptions>(target, Linguist::ROLE_G2P, true);
             auto s2p = stage<S2p::S2PExports, S2p::S2PImportOptions>(target, Linguist::ROLE_S2P, false);
             auto onset = stage<Onset::OnsetExports, Onset::OnsetImportOptions>(target, Linguist::ROLE_ONSET, false);
@@ -68,6 +75,7 @@ namespace dssp::inference {
             if (!onset) {
                 return std::unexpected{std::move(onset.error())};
             }
+
             LanguageRoute result;
             result.spec = spec;
             result.binding = *pipeline->binding(handle);
@@ -80,6 +88,7 @@ namespace dssp::inference {
                 case Linguist::Depth::Onsets: result.depth = LanguageDepth::Onsets; break;
                 default: return std::unexpected{ResourceError("Unsupported Wolf language depth for " + std::string(handle))};
             }
+
             return result;
         } catch (const std::exception &error) {
             return std::unexpected{ResourceError("Cannot inspect native language bindings", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"synthrt/Wolf", "inspect language imports", "exception"}))};

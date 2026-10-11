@@ -10,16 +10,19 @@ namespace dssp::api_v1 {
         result["minor"] = value.minor;
         return result;
     }
+
     Json::Value toJson(const dto::ApplicationInfo &value) {
         Json::Value result;
         result["apiVersion"] = toJson(value.apiVersion);
         return result;
     }
+
     Json::Value toJson(const dto::ApplicationInfoResponse &value) {
         Json::Value result;
         result["dssp"] = toJson(value.dssp);
         return result;
     }
+
     Json::Value toJson(const dto::AST &value) {
         const auto visitor = Overload{
             [](double number) -> Json::Value { return number; },
@@ -31,6 +34,7 @@ namespace dssp::api_v1 {
             }};
         return std::visit(visitor, value.value);
     }
+
     Json::Value toJson(const dto::ParameterPresentation &value) {
         Json::Value result;
         result["name"] = value.name;
@@ -51,6 +55,7 @@ namespace dssp::api_v1 {
         result["displayValueDecimalPlaces"] = value.displayValueDecimalPlaces;
         return result;
     }
+
     Json::Value toJson(const dto::ArchitectureMetadata &value) {
         Json::Value result;
         result["id"] = value.id;
@@ -58,6 +63,7 @@ namespace dssp::api_v1 {
         result["parameters"] = toJson(value.parameters);
         return result;
     }
+
     Json::Value toJson(const dto::GroupMetadata &value) {
         Json::Value result;
         result["id"] = value.id;
@@ -87,6 +93,7 @@ namespace dssp::api_v1 {
         result["defaultArchExtra"] = value.defaultArchExtra;
         return result;
     }
+
     Json::Value toJson(const dto::GroupLanguageInfo &value) {
         Json::Value result;
         result["name"] = value.name;
@@ -99,6 +106,7 @@ namespace dssp::api_v1 {
         }
         return result;
     }
+
     Json::Value toJson(const dto::SingerInfo &value) {
         Json::Value result;
         result["id"] = value.id;
@@ -110,22 +118,26 @@ namespace dssp::api_v1 {
         result["defaultExtra"] = value.defaultExtra;
         return result;
     }
+
     Json::Value toJson(const dto::SingerAvatarResponse &value) {
         Json::Value result;
         result["avatarUrl"] = value.avatarUrl;
         return result;
     }
+
     Json::Value toJson(const dto::SingerBackgroundResponse &value) {
         Json::Value result;
         result["backgroundUrl"] = value.backgroundUrl;
         return result;
     }
+
     Json::Value toJson(const dto::SingerDemoAudio &value) {
         Json::Value result;
         result["name"] = value.name;
         result["audioUrl"] = value.audioUrl;
         return result;
     }
+
     Json::Value toJson(const dto::ExtractorInfo &value) {
         Json::Value result;
         result["id"] = value.id;
@@ -142,16 +154,19 @@ namespace dssp::api_v1 {
         }
         return result;
     }
+
     Json::Value toJson(const dto::SeparationTrackInfo &value) {
         Json::Value result;
         result["name"] = value.name;
         return result;
     }
+
     Json::Value toJson(const dto::SeparationExtractorInfo &value) {
         auto result = toJson(static_cast<const dto::ExtractorInfo &>(value));
         result["tracks"] = toJson(value.tracks);
         return result;
     }
+
     Json::Value toJson(const dto::ExtractorList &value) {
         Json::Value result;
         result["note"] = toJson(value.note);
@@ -160,95 +175,112 @@ namespace dssp::api_v1 {
         result["separation"] = toJson(value.separation);
         return result;
     }
+
     Json::Value toJson(const dto::EnvTagResponse &value) {
         Json::Value result;
         result["envTag"] = value.envTag;
         return result;
     }
+
     Json::Value toJson(const dto::Pronunciation &value) {
         Json::Value result;
         result["pronunciation"] = value.pronunciation;
         result["candidates"] = toJson(value.candidates);
         return result;
     }
+
     Json::Value toJson(const dto::Phoneme &value) {
         Json::Value result;
         result["token"] = value.token;
         result["onset"] = value.onset;
         return result;
     }
+
     Json::Value toJson(const dto::PhonemeNote &value) {
         Json::Value result;
         result["phonemes"] = toJson(value.phonemes);
         return result;
     }
+
     Json::Value toJson(const dto::DurationOutputPhoneme &value) {
         Json::Value result;
         result["start"] = value.start;
         return result;
     }
+
     Json::Value toJson(const dto::DurationOutputNote &value) {
         Json::Value result;
         result["phonemes"] = toJson(value.phonemes);
         return result;
     }
+
     Json::Value toJson(const dto::ParameterOutputParameter &value) {
         Json::Value result;
         result["values"] = toJson(value.values);
         result["sampleRate"] = value.sampleRate;
         return result;
     }
+
     Json::Value toJson(const dto::ParameterOutput &value) {
         Json::Value result;
         result["parameters"] = toJson(value.parameters);
         return result;
     }
+
     Json::Value toJson(const dto::AudioOutput &value) {
         Json::Value result;
         result["audioUrl"] = value.audioUrl;
         return result;
     }
+
     Json::Value toJson(const dto::NotePosition &value) {
         Json::Value result;
         result["gap"] = value.gap;
         result["duration"] = value.duration;
         return result;
     }
+
     Json::Value toJson(const dto::ExtractedNote &value) {
         Json::Value result;
         result["position"] = toJson(value.position);
         result["cent"] = value.cent;
         return result;
     }
+
     Json::Value toJson(const dto::PitchExtractionSegment &value) {
         Json::Value result;
         result["gap"] = toJson(value.gap);
         result["pitch"] = toJson(value.pitch);
         return result;
     }
+
     Json::Value toJson(const dto::PitchExtractionOutput &value) {
         Json::Value result;
         result["segments"] = toJson(value.segments);
         result["sampleRate"] = value.sampleRate;
         return result;
     }
+
     Json::Value toJson(const dto::TempoExtractionOutput &value) {
         Json::Value result;
         result["beats"] = toJson(value.beats);
         return result;
     }
+
     Json::Value toJson(const dto::ExtractedBeat &value) {
         Json::Value result;
         result["position"] = value.position;
         result["downbeat"] = value.downbeat;
         return result;
     }
+
     Json::Value toJson(const dto::SeparationTrack &value) {
         Json::Value result;
         result["name"] = value.name;
         result["audioUrl"] = value.audioUrl;
         return result;
     }
+
     Json::Value toJson(const dto::SeparationExtractionOutput &value) {
         Json::Value result;
         result["tracks"] = toJson(value.tracks);

@@ -16,16 +16,19 @@ namespace dssp::tests {
             std::string category;
             std::string message;
         };
+
         LogCapture() : previous_(stdc::Logger::logCallback()) {
             std::lock_guard lock(mutex_);
             active_ = this;
             stdc::Logger::setLogCallback(&capture);
         }
+
         ~LogCapture() {
             std::lock_guard lock(mutex_);
             stdc::Logger::setLogCallback(previous_);
             active_ = nullptr;
         }
+
         LogCapture(const LogCapture &) = delete;
         LogCapture &operator=(const LogCapture &) = delete;
         std::vector<Record> records(std::string_view category, int level) const {
@@ -38,6 +41,7 @@ namespace dssp::tests {
             }
             return result;
         }
+
         std::vector<Record> accessRecords() const {
             return records("dssp.http.Access", stdc::Logger::Information);
         }
@@ -49,6 +53,7 @@ namespace dssp::tests {
                 active_->records_.push_back({level, context.category ? context.category : "", std::string(message)});
             }
         }
+
         inline static std::mutex mutex_;
         inline static LogCapture *active_ = nullptr;
         const stdc::Logger::LogCallback previous_;

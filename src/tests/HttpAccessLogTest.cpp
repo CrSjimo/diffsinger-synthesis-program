@@ -33,6 +33,7 @@ namespace dssp::tests {
         class RunningServer {
         public:
             RunningServer(drogon::HttpAppFramework &app, std::shared_ptr<http::AccessLog> access, std::shared_ptr<http::RequestLifetimeRegistry> lifetime) : app_(app), access_(std::move(access)), lifetime_(std::move(lifetime)), thread_([&app] { app.run(); }) {}
+
             ~RunningServer() {
                 access_->shutdown();
                 lifetime_->cancelAll();
@@ -63,6 +64,7 @@ namespace dssp::tests {
             "Vendor/voices=1.0:singer/avatar", "Vendor/voices=1.0:singer/background", "Vendor/voices=1.0:singer/demo-audio",
             "Vendor/voice/packages=1.2.3.4:singer/Lead_Voice-1"
         };
+
         implementation->onSinger = [&](const arch::ResourceQuery &query) -> arch::CatalogResult<std::optional<arch::SingerInfo>> {
             if (!singerIds.contains(query.id)) {
                 return fail<arch::CatalogErrors>(arch::ResourceNotFoundError("Unknown singer: " + query.id));
@@ -74,6 +76,7 @@ namespace dssp::tests {
             singer.defaultLanguage = "eng";
             return std::optional{std::move(singer)};
         };
+
         const auto groupMetadata = [](const arch::CatalogOptions &options) {
             arch::GroupMetadata group;
             group.id = "group";
@@ -88,6 +91,7 @@ namespace dssp::tests {
             group.defaultArchExtra = 7;
             return group;
         };
+
         implementation->onGroups = [&](const arch::CatalogOptions &options) -> arch::CatalogResult<std::vector<arch::GroupMetadata>> { return std::vector<arch::GroupMetadata>{groupMetadata(options)}; };
         implementation->onGroup = [&](const arch::ResourceQuery &query) -> arch::CatalogResult<std::optional<arch::GroupMetadata>> {
             if (query.id != "group") {
@@ -95,6 +99,7 @@ namespace dssp::tests {
             }
             return std::optional{groupMetadata(query.display)};
         };
+
         implementation->onAvatar = [&](const arch::SingerMediaQuery &query) -> arch::CatalogResult<std::string> {
             if (!singerIds.contains(query.singer.id)) {
                 return fail<arch::CatalogErrors>(arch::ResourceNotFoundError("Unknown singer: " + query.singer.id));
@@ -105,18 +110,21 @@ namespace dssp::tests {
             }
             return "data:application/octet-stream;base64," + drogon::utils::base64Encode(query.singer.id);
         };
+
         implementation->onBackground = [&](const arch::SingerMediaQuery &query) -> arch::CatalogResult<std::string> {
             if (!singerIds.contains(query.singer.id)) {
                 return fail<arch::CatalogErrors>(arch::ResourceNotFoundError("Unknown singer: " + query.singer.id));
             }
             return "data:application/octet-stream;base64," + drogon::utils::base64Encode(query.singer.id);
         };
+
         implementation->onDemoAudio = [&](const arch::SingerMediaQuery &query) -> arch::CatalogResult<std::vector<arch::SingerDemoAudio>> {
             if (!singerIds.contains(query.singer.id)) {
                 return fail<arch::CatalogErrors>(arch::ResourceNotFoundError("Unknown singer: " + query.singer.id));
             }
             return std::vector<arch::SingerDemoAudio>{{query.singer.id, "data:audio/wav;base64,AA=="}};
         };
+
         implementation->onPronunciation = [&](arch::PronunciationInput input, std::stop_token, arch::Completion<arch::PronunciationOutput> complete) {
             const auto fail = input.context.singer.id == "failure";
             backendLoop.getLoop()->queueInLoop([complete = std::move(complete), fail] {
@@ -127,6 +135,7 @@ namespace dssp::tests {
                 }
             });
         };
+
         auto access = std::make_shared<http::AccessLog>();
         auto lifetime = std::make_shared<http::RequestLifetimeRegistry>();
         auto &app = drogon::app();
@@ -205,6 +214,7 @@ namespace dssp::tests {
             bool groupMetadata = false;
             std::string acceptLanguage;
         };
+
         std::vector<Case> cases{
             {drogon::Get, "/v1/info", {}, 200},
             {drogon::Head, "/v1/info", {}, 200},
@@ -233,6 +243,7 @@ namespace dssp::tests {
             {drogon::Post, "/v1/synth/pronunciation", failureBody, 500},
             {drogon::Options, "/v1/unrouted-preflight", {}, 204},
         };
+
         for (const auto &id : singerIds) {
             // Encode only the ID component, then send the resulting path verbatim.
             // Encoding the entire path again would turn %2F into %252F.
@@ -243,6 +254,7 @@ namespace dssp::tests {
             cases.push_back({drogon::Get, path + "/background", {}, 200, "application/json", "backgroundUrl", mediaUrl});
             cases.push_back({drogon::Get, path + "/demo-audio", {}, 200, "application/json", "name", id, true});
         }
+
         cases.push_back({drogon::Get, "/v1/arch/diffsinger/singer/Vendor%2fvoices%3d1.0%3asinger%2fmain", {}, 200, "application/json", "id", "Vendor/voices=1.0:singer/main"});
         cases.push_back({drogon::Get, "/v1/arch/diffsinger/singer/" + drogon::utils::urlEncodeComponent(drogon::utils::urlEncodeComponent("Vendor/voices=1.0:singer/main")), {}, 404});
         cases.push_back({drogon::Get, "/v1/arch/diffsinger/singer/Vendor%252Fvoices%3D1.0%3Asinger%2Fmain", {}, 404});
@@ -331,6 +343,7 @@ namespace dssp::tests {
             EXPECT_EQ(message.find("private-query"), std::string::npos);
             EXPECT_TRUE(ids.insert(message.substr(0, message.find(" method="))).second);
         }
+
         const auto failures = capture.records("dssp.api_v1.ArchitectureErrors", stdc::Logger::Critical);
         ASSERT_EQ(failures.size(), 1U);
         const auto failureId = failures.front().message.substr(0, failures.front().message.find(" method="));

@@ -21,6 +21,7 @@ namespace srtbeatinfer {
         if (auto checked = checkInput(input); !checked) {
             return checked.takeError();
         }
+
         const bool onWorker = claimedByThisThread();
         if (!onWorker) {
             if (auto claimed = claim(); !claimed) {
@@ -36,6 +37,7 @@ namespace srtbeatinfer {
             std::lock_guard<std::mutex> lock(m_asyncState->mutex);
             m_asyncState->cancellationRequested = false;
         }
+
         setState(Running);
         srt::Expected<std::unique_ptr<srt::TaskResult>> result =
             srt::Error(BeatError::Internal, "the beat produced no result");
@@ -47,9 +49,11 @@ namespace srtbeatinfer {
         } catch (...) {
             result = srt::Error(BeatError::Internal, "the beat threw an exception");
         }
+
         if (result && !*result) {
             result = srt::Error(BeatError::Internal, "the beat produced no result");
         }
+
         // The error code determines the state, so that the code and the state agree regardless
         // of the stop flag: a body that detected the stop reports Cancelled, and a body that
         // finished or failed for another reason before it checked the flag keeps its outcome.
@@ -58,9 +62,11 @@ namespace srtbeatinfer {
         } else {
             setState(Succeeded);
         }
+
         if (!onWorker) {
             release();
         }
+
         return result;
     }
 
@@ -77,6 +83,7 @@ namespace srtbeatinfer {
         if (auto checked = checkInput(*input); !checked) {
             return checked.takeError();
         }
+
         std::uint64_t generation = 0;
         {
             std::lock_guard<std::mutex> lock(m_asyncState->mutex);
@@ -88,11 +95,13 @@ namespace srtbeatinfer {
                 return srt::Error(srt::Error::InvalidArgument,
                     "this beat tracker is already running an execution");
             }
+
             m_asyncState->running = true;
             m_asyncState->cancellationRequested = false;
             m_asyncState->workerId = {};
             generation = ++*m_generation;
         }
+
         // Cleared here, on the caller's thread, so that a stop request that arrives immediately
         // after this function returns applies to this execution rather than being cleared by the
         // worker.
@@ -110,6 +119,7 @@ namespace srtbeatinfer {
                     std::lock_guard<std::mutex> lock(asyncState->mutex);
                     asyncState->workerId = std::this_thread::get_id();
                 }
+
                 // start() sets the state from the outcome. A stop request that arrives after the
                 // body returned does not change the state, because the callback receives that
                 // outcome and the state must describe the same outcome.
@@ -129,12 +139,14 @@ namespace srtbeatinfer {
                     srt::logCategory().srtCritical(
                         "a beat callback threw an exception, which was caught and discarded");
                 }
+
                 // Cleared only if the record still identifies this worker. A successor started
                 // inside the callback may already be delivering its own callback, and clearing its
                 // record would let a start from that callback retain a stop request aimed at
                 // another execution.
                 auto self = std::this_thread::get_id();
                 callbackWorker->compare_exchange_strong(self, std::thread::id());
+
                 // The running state is released after the callback, so that a waiter also waits
                 // for the callback. A successor started from inside the callback owns the running
                 // state, as the generation counter indicates, and the state is then left unchanged.
@@ -145,6 +157,7 @@ namespace srtbeatinfer {
                         asyncState->workerId = {};
                     }
                 }
+
                 asyncState->finished.notify_all();
             });
         } catch (const std::system_error &error) {
@@ -154,11 +167,13 @@ namespace srtbeatinfer {
                 std::lock_guard<std::mutex> lock(m_asyncState->mutex);
                 m_asyncState->running = false;
             }
+
             m_asyncState->finished.notify_all();
             setState(Failed);
             return srt::Error(BeatError::NoWorker,
                 std::string("no worker thread could be started: ") + error.what());
         }
+
         return srt::Expected<void>();
     }
 
@@ -184,6 +199,7 @@ namespace srtbeatinfer {
                     std::to_string(m_inputVersion) + " input, and the input is " +
                     input.type() + " level " + std::to_string(input.version()));
         }
+
         return srt::Expected<void>();
     }
 
@@ -203,6 +219,7 @@ namespace srtbeatinfer {
                 return srt::Error(srt::Error::InvalidArgument,
                     "this beat tracker is already running an execution");
             }
+
             m_asyncState->running = true;
             m_asyncState->cancellationRequested = false;
             // The worker identifier names this thread so that a wait from this thread returns
@@ -211,6 +228,7 @@ namespace srtbeatinfer {
             m_asyncState->workerId = std::this_thread::get_id();
             ++*m_generation;
         }
+
         m_stopRequested.store(false);
         return srt::Expected<void>();
     }
@@ -221,6 +239,7 @@ namespace srtbeatinfer {
             m_asyncState->running = false;
             m_asyncState->workerId = {};
         }
+
         m_asyncState->finished.notify_all();
     }
 

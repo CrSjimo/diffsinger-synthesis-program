@@ -17,6 +17,7 @@ namespace {
     int configureLogging(const stdc::cli::ParseResult &result) {
         using dssp::LogLevel;
         using namespace std::literals::string_view_literals;
+
         static constexpr std::array levels{
             std::pair{"trace"sv, LogLevel::Trace},
             std::pair{"debug"sv, LogLevel::Debug},
@@ -34,6 +35,7 @@ namespace {
                 configured = it->second;
             }
         }
+
         const bool verbose = result.option("--verbose").has_value();
         const bool quiet = result.option("--quiet").has_value();
         auto selected = std::pair{"info"sv, LogLevel::Info};
@@ -55,14 +57,17 @@ namespace {
         } else if (quiet) {
             selected = {"warning"sv, LogLevel::Warning};
         }
+
         if (static_cast<int>(configured.has_value()) + verbose + quiet > 1) {
             warning += "Multiple logging options set. ";
         }
+
         if (!warning.empty()) {
             // Report the decision before a critical/fatal threshold can hide it.
             const stdc::LogCategory log("dssp.Main");
             log.stdcWarning("%1Using log level '%2'.", warning, selected.first);
         }
+
         dssp::setLogLevel(selected.second);
         return 0;
     }
@@ -85,6 +90,7 @@ int main(int argc, char **argv) {
             .setPreHandler(configureLogging)
             .addCommand(dumpDevicesCommand)
             .addCommand(serveCommand);
+
         stdc::cli::Parser parser(mainCommand);
         return parser.invoke(stdc::system::command_line_arguments().vec());
     } catch (const std::exception &error) {

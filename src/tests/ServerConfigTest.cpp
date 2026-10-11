@@ -44,6 +44,7 @@ namespace dssp::tests {
             EXPECT_EQ(cache.idleTimeout, std::chrono::seconds(600));
             EXPECT_EQ(cache.cleanupInterval, std::chrono::seconds(60));
         }
+
         const auto configured = resolveCpuConfig({{"--package-dir", root.string()}, {"--diffsinger-pronunciation-cache-capacity", "3"}, {"--diffsinger-acoustic-idle-timeout", "0"}}, {{"DSSP_DIFFSINGER_PRONUNCIATION_CACHE_CAPACITY", "bad"}, {"DSSP_DIFFSINGER_PRONUNCIATION_IDLE_TIMEOUT", "12"}, {"DSSP_DIFFSINGER_ACOUSTIC_CACHE_CAPACITY", "0"}, {"DSSP_DIFFSINGER_ACOUSTIC_CLEANUP_INTERVAL", "7"}}, root);
         ASSERT_TRUE(configured);
         EXPECT_EQ(configured->inferenceCaches.at("diffsinger-pronunciation").capacity, 3U);
@@ -124,6 +125,7 @@ namespace dssp::tests {
             EXPECT_EQ(result.error().option(), "--package-dir");
             return;
         }
+
         ASSERT_TRUE(result);
         EXPECT_EQ(*result, (*base / "OpenVPI" / "DiffScope_packages").lexically_normal());
         EXPECT_TRUE(result->is_absolute());
@@ -169,6 +171,7 @@ namespace dssp::tests {
             EXPECT_EQ(result.error().message(), packages.error().message());
             return;
         }
+
         // Read the user's directory without creating or modifying it.
         std::error_code error;
         if (!std::filesystem::is_directory(*packages, error)) {
@@ -177,6 +180,7 @@ namespace dssp::tests {
             EXPECT_EQ(result.error().message(), "Package root must be an existing directory");
             return;
         }
+
         ASSERT_TRUE(result);
         EXPECT_EQ(result->packageDir, *packages);
     }
@@ -204,6 +208,7 @@ namespace dssp::tests {
             ASSERT_FALSE(result);
             EXPECT_EQ(result.error().option(), "--port");
         }
+
         for (const auto threshold : {"nan", "inf", "-0.1", "0.02suffix"}) {
             EXPECT_FALSE(resolveCpuConfig({{"--package-dir", root.string()}, {"--silence-threshold", threshold}}, {}, root));
         }
@@ -238,6 +243,7 @@ namespace dssp::tests {
             EXPECT_EQ(result.error().cause()->kind(), "dssp.device");
             return;
         }
+
         ASSERT_TRUE(result);
         EXPECT_EQ(result->executionProvider, device->executionProvider());
         EXPECT_EQ(result->deviceIndex, device->index());

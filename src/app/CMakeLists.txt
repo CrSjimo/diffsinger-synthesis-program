@@ -10,6 +10,7 @@ set_target_properties(dssp PROPERTIES
     CXX_EXTENSIONS OFF
     MACOSX_BUNDLE OFF
 )
+
 target_compile_definitions(dssp PRIVATE DSSP_DESCRIPTION="${DSSP_DESCRIPTION}")
 target_compile_definitions(dssp PRIVATE DSSP_VERSION="${DSSP_VERSION}")
 

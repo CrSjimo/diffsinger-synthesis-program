@@ -14,13 +14,16 @@
 namespace dssp::resource {
     namespace {
         stdc::LogCategory log("dssp.resource.TaskExecutor");
+
         struct Submission {
             std::mutex mutex;
             std::optional<TaskExecutionError> dispatchError;
         };
     }
+
     struct TaskExecutor::Impl {
         Impl(std::unique_ptr<WorkerPool> executor, std::string name) : executor(std::move(executor)), name(std::move(name)) {}
+
         std::unique_ptr<WorkerPool> executor;
         std::string name;
         std::mutex mutex;
@@ -33,22 +36,27 @@ namespace dssp::resource {
         if (name.empty() || !workers) {
             return std::unexpected{TaskExecutionError("Task executor requires a name and at least one worker")};
         }
+
         auto executor = WorkerPool::create(name, workers);
         if (!executor) {
             return std::unexpected{TaskExecutionError("Cannot create background task workers", executor.error().clone())};
         }
+
         try {
             return std::shared_ptr<TaskExecutor>(new TaskExecutor(std::make_unique<Impl>(std::move(*executor), std::move(name))));
         } catch (const std::exception &error) {
             return std::unexpected{TaskExecutionError("Cannot create background task workers", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"standard library", "TaskExecutor construction", "exception"}))};
         }
     }
+
     TaskExecutor::TaskExecutor(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+
     TaskExecutor::~TaskExecutor() { shutdown(); }
 
     void TaskExecutor::submit(Task task, std::stop_token stop) {
         auto *impl = impl_.get();
         const auto submission = std::make_shared<Submission>();
+
         // A one-item SerialQueue supplies the existing cancellation/lifecycle
         // rules. The worker pool schedules unrelated jobs concurrently.
         const auto queueReference = std::make_shared<std::weak_ptr<SerialQueue>>();
@@ -60,6 +68,7 @@ namespace dssp::resource {
             if (dispatched) {
                 return;
             }
+
             {
                 const std::lock_guard lock(submission->mutex);
                 submission->dispatchError.emplace("Cannot dispatch background task", dispatched.error().clone());
@@ -67,10 +76,12 @@ namespace dssp::resource {
             if (queue) {
                 queue->close();
             }
+
             // Clear SerialQueue's scheduled drain after closing; no user work runs.
             work();
         }, impl->name);
         *queueReference = queue;
+
         bool stopped;
         {
             const std::lock_guard lock(impl->mutex);
@@ -80,9 +91,11 @@ namespace dssp::resource {
                 impl->jobs.push_back(queue);
             }
         }
+
         if (stopped) {
             queue->close();
         }
+
         queue->submit({std::move(task.run), [queue, submission, complete = std::move(task.complete)](bool cancelled) {
             TaskResult result;
             {
@@ -93,9 +106,11 @@ namespace dssp::resource {
                     result = std::unexpected{error::ErrorSet<TaskExecutionError, TaskCancelledError>{TaskCancelledError("Background task was cancelled")}};
                 }
             }
+
             complete(std::move(result));
         }}, stop);
     }
+
     void TaskExecutor::shutdown() {
         auto *impl = impl_.get();
         std::call_once(impl->shutdownOnce, [impl] {
@@ -109,12 +124,15 @@ namespace dssp::resource {
                     }
                 }
             }
+
             for (const auto &job : jobs) {
                 job->close();
             }
+
             for (const auto &job : jobs) {
                 job->wait();
             }
+
             impl->executor->shutdown();
             log.stdcTrace("Background executor %1 stopped", impl->name);
         });

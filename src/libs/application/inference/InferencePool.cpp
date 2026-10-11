@@ -23,6 +23,7 @@ namespace dssp::inference {
         struct LoadedInference {
             std::string label;
             std::unique_ptr<TaskExecutive> executive;
+
             ~LoadedInference() {
                 if (!executive) {
                     return;
@@ -41,6 +42,7 @@ namespace dssp::inference {
     class InferenceResource {
     public:
         ExecutiveDefinition<TaskExecutive> definition;
+
         std::shared_ptr<resource::SerialQueue> queue;
         const void *owner = nullptr;
         mutable std::mutex dispatchMutex;
@@ -96,7 +98,9 @@ namespace dssp::inference {
             return std::unexpected{InitializationError("Cannot create inference workers", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"standard library", "create inference workers", "exception"}))};
         }
     }
+
     InferencePool::InferencePool(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+
     InferencePool::~InferencePool() { shutdown(); }
 
     std::expected<InferenceDefinition, ExecutionError> InferencePool::importDefinition(const srt::ContribImport &imported, std::shared_ptr<const srt::InferenceRuntimeOptions> options, const srt::JsonValue &effectiveRuntime) {
@@ -105,6 +109,7 @@ namespace dssp::inference {
             if (!binding || binding->state() != srt::ContribImportBinding::Active || !options) {
                 return std::unexpected{ExecutionError("Inference import is not active")};
             }
+
             auto &target = binding->target();
             auto *spec = dynamic_cast<srt::InferenceSpec *>(&target);
             if (!spec || options->interface() != target.interface() || options->variant() != target.variant() || options->level() != target.level()) {
@@ -115,6 +120,7 @@ namespace dssp::inference {
             if (!key) {
                 return std::unexpected{ExecutionError("Cannot identify inference resource", key.error().clone())};
             }
+
             InferenceDefinition definition;
             definition.key = *key;
             definition.label = resourceReference(target);
@@ -123,18 +129,22 @@ namespace dssp::inference {
             definition.create = [spec, importOptions, options = std::move(options)] {
                 return nativeCall("InferenceSpec::createInference", [&] { return spec->createInference(*importOptions, *options); });
             };
+
             return definition;
         } catch (const std::exception &error) {
             return std::unexpected{ExecutionError("Cannot inspect inference import", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"synthrt", "inspect inference import", "exception"}))};
         }
     }
+
     std::expected<InferenceHandle, ExecutionError> InferencePool::bind(InferenceDefinition definition) {
         return bindExecutive(std::move(definition));
     }
+
     std::expected<InferenceHandle, ExecutionError> InferencePool::bindTask(ExecutiveDefinition<TaskExecutive> definition) {
         if (definition.key.empty() || !definition.create) {
             return std::unexpected{ExecutionError("Inference resource requires an identity and a factory")};
         }
+
         const std::lock_guard lock(impl_->mutex);
         if (impl_->stopped) {
             return std::unexpected{ExecutionError("Inference cache group has been shut down")};
@@ -142,6 +152,7 @@ namespace dssp::inference {
         if (const auto found = impl_->resources.find(definition.key); found != impl_->resources.end()) {
             return found->second;
         }
+
         auto resource = std::make_shared<InferenceResource>();
         resource->definition = std::move(definition);
         resource->owner = impl_.get();
@@ -164,11 +175,13 @@ namespace dssp::inference {
         impl_->resources.emplace(resource->definition.key, resource);
         return InferenceHandle(std::move(resource));
     }
+
     void InferencePool::schedule(InferenceHandle handle, std::stop_token stop, std::function<bool(TaskExecutive &, std::stop_token)> run, std::function<void(std::optional<ExecutionError>, bool)> complete) {
         if (!handle || handle->owner != impl_.get()) {
             complete(ExecutionError("Inference resource belongs to another cache group"), stop.stop_requested());
             return;
         }
+
         const auto error = std::make_shared<std::optional<ExecutionError>>();
         const auto admissionCancelled = std::make_shared<bool>(false);
         handle->queue->submit({{}, [handle, error, admissionCancelled, complete = std::move(complete)](bool cancelled) mutable {
@@ -186,6 +199,7 @@ namespace dssp::inference {
             });
         }}, stop);
     }
+
     drogon::Task<bool> InferencePool::execute(InferenceHandle handle, std::stop_token token, std::shared_ptr<std::optional<ExecutionError>> error, std::function<bool(TaskExecutive &, std::stop_token)> run) {
         auto *impl = impl_.get();
         if (token.stop_requested()) co_return true;
@@ -200,12 +214,14 @@ namespace dssp::inference {
                 error->emplace("Inference provider returned a null executive");
                 co_return false;
             }
+
             auto loaded = std::make_unique<LoadedInference>();
             loaded->label = handle->definition.label;
             loaded->executive = std::move(*created);
             log.stdcDebug("Loaded inference resource %1 into cache group %2", loaded->label, impl->group);
             lease.emplace(impl->cache.insert(handle->definition.key, std::move(loaded)));
         }
+
         auto &executive = *lease->value()->executive;
         // Loading/initialization occurs outside admission. Keep the lease
         // pinned while awaiting the shared execution permit.
@@ -217,6 +233,7 @@ namespace dssp::inference {
             permit.emplace(std::move(*admitted));
             log.stdcTrace("Acquired DirectML execution admission for inference %1", handle->definition.label);
         }
+
         bool succeeded = false;
         {
             std::atomic_flag nativeStopRequested = ATOMIC_FLAG_INIT;
@@ -228,6 +245,7 @@ namespace dssp::inference {
                     log.stdcWarning("Cannot request stop for inference %1: %2", handle->definition.label, stopped.error().formatChain());
                 }
             };
+
             const std::stop_callback cancellation(token, requestStop);
             const std::stop_callback gateCancellation(permit ? permit->cancellation() : std::stop_token{}, requestStop);
             if (!token.stop_requested() && (!permit || !permit->cancellation().stop_requested())) {
@@ -241,15 +259,20 @@ namespace dssp::inference {
                 }
             }
         }
+
         if (!succeeded || token.stop_requested() || executive.state() == srt::ITask::Canceled || executive.state() == srt::ITask::Failed) {
             // Cancelled/failed native tasks may retain stop or failure state.
             // Recreate on the next task rather than infecting another request.
             impl->cache.erase(handle->definition.key);
         }
+
         co_return token.stop_requested() || (permit && permit->cancellation().stop_requested());
     }
+
     std::size_t InferencePool::residentCount() const { return impl_->cache.size(); }
+
     void InferencePool::sweep() { impl_->cache.sweep(); }
+
     void InferencePool::shutdown() {
         std::call_once(impl_->shutdownOnce, [&] {
             std::vector<InferenceHandle> resources;
@@ -260,16 +283,20 @@ namespace dssp::inference {
                     resources.push_back(resource);
                 }
             }
+
             impl_->cleanup.request_stop();
             if (impl_->cleanup.joinable()) {
                 impl_->cleanup.join();
             }
+
             for (const auto &resource : resources) {
                 resource->queue->close();
             }
+
             for (const auto &resource : resources) {
                 resource->queue->wait();
             }
+
             impl_->executor->shutdown();
             impl_->cache.clear();
             // Keep closed definitions valid for outstanding non-running handles.

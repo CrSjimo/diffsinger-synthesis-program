@@ -18,11 +18,13 @@ namespace dssp::resource {
         using ErrorType::ErrorType;
         std::string_view kind() const noexcept override { return "dssp.resource.task_execution"; }
     };
+
     class TaskCancelledError final : public ErrorType<TaskCancelledError> {
     public:
         using ErrorType::ErrorType;
         std::string_view kind() const noexcept override { return "dssp.resource.task_cancelled"; }
     };
+
     using TaskResult = std::expected<void, error::ErrorSet<TaskExecutionError, TaskCancelledError>>;
 
     // Ordinary background work, with no resource identity or cache. Callbacks
@@ -34,6 +36,7 @@ namespace dssp::resource {
             // Exactly once, after run returns or immediately on queued cancellation.
             std::function<void(TaskResult)> complete;
         };
+
         static std::expected<std::shared_ptr<TaskExecutor>, TaskExecutionError> create(std::string name, std::size_t workers = 2);
         ~TaskExecutor();
         TaskExecutor(const TaskExecutor &) = delete;
@@ -46,6 +49,7 @@ namespace dssp::resource {
                 submit({[](std::stop_token) {}, std::move(complete)}, stop);
             });
         }
+
         // Cancels pending work, requests running work to stop, and joins workers.
         // Never call from one of this executor's callbacks.
         void shutdown();

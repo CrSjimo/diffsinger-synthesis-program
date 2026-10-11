@@ -33,6 +33,7 @@ namespace dssp::api_v1 {
     class CatalogController final : public drogon::HttpController<CatalogController, false> {
     public:
         explicit CatalogController(std::shared_ptr<const arch::ArchitectureCatalog> architectures) : architectures_(std::move(architectures)) {}
+
         METHOD_LIST_BEGIN
             ADD_METHOD_TO(CatalogController::architectures, "/v1/arch", drogon::Get);
             ADD_METHOD_TO(CatalogController::architecture, "/v1/arch/{1}", drogon::Get);
@@ -68,6 +69,7 @@ namespace dssp::api_v1 {
     class SynthesisController final : public drogon::HttpController<SynthesisController, false>, public ControllerSupport {
     public:
         SynthesisController(std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::shared_ptr<const arch::ArchitectureCatalog> architectures) : ControllerSupport(std::move(lifetime)), architectures_(std::move(architectures)) {}
+
         METHOD_LIST_BEGIN
             ADD_METHOD_TO(SynthesisController::envTag, "/v1/synth/env-tag", drogon::Post);
             ADD_METHOD_TO(SynthesisController::pronunciation, "/v1/synth/pronunciation", drogon::Post);
@@ -90,6 +92,7 @@ namespace dssp::api_v1 {
     class ExtractionController final : public drogon::HttpController<ExtractionController, false>, public ControllerSupport {
     public:
         ExtractionController(std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::shared_ptr<extraction::Service> service) : ControllerSupport(std::move(lifetime)), service_(std::move(service)) {}
+
         METHOD_LIST_BEGIN
             ADD_METHOD_TO(ExtractionController::extractors, "/v1/extractor", drogon::Get);
             ADD_METHOD_VIA_REGEX(ExtractionController::noteExtractor, R"(/v1/extractor/note/([^:]+:[^/]+/[^/]+))", drogon::Get);
