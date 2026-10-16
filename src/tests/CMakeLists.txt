@@ -1,4 +1,5 @@
 find_package(GTest CONFIG REQUIRED)
+find_package(stdcorelib CONFIG REQUIRED)
 find_package(onnxruntime-builds CONFIG REQUIRED)
 find_package(ICU 68 REQUIRED COMPONENTS uc i18n data)
 
@@ -6,6 +7,10 @@ find_package(ICU 68 REQUIRED COMPONENTS uc i18n data)
 add_executable(dssp_log_timestamp_tests LogTimestampTest.cpp ../app/LogTimestamp.cpp)
 target_compile_features(dssp_log_timestamp_tests PRIVATE cxx_std_23)
 target_link_libraries(dssp_log_timestamp_tests PRIVATE GTest::gtest_main ICU::uc ICU::i18n ICU::data)
+
+add_executable(dssp_logger_tests LoggerTest.cpp ../app/Logger.cpp ../app/LogTimestamp.cpp)
+target_compile_features(dssp_logger_tests PRIVATE cxx_std_23)
+target_link_libraries(dssp_logger_tests PRIVATE GTest::gtest_main stdcorelib::stdcorelib ICU::uc ICU::i18n ICU::data)
 
 add_executable(dssp_tests
     ErrorTest.cpp
@@ -76,6 +81,7 @@ dssp_add_translations(dssp_metadata_resources_tests "${CMAKE_CURRENT_SOURCE_DIR}
 include(GoogleTest)
 
 gtest_discover_tests(dssp_log_timestamp_tests DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(dssp_logger_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(dssp_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(dssp_http_access_log_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(dssp_arch_diffsinger_tests DISCOVERY_MODE PRE_TEST)

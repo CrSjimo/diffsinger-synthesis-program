@@ -14,12 +14,21 @@ namespace dssp {
         Fatal,
     };
 
+    enum class LogMode {
+        Normal,
+        Structured,
+    };
+
     // Registers the console handler with stdcorelib's logging mechanism.
     void installLogger();
 
     // The logLevel configuration item, defaulting to Info.
     void setLogLevel(LogLevel level);
     LogLevel logLevel();
+
+    // The logMode configuration item, defaulting to Normal.
+    void setLogMode(LogMode mode);
+    LogMode logMode();
 
 }
 

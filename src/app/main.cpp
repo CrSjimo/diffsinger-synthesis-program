@@ -18,6 +18,17 @@ namespace {
         using dssp::LogLevel;
         using namespace std::literals::string_view_literals;
 
+        const auto mode = result.valueForOption<std::string>("--log-mode").value_or("normal");
+        if (mode == "normal") {
+            dssp::setLogMode(dssp::LogMode::Normal);
+        } else if (mode == "structured") {
+            dssp::setLogMode(dssp::LogMode::Structured);
+        } else {
+            const stdc::LogCategory log("dssp.Main");
+            log.stdcCritical("Invalid log mode '%1'; expected normal or structured.", mode);
+            return 1;
+        }
+
         static constexpr std::array levels{
             std::pair{"trace"sv, LogLevel::Trace},
             std::pair{"debug"sv, LogLevel::Debug},
@@ -84,6 +95,7 @@ int main(int argc, char **argv) {
         auto mainCommand = stdc::cli::Command{stdc::system::application_name(), DSSP_DESCRIPTION}
             .addVersionOption(DSSP_VERSION)
             .addHelpOption(true, false)
+            .addOption(stdc::cli::Option({"--log-mode"}, "Log output format, default normal").arg("normal|structured").recursive())
             .addOption(stdc::cli::Option({"--log-level"}, "Log level (DSSP_LOG_LEVEL), default info").arg("trace|debug|success|info|warning|critical|fatal").recursive())
             .addOption(stdc::cli::Option({"-V", "--verbose"}, "Set log level to debug").recursive())
             .addOption(stdc::cli::Option({"-q", "--quiet"}, "Set log level to warning").recursive())

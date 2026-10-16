@@ -71,5 +71,17 @@ namespace dssp::tests {
             EXPECT_EQ(detail::formatLogTimestamp(utc(2024, 11, 3, 5, 30, 0)), "2024-11-03T01:30:00.000-04:00");
             EXPECT_EQ(detail::formatLogTimestamp(utc(2024, 11, 3, 6, 30, 0)), "2024-11-03T01:30:00.000-05:00");
         }
+
+        TEST_F(LogTimestampTest, StructuredTimezoneOffsetUsesLoggedInstant) {
+            zone("UTC");
+            EXPECT_EQ(detail::logTimezoneOffset(utc(2024, 6, 1, 0, 0, 0)), std::chrono::seconds{0});
+            zone("Asia/Kathmandu");
+            EXPECT_EQ(detail::logTimezoneOffset(utc(2024, 6, 1, 0, 0, 0)), std::chrono::seconds{20700});
+            zone("GMT-03:30");
+            EXPECT_EQ(detail::logTimezoneOffset(utc(2024, 6, 1, 0, 0, 0)), std::chrono::seconds{-12600});
+            zone("America/New_York");
+            EXPECT_EQ(detail::logTimezoneOffset(utc(2024, 3, 10, 6, 59, 59, 999)), std::chrono::seconds{-18000});
+            EXPECT_EQ(detail::logTimezoneOffset(utc(2024, 3, 10, 7, 0, 0)), std::chrono::seconds{-14400});
+        }
     }
 }
