@@ -1,0 +1,41 @@
+name: Dev Build
+
+on:
+  # push:
+  #   branches: [main]
+  #   paths-ignore:
+  #     - README.md
+  #     - COPYING
+  #     - '.github/**'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - README.md
+      - COPYING
+      - '.github/**'
+  workflow_dispatch:
+    inputs:
+      identifier:
+        description: Additional version identifier
+        type: string
+      use_ccache:
+        description: Use CCache
+        type: boolean
+        default: true
+      use_cache:
+        description: Restore and save caches
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  Build:
+    uses: ./.github/workflows/build.yml
+    with:
+      source_sha: ${{ github.sha }}
+      build_type: dev
+      version_identifier: ${{ github.sha }}${{ github.event.inputs.identifier && '.' || '' }}${{ github.event.inputs.identifier }}
+      use_cache: ${{ github.event_name != 'workflow_dispatch' || inputs.use_cache }}
+      use_ccache: ${{ github.event.inputs.use_ccache == 'true' }}

@@ -1,0 +1,65 @@
+param(
+    [Parameter(Mandatory)]
+    [string]$InstallDir,
+
+    [Parameter(Mandatory)]
+    [ValidatePattern('^[A-Za-z0-9_]+$')]
+    [string]$ApplicationName,
+
+    [Parameter(Mandatory)]
+    [string]$ArchivePath
+)
+
+$ErrorActionPreference = 'Stop'
+$installPath = (Resolve-Path -LiteralPath $InstallDir).Path
+$archiveFullPath = [System.IO.Path]::GetFullPath($ArchivePath)
+if (Test-Path -LiteralPath $archiveFullPath) {
+    throw "Archive already exists: $archiveFullPath"
+}
+$executable = Join-Path $installPath ($IsWindows ? 'bin/dssp.exe' : 'bin/dssp')
+if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+    throw "Installed executable is missing: $executable"
+}
+
+$stagingRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("DSSP-Portable-" + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $stagingRoot | Out-Null
+$applicationDir = Join-Path $stagingRoot $ApplicationName
+if ($IsWindows) {
+    New-Item -ItemType Directory -Path $applicationDir | Out-Null
+    Get-ChildItem -LiteralPath $installPath -Force | Copy-Item -Destination $applicationDir -Recurse -Force
+} else {
+    # cp -a preserves executable permissions and shared-library symlinks.
+    & /bin/cp -a $installPath $applicationDir | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw 'Portable staging failed' }
+}
+
+# Symbol files are not part of the portable distribution.
+Get-ChildItem -LiteralPath $applicationDir -Recurse -Force -Directory -Filter '*.dSYM' |
+    ForEach-Object {
+        $symbolPath = (Resolve-Path -LiteralPath $_.FullName).Path
+        $stagingPrefix = [System.IO.Path]::GetFullPath($applicationDir) + [System.IO.Path]::DirectorySeparatorChar
+        if (-not $symbolPath.StartsWith($stagingPrefix, [System.StringComparison]::Ordinal) -or $_.LinkType) {
+            throw "Symbol directory is outside the staging tree or is a link: $symbolPath"
+        }
+        Remove-Item -LiteralPath $symbolPath -Recurse -Force
+    }
+Get-ChildItem -LiteralPath $applicationDir -Recurse -Force -File |
+    Where-Object { $_.Extension -in '.pdb', '.debug' } | Remove-Item -Force
+
+Push-Location $stagingRoot
+try {
+    if ($IsWindows) {
+        & 7z a -tzip -mx=9 $archiveFullPath $ApplicationName | Out-Host
+    } elseif ($IsMacOS) {
+        & /usr/bin/ditto -c -k --keepParent --norsrc $ApplicationName $archiveFullPath | Out-Host
+    } else {
+        & /usr/bin/zip -9 -r -y $archiveFullPath $ApplicationName | Out-Host
+    }
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $archiveFullPath -PathType Leaf)) {
+        throw 'Portable ZIP creation failed'
+    }
+} finally {
+    Pop-Location
+}
+
+Write-Output $archiveFullPath
