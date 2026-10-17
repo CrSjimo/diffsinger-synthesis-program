@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   Check:
-    if: github.repository == 'CrSjimo/diffsinger-synthesis-program' && github.ref == 'refs/heads/main'
+    if: github.repository == 'diffscope/diffsinger-synthesis-program' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       should_build: ${{ steps.check.outputs.should_build }}
