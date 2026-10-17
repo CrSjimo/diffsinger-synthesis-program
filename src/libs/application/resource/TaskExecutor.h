@@ -57,7 +57,7 @@ namespace dssp::resource {
     private:
         struct Impl;
         explicit TaskExecutor(std::unique_ptr<Impl>);
-        std::unique_ptr<Impl> impl_;
+        std::unique_ptr<Impl> m_impl;
     };
 }
 

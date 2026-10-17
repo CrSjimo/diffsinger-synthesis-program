@@ -11,8 +11,8 @@ namespace dssp::arch_diffsinger {
 
     class DiffSinger final : public arch::Architecture {
     public:
-        DiffSinger(std::shared_ptr<const SingerCatalog> catalog, std::shared_ptr<media::Resources> media, std::shared_ptr<const localization::Catalog> translations, std::shared_ptr<resource::TaskExecutor> tasks) : catalog_(std::move(catalog)), media_(std::move(media)), translations_(std::move(translations)), tasks_(std::move(tasks)) {}
-        const SingerCatalog &catalog() const noexcept { return *catalog_; }
+        DiffSinger(std::shared_ptr<const SingerCatalog> catalog, std::shared_ptr<media::Resources> media, std::shared_ptr<const localization::Catalog> translations, std::shared_ptr<resource::TaskExecutor> tasks) : m_catalog(std::move(catalog)), m_media(std::move(media)), m_translations(std::move(translations)), m_tasks(std::move(tasks)) {}
+        const SingerCatalog &catalog() const noexcept { return *m_catalog; }
         std::string_view id() const noexcept override;
         arch::CatalogResult<arch::ArchitectureMetadata> metadata(const arch::CatalogOptions &) const override;
         arch::CatalogResult<std::vector<arch::SingerInfo>> singers(const arch::CatalogOptions &) const override;
@@ -31,10 +31,10 @@ namespace dssp::arch_diffsinger {
         void audio(arch::AudioInput, std::stop_token, arch::Completion<arch::AudioOutput>) const override;
 
     private:
-        std::shared_ptr<const SingerCatalog> catalog_;
-        std::shared_ptr<media::Resources> media_;
-        std::shared_ptr<const localization::Catalog> translations_;
-        std::shared_ptr<resource::TaskExecutor> tasks_;
+        std::shared_ptr<const SingerCatalog> m_catalog;
+        std::shared_ptr<media::Resources> m_media;
+        std::shared_ptr<const localization::Catalog> m_translations;
+        std::shared_ptr<resource::TaskExecutor> m_tasks;
     };
 
 }

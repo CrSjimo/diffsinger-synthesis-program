@@ -54,7 +54,7 @@ namespace dssp::resource {
 
         try {
             auto pool = std::unique_ptr<WorkerPool>(new WorkerPool(std::make_unique<Impl>(std::move(name))));
-            auto *impl = pool->impl_.get();
+            auto *impl = pool->m_impl.get();
             impl->workers.reserve(workers);
             for (std::size_t i = 0; i < workers; ++i) {
                 impl->workers.emplace_back([impl](std::stop_token stop) { impl->run(stop); });
@@ -66,7 +66,7 @@ namespace dssp::resource {
         }
     }
 
-    WorkerPool::WorkerPool(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+    WorkerPool::WorkerPool(std::unique_ptr<Impl> impl) : m_impl(std::move(impl)) {}
 
     WorkerPool::~WorkerPool() { shutdown(); }
 
@@ -75,7 +75,7 @@ namespace dssp::resource {
             return std::unexpected{WorkerError("Cannot dispatch empty work")};
         }
 
-        auto *impl = impl_.get();
+        auto *impl = m_impl.get();
         try {
             const std::lock_guard lock(impl->mutex);
             if (impl->closed) {
@@ -91,7 +91,7 @@ namespace dssp::resource {
     }
 
     void WorkerPool::shutdown() {
-        auto *impl = impl_.get();
+        auto *impl = m_impl.get();
         std::call_once(impl->shutdownOnce, [impl] {
             {
                 const std::lock_guard lock(impl->mutex);

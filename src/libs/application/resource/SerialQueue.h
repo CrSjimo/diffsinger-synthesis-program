@@ -35,7 +35,7 @@ namespace dssp::resource {
 
     private:
         struct State;
-        std::shared_ptr<State> state_;
+        std::shared_ptr<State> m_state;
     };
 }
 

@@ -16,9 +16,9 @@ namespace dssp::tests {
     protected:
         void loadEnvironment(LanguagePackageOptions options = {}) {
             options.singer = true;
-            writeLanguagePackage(files, "package", options);
+            writeLanguagePackage(m_files, "package", options);
             inference::EnvironmentOptions configuration;
-            configuration.packageRoots = {files.path()};
+            configuration.packageRoots = {m_files.path()};
             const std::filesystem::path plugins(DSSP_TEST_PLUGIN_DIR);
             configuration.pluginPaths = arch_diffsinger::pluginPaths(plugins);
             configuration.pluginPaths.push_back({"inference", plugins / "dsinfer" / "inferenceinterpreters"});
@@ -26,27 +26,27 @@ namespace dssp::tests {
             configuration.pluginPaths.push_back({"linguist", plugins / "wolf" / "linguistproviders"});
             const auto host = inference::Environment::create(configuration);
             ASSERT_TRUE(host) << (host ? "" : host.error().formatChain());
-            environment = *host;
+            m_environment = *host;
         }
 
         void initialize(LanguagePackageOptions options = {}) {
             loadEnvironment(options);
-            ASSERT_NE(environment, nullptr);
-            ASSERT_TRUE(environment->problems().empty()) << (environment->problems().empty() ? "" : environment->problems().front().error.formatChain());
+            ASSERT_NE(m_environment, nullptr);
+            ASSERT_TRUE(m_environment->problems().empty()) << (m_environment->problems().empty() ? "" : m_environment->problems().front().error.formatChain());
             const auto resources = media::Resources::create(std::filesystem::path(DSSP_TEST_RESOURCE_DIR) / "media" / "magic.mgc");
             ASSERT_TRUE(resources);
-            const auto created = arch_diffsinger::create({environment, *resources, std::filesystem::path(DSSP_TEST_RESOURCE_DIR) / "localization"});
+            const auto created = arch_diffsinger::create({m_environment, *resources, std::filesystem::path(DSSP_TEST_RESOURCE_DIR) / "localization"});
             ASSERT_TRUE(created) << (created ? "" : created.error().formatChain());
-            implementation = *created;
-            const auto singers = implementation->singers({});
+            m_implementation = *created;
+            const auto singers = m_implementation->singers({});
             ASSERT_TRUE(singers);
             ASSERT_EQ(singers->size(), 1U);
-            context = {Json::Value(Json::objectValue), {singers->front().id, Json::Value(Json::objectValue)}};
+            m_context = {Json::Value(Json::objectValue), {singers->front().id, Json::Value(Json::objectValue)}};
         }
 
         void TearDown() override {
-            if (environment) {
-                environment->shutdown();
+            if (m_environment) {
+                m_environment->shutdown();
             }
         }
 
@@ -64,24 +64,24 @@ namespace dssp::tests {
         }
 
         arch::SynthesisResult<arch::PronunciationOutput> pronunciation(std::vector<arch::Lyric> notes) {
-            return await<arch::PronunciationOutput>([&](auto callback) { implementation->pronunciation({context, std::move(notes)}, {}, std::move(callback)); });
+            return await<arch::PronunciationOutput>([&](auto callback) { m_implementation->pronunciation({m_context, std::move(notes)}, {}, std::move(callback)); });
         }
 
         arch::SynthesisResult<arch::PhonemeOutput> phoneme(std::vector<arch::PronunciationNote> notes) {
-            return await<arch::PhonemeOutput>([&](auto callback) { implementation->phoneme({context, std::move(notes)}, {}, std::move(callback)); });
+            return await<arch::PhonemeOutput>([&](auto callback) { m_implementation->phoneme({m_context, std::move(notes)}, {}, std::move(callback)); });
         }
 
-        TestFiles files;
-        std::shared_ptr<inference::Environment> environment;
-        arch::ArchitecturePtr implementation;
-        arch::SingleSingerContext context;
+        TestFiles m_files;
+        std::shared_ptr<inference::Environment> m_environment;
+        arch::ArchitecturePtr m_implementation;
+        arch::SingleSingerContext m_context;
     };
 
     TEST_F(LanguagePredictionTest, RealG2pPreservesOrderCandidatesFallbackAndLiteralEditorCharacters) {
         initialize();
-        ASSERT_NE(implementation, nullptr);
+        ASSERT_NE(m_implementation, nullptr);
         for (const auto group : {"diffsinger-pronunciation", "diffsinger-phoneme", "diffsinger-onset"}) {
-            const auto pool = environment->inferences(group);
+            const auto pool = m_environment->inferences(group);
             ASSERT_TRUE(pool);
             EXPECT_EQ((*pool)->residentCount(), 0U);
         }
@@ -99,11 +99,11 @@ namespace dssp::tests {
         EXPECT_EQ(result->notes[4].candidates, (std::vector<std::string>{"SP"}));
         EXPECT_EQ(result->notes[5].pronunciation, "a+");
         EXPECT_EQ(result->notes[6].pronunciation, "-");
-        const auto pronunciationPool = environment->inferences("diffsinger-pronunciation");
+        const auto pronunciationPool = m_environment->inferences("diffsinger-pronunciation");
         ASSERT_TRUE(pronunciationPool);
         EXPECT_EQ((*pronunciationPool)->residentCount(), 1U);
         for (const auto group : {"diffsinger-phoneme", "diffsinger-onset"}) {
-            const auto pool = environment->inferences(group);
+            const auto pool = m_environment->inferences(group);
             ASSERT_TRUE(pool);
             EXPECT_EQ((*pool)->residentCount(), 0U);
         }
@@ -111,7 +111,7 @@ namespace dssp::tests {
 
     TEST_F(LanguagePredictionTest, RealS2pAndOnsetConvertFullInputsBeforeSlicingAndDoNotInvokeG2p) {
         initialize();
-        ASSERT_NE(implementation, nullptr);
+        ASSERT_NE(m_implementation, nullptr);
         const auto result = phoneme({{"b a b i", "eng", {}, {}}, {"b a b i", "eng", 1, {}}, {"b a b i", "eng", {}, -1}, {"b a b i", "eng", 0, 0}, {"b a b i", "eng", -100, 100}, {"AP", "missing", {}, {}}, {"word", "missing", {}, {}}, {"", "eng", {}, {}}});
         ASSERT_TRUE(result) << (result ? "" : result.error().asError().formatChain());
         ASSERT_EQ(result->notes.size(), 8U);
@@ -133,11 +133,11 @@ namespace dssp::tests {
         EXPECT_TRUE(result->notes[5].phonemes[0].onset);
         EXPECT_TRUE(result->notes[6].phonemes.empty());
         EXPECT_TRUE(result->notes[7].phonemes.empty());
-        const auto pool = environment->inferences("diffsinger-phoneme");
+        const auto pool = m_environment->inferences("diffsinger-phoneme");
         ASSERT_TRUE(pool);
         EXPECT_EQ((*pool)->residentCount(), 1U);
-        const auto onset = environment->inferences("diffsinger-onset");
-        const auto pronunciation = environment->inferences("diffsinger-pronunciation");
+        const auto onset = m_environment->inferences("diffsinger-onset");
+        const auto pronunciation = m_environment->inferences("diffsinger-pronunciation");
         ASSERT_TRUE(onset);
         ASSERT_TRUE(pronunciation);
         EXPECT_EQ((*onset)->residentCount(), 1U);
@@ -146,7 +146,7 @@ namespace dssp::tests {
 
     TEST_F(LanguagePredictionTest, TokenOnlyAndMissingDictionaryEntriesAreNormalResults) {
         initialize({.onsets = false, .dictionaryS2p = true});
-        ASSERT_NE(implementation, nullptr);
+        ASSERT_NE(m_implementation, nullptr);
         const auto result = phoneme({{"test", "eng", {}, {}}, {"unlisted", "eng", {}, {}}, {"test", "eng", 1, {}}, {"test", "eng", -1, {}}});
         ASSERT_TRUE(result) << (result ? "" : result.error().asError().formatChain());
         ASSERT_EQ(result->notes.size(), 4U);
@@ -162,7 +162,7 @@ namespace dssp::tests {
 
     TEST_F(LanguagePredictionTest, PhonemesRemainIndependentOfNoteOrderBatchingAndPriorCalls) {
         initialize();
-        ASSERT_NE(implementation, nullptr);
+        ASSERT_NE(m_implementation, nullptr);
         const auto alone = phoneme({{"b a b i", "eng", {}, {}}});
         const auto mixed = phoneme({{"i", "eng", {}, {}}, {"b a b i", "eng", {}, {}}, {"b a", "eng", {}, {}}});
         const auto reordered = phoneme({{"b a", "eng", {}, {}}, {"b a b i", "eng", {}, {}}, {"i", "eng", {}, {}}});
@@ -184,7 +184,7 @@ namespace dssp::tests {
 
     TEST_F(LanguagePredictionTest, EmptyNotesAndCancellationDoNotCreateExecutives) {
         initialize();
-        ASSERT_NE(implementation, nullptr);
+        ASSERT_NE(m_implementation, nullptr);
         const auto words = pronunciation({});
         const auto phones = phoneme({});
         ASSERT_TRUE(words);
@@ -193,11 +193,11 @@ namespace dssp::tests {
         EXPECT_TRUE(phones->notes.empty());
         std::stop_source stop;
         stop.request_stop();
-        const auto cancelled = await<arch::PhonemeOutput>([&](auto callback) { implementation->phoneme({context, {{"b a", "eng", {}, {}}}}, stop.get_token(), std::move(callback)); });
+        const auto cancelled = await<arch::PhonemeOutput>([&](auto callback) { m_implementation->phoneme({m_context, {{"b a", "eng", {}, {}}}}, stop.get_token(), std::move(callback)); });
         ASSERT_FALSE(cancelled);
         EXPECT_NE(cancelled.error().get_if<arch::CancelledError>(), nullptr);
         for (const auto group : {"diffsinger-pronunciation", "diffsinger-phoneme", "diffsinger-onset"}) {
-            const auto pool = environment->inferences(group);
+            const auto pool = m_environment->inferences(group);
             ASSERT_TRUE(pool);
             EXPECT_EQ((*pool)->residentCount(), 0U);
         }
@@ -205,12 +205,12 @@ namespace dssp::tests {
 
     TEST_F(LanguagePredictionTest, SingerWithoutLanguagesFallsBackWithoutLoadingExecutives) {
         initialize({.singerLanguages = false});
-        ASSERT_NE(implementation, nullptr);
-        const auto singers = implementation->singers({});
+        ASSERT_NE(m_implementation, nullptr);
+        const auto singers = m_implementation->singers({});
         ASSERT_TRUE(singers);
         ASSERT_EQ(singers->size(), 1U);
         EXPECT_TRUE(singers->front().defaultLanguage.empty());
-        const auto groups = implementation->groups({});
+        const auto groups = m_implementation->groups({});
         ASSERT_TRUE(groups);
         ASSERT_EQ(groups->size(), 1U);
         EXPECT_TRUE(groups->front().languages.empty());
@@ -230,7 +230,7 @@ namespace dssp::tests {
         EXPECT_TRUE(phones->notes[0].phonemes.empty());
         EXPECT_TRUE(phones->notes[1].phonemes.empty());
         for (const auto group : {"diffsinger-pronunciation", "diffsinger-phoneme", "diffsinger-onset"}) {
-            const auto pool = environment->inferences(group);
+            const auto pool = m_environment->inferences(group);
             ASSERT_TRUE(pool);
             EXPECT_EQ((*pool)->residentCount(), 0U);
         }
@@ -238,7 +238,7 @@ namespace dssp::tests {
 
     TEST_F(LanguagePredictionTest, CustomReservedTokensAreNotExtendedWithSpAp) {
         initialize({.customReserved = true});
-        ASSERT_NE(implementation, nullptr);
+        ASSERT_NE(m_implementation, nullptr);
         const auto result = pronunciation({{"read", ""}, {"REST", ""}, {"read", "eng"}});
         ASSERT_TRUE(result);
         ASSERT_EQ(result->notes.size(), 3U);
@@ -256,7 +256,7 @@ namespace dssp::tests {
 
     TEST_F(LanguagePredictionTest, UndeclaredReservedTokensDoNotBypassInference) {
         initialize({.noReserved = true});
-        ASSERT_NE(implementation, nullptr);
+        ASSERT_NE(m_implementation, nullptr);
         const auto result = phoneme({{"SP", "eng", {}, {}}, {"AP", "eng", {}, {}}});
         ASSERT_TRUE(result);
         ASSERT_EQ(result->notes.size(), 2U);
@@ -265,18 +265,18 @@ namespace dssp::tests {
             EXPECT_FALSE(note.phonemes.front().onset);
         }
 
-        const auto pool = environment->inferences("diffsinger-phoneme");
+        const auto pool = m_environment->inferences("diffsinger-phoneme");
         ASSERT_TRUE(pool);
         EXPECT_EQ((*pool)->residentCount(), 1U);
     }
 
     TEST_F(LanguagePredictionTest, MissingDeclaredDictionaryRejectsThePackageWithADiagnostic) {
         loadEnvironment({.missingS2pDictionary = true});
-        ASSERT_NE(environment, nullptr);
-        EXPECT_TRUE(environment->packages().empty());
-        ASSERT_EQ(environment->problems().size(), 1U);
-        const auto &problem = environment->problems().front();
-        EXPECT_EQ(problem.path, files.path() / "package");
+        ASSERT_NE(m_environment, nullptr);
+        EXPECT_TRUE(m_environment->packages().empty());
+        ASSERT_EQ(m_environment->problems().size(), 1U);
+        const auto &problem = m_environment->problems().front();
+        EXPECT_EQ(problem.path, m_files.path() / "package");
         ASSERT_NE(problem.error.cause(), nullptr);
         auto cause = problem.error.cause();
         while (cause->cause()) {
@@ -288,7 +288,7 @@ namespace dssp::tests {
         EXPECT_EQ(native->diagnostic().domain, srt::Error::category().name());
         EXPECT_EQ(native->diagnostic().code, srt::Error::FileNotFound);
         for (const auto group : {"diffsinger-pronunciation", "diffsinger-phoneme", "diffsinger-onset"}) {
-            const auto pool = environment->inferences(group);
+            const auto pool = m_environment->inferences(group);
             ASSERT_TRUE(pool);
             EXPECT_EQ((*pool)->residentCount(), 0U);
         }
@@ -296,16 +296,16 @@ namespace dssp::tests {
 
     TEST_F(LanguagePredictionTest, UnavailableInferencePoolIsAnUnexpectedErrorAndContextValidationPrecedesBinding) {
         initialize({.dictionaryS2p = true});
-        ASSERT_NE(implementation, nullptr);
-        const auto pool = environment->inferences("diffsinger-phoneme");
+        ASSERT_NE(m_implementation, nullptr);
+        const auto pool = m_environment->inferences("diffsinger-phoneme");
         ASSERT_TRUE(pool);
         EXPECT_EQ((*pool)->residentCount(), 0U);
         (*pool)->shutdown();
-        context.archExtra["depth"] = 2;
+        m_context.archExtra["depth"] = 2;
         const auto invalid = phoneme({{"test", "eng", {}, {}}});
         ASSERT_FALSE(invalid);
         EXPECT_NE(invalid.error().get_if<arch::InvalidInputError>(), nullptr);
-        context.archExtra = Json::Value(Json::objectValue);
+        m_context.archExtra = Json::Value(Json::objectValue);
         const auto result = phoneme({{"test", "eng", {}, {}}});
         ASSERT_FALSE(result);
         const auto *error = result.error().get_if<arch::OperationError>();

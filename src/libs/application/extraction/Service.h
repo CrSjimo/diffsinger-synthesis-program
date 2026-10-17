@@ -25,7 +25,7 @@ namespace dssp::extraction {
     private:
         struct Impl;
         explicit Service(std::unique_ptr<Impl>);
-        std::unique_ptr<Impl> impl_;
+        std::unique_ptr<Impl> m_impl;
     };
 }
 

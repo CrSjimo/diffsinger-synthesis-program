@@ -27,12 +27,12 @@ namespace dssp::http {
 
     class ValidationError final : public ErrorType<ValidationError> {
     public:
-        explicit ValidationError(std::vector<FieldIssue> issues, std::source_location location = std::source_location::current()) : ErrorType("Request fields do not conform to the API schema", {}, location), issues_(std::make_shared<const std::vector<FieldIssue>>(std::move(issues))) {}
-        const std::vector<FieldIssue> &issues() const noexcept { return *issues_; }
+        explicit ValidationError(std::vector<FieldIssue> issues, std::source_location location = std::source_location::current()) : ErrorType("Request fields do not conform to the API schema", {}, location), m_issues(std::make_shared<const std::vector<FieldIssue>>(std::move(issues))) {}
+        const std::vector<FieldIssue> &issues() const noexcept { return *m_issues; }
         std::string_view kind() const noexcept override { return "dssp.http.validation"; }
 
     private:
-        std::shared_ptr<const std::vector<FieldIssue>> issues_;
+        std::shared_ptr<const std::vector<FieldIssue>> m_issues;
     };
 
     class HttpBoundaryError final : public ErrorType<HttpBoundaryError> {

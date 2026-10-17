@@ -23,9 +23,9 @@ namespace dssp::localization {
 
     private:
         using Strings = std::map<std::string, std::string>;
-        std::string fallbackLocale_;
-        std::vector<std::string> locales_;
-        std::vector<Strings> translations_;
+        std::string m_fallbackLocale;
+        std::vector<std::string> m_locales;
+        std::vector<Strings> m_translations;
     };
 }
 

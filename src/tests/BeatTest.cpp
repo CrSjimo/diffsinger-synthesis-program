@@ -46,7 +46,7 @@ namespace dssp::tests {
 
         class FakeTracker final : public Beat::BeatExecutive {
         public:
-            FakeTracker(srt::InferenceSpec &spec, int mode, std::shared_ptr<std::promise<void>> started) : BeatExecutive(spec), mode_(mode), started_(std::move(started)) {}
+            FakeTracker(srt::InferenceSpec &spec, int mode, std::shared_ptr<std::promise<void>> started) : BeatExecutive(spec), m_mode(mode), m_started(std::move(started)) {}
 
             ~FakeTracker() override {
                 (void)stop();
@@ -61,8 +61,8 @@ namespace dssp::tests {
                 EXPECT_EQ(input.audio.startTime, 0);
                 EXPECT_FLOAT_EQ(input.audio.samples[500], 0.0625f);
 
-                if (started_) {
-                    started_->set_value();
+                if (m_started) {
+                    m_started->set_value();
                     const auto deadline = std::chrono::steady_clock::now() + 3s;
                     while (!cancelled() && std::chrono::steady_clock::now() < deadline) std::this_thread::sleep_for(1ms);
                     if (cancelled()) return srtbeatinfer::cancelledError();
@@ -71,48 +71,48 @@ namespace dssp::tests {
 
                 auto result = std::make_unique<Beat::BeatResult>();
                 result->beats = {{0.25, true}, {0.75, false}};
-                if (mode_ == 1) result->beats[1].time = 0.1;
-                if (mode_ == 2) result->beats[1].time = std::numeric_limits<double>::quiet_NaN();
-                if (mode_ == 3) result->beats[1].time = 1.1;
-                if (mode_ == 4) result->beats.clear();
+                if (m_mode == 1) result->beats[1].time = 0.1;
+                if (m_mode == 2) result->beats[1].time = std::numeric_limits<double>::quiet_NaN();
+                if (m_mode == 3) result->beats[1].time = 1.1;
+                if (m_mode == 4) result->beats.clear();
 
                 return result;
             }
 
         private:
-            int mode_;
-            std::shared_ptr<std::promise<void>> started_;
+            int m_mode;
+            std::shared_ptr<std::promise<void>> m_started;
         };
     }
 
     class BeatTest : public ::testing::Test {
     protected:
         void SetUp() override {
-            files.write("package/desc.json", R"({"$version":"1.0","id":"example/beat","version":"1","runtimeLevel":1,"contributions":{"inference":[{"id":"final0","path":"final0.json"}]}})");
-            files.write("package/final0.json", R"({"name":{"_":"Beat This!","zh-CN":"节拍提取"},"interface":"org.openvpi.srtbeatinfer.inference.Beat","variant":"beat-this","level":1,"exports":{"sampleRate":22050,"channelCount":1,"maxSegmentDuration":0,"downbeats":true},"configuration":{"model":"missing.onnx","chunkFrames":1500,"borderFrames":6}})");
+            m_files.write("package/desc.json", R"({"$version":"1.0","id":"example/beat","version":"1","runtimeLevel":1,"contributions":{"inference":[{"id":"final0","path":"final0.json"}]}})");
+            m_files.write("package/final0.json", R"({"name":{"_":"Beat This!","zh-CN":"节拍提取"},"interface":"org.openvpi.srtbeatinfer.inference.Beat","variant":"beat-this","level":1,"exports":{"sampleRate":22050,"channelCount":1,"maxSegmentDuration":0,"downbeats":true},"configuration":{"model":"missing.onnx","chunkFrames":1500,"borderFrames":6}})");
 
             inference::EnvironmentOptions options;
-            options.packageRoots = {files.path()};
+            options.packageRoots = {m_files.path()};
             options.pluginPaths = {{"inference", DSSP_TEST_BEAT_PLUGIN_DIR}};
             auto made = inference::Environment::create(options);
             ASSERT_TRUE(made);
-            environment = *made;
-            ASSERT_TRUE(environment->problems().empty()) << (environment->problems().empty() ? "" : environment->problems().front().error.formatChain());
+            m_environment = *made;
+            ASSERT_TRUE(m_environment->problems().empty()) << (m_environment->problems().empty() ? "" : m_environment->problems().front().error.formatChain());
         }
 
         void TearDown() override {
-            if (service) service->shutdown();
-            if (environment) environment->shutdown();
+            if (m_service) m_service->shutdown();
+            if (m_environment) m_environment->shutdown();
         }
 
         void start(int mode = 0, std::shared_ptr<std::promise<void>> started = {}, bool install = true) {
             if (install) {
-                auto *category = dynamic_cast<srt::InferenceCategory *>(environment->unit().category("inference"));
+                auto *category = dynamic_cast<srt::InferenceCategory *>(m_environment->unit().category("inference"));
                 ASSERT_NE(category, nullptr);
                 auto specs = category->inferences();
                 ASSERT_EQ(specs.size(), 1);
                 auto *spec = specs.front();
-                auto pool = environment->inferences("extraction-tempo");
+                auto pool = m_environment->inferences("extraction-tempo");
                 ASSERT_TRUE(pool);
 
                 inference::InferenceDefinition definition;
@@ -122,27 +122,27 @@ namespace dssp::tests {
                 ASSERT_TRUE((*pool)->bind(std::move(definition)));
             }
 
-            auto made = extraction::Service::create(environment);
+            auto made = extraction::Service::create(m_environment);
             ASSERT_TRUE(made);
-            service = *made;
+            m_service = *made;
         }
 
         auto submit(extraction::Input input, std::stop_token token = {}) {
             auto promise = std::make_shared<std::promise<extraction::ExtractionResult<extraction::TempoOutput>>>();
             auto future = promise->get_future();
-            service->tempo(std::move(input), token, [promise](auto result) { promise->set_value(std::move(result)); });
+            m_service->tempo(std::move(input), token, [promise](auto result) { promise->set_value(std::move(result)); });
             return future;
         }
 
-        TestFiles files;
-        std::shared_ptr<inference::Environment> environment;
-        std::shared_ptr<extraction::Service> service;
+        TestFiles m_files;
+        std::shared_ptr<inference::Environment> m_environment;
+        std::shared_ptr<extraction::Service> m_service;
     };
 
     TEST_F(BeatTest, ColdDiscoveryDoesNotOpenModelAndExportsTempoMetadata) {
         start(0, {}, false);
 
-        auto list = service->extractors("zh-CN");
+        auto list = m_service->extractors("zh-CN");
         ASSERT_TRUE(list);
         ASSERT_EQ(list->tempo.size(), 1);
         EXPECT_EQ(list->tempo[0].id, Id);
@@ -152,10 +152,10 @@ namespace dssp::tests {
         const auto json = api_v1::toJson(api_v1::toDto(*list));
         EXPECT_EQ(json["tempo"][0]["preferredAudioSampleRate"].asUInt(), 22050);
 
-        auto pool = environment->inferences("extraction-tempo");
+        auto pool = m_environment->inferences("extraction-tempo");
         ASSERT_TRUE(pool);
         EXPECT_EQ((*pool)->residentCount(), 0);
-        EXPECT_FALSE(service->extractor(extraction::Kind::Note, Id));
+        EXPECT_FALSE(m_service->extractor(extraction::Kind::Note, Id));
     }
 
     TEST_F(BeatTest, DownmixesAndReturnsAbsolutePositionsWithBooleanDownbeats) {

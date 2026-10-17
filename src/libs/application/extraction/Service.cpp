@@ -186,33 +186,33 @@ namespace dssp::extraction {
         return std::shared_ptr<Service>(new Service(std::move(impl)));
     }
 
-    Service::Service(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+    Service::Service(std::unique_ptr<Impl> impl) : m_impl(std::move(impl)) {}
 
     Service::~Service() = default;
-    void Service::shutdown() { impl_->tasks->shutdown(); }
+    void Service::shutdown() { m_impl->tasks->shutdown(); }
 
     void Service::tempo(Input input, std::stop_token stop, Completion<TempoOutput> complete) const {
-        const auto *record = impl_->catalog->find(Kind::Tempo, input.extractor);
+        const auto *record = m_impl->catalog->find(Kind::Tempo, input.extractor);
         if (!record) {
             complete(fail<ExtractionErrors>(InvalidInputError("Tempo extractor does not exist: " + input.extractor)));
             return;
         }
 
-        extractTempo(impl_->catalog, *record, impl_->tasks, std::move(input), stop, std::move(complete));
+        extractTempo(m_impl->catalog, *record, m_impl->tasks, std::move(input), stop, std::move(complete));
     }
 
-    CatalogResult<ExtractorList> Service::extractors(std::string_view language) const { return impl_->catalog->list(language); }
+    CatalogResult<ExtractorList> Service::extractors(std::string_view language) const { return m_impl->catalog->list(language); }
 
-    CatalogResult<ExtractorInfo> Service::extractor(Kind kind, std::string_view id, std::string_view language) const { return impl_->catalog->metadata(kind, id, language); }
+    CatalogResult<ExtractorInfo> Service::extractor(Kind kind, std::string_view id, std::string_view language) const { return m_impl->catalog->metadata(kind, id, language); }
 
     void Service::note(Input input, std::stop_token stop, Completion<NoteOutput> complete) const {
-        const auto *record = impl_->catalog->find(Kind::Note, input.extractor);
+        const auto *record = m_impl->catalog->find(Kind::Note, input.extractor);
         if (!record) {
             complete(fail<ExtractionErrors>(InvalidInputError("Note extractor does not exist: " + input.extractor)));
             return;
         }
 
-        extract<Note::NoteExecutive, Note::NoteStartInput, Note::NoteResult>(impl_->catalog, *record, impl_->tasks, std::move(input), impl_->threshold, stop, std::move(complete), [](const auto &request, const auto &results) -> std::expected<NoteOutput, OperationError> {
+        extract<Note::NoteExecutive, Note::NoteStartInput, Note::NoteResult>(m_impl->catalog, *record, m_impl->tasks, std::move(input), m_impl->threshold, stop, std::move(complete), [](const auto &request, const auto &results) -> std::expected<NoteOutput, OperationError> {
             std::vector<Note::NoteInfo> notes;
             for (std::size_t index = 0; index < results.size(); ++index) {
                 const auto start = static_cast<double>(request.spans[index].begin) / request.record.sampleRate;
@@ -228,13 +228,13 @@ namespace dssp::extraction {
     }
 
     void Service::pitch(Input input, std::stop_token stop, Completion<PitchOutput> complete) const {
-        const auto *record = impl_->catalog->find(Kind::Pitch, input.extractor);
+        const auto *record = m_impl->catalog->find(Kind::Pitch, input.extractor);
         if (!record) {
             complete(fail<ExtractionErrors>(InvalidInputError("Pitch extractor does not exist: " + input.extractor)));
             return;
         }
 
-        extract<F0::F0Executive, F0::F0StartInput, F0::F0Result>(impl_->catalog, *record, impl_->tasks, std::move(input), impl_->threshold, stop, std::move(complete), [](const auto &request, const auto &results) -> std::expected<PitchOutput, OperationError> {
+        extract<F0::F0Executive, F0::F0StartInput, F0::F0Result>(m_impl->catalog, *record, m_impl->tasks, std::move(input), m_impl->threshold, stop, std::move(complete), [](const auto &request, const auto &results) -> std::expected<PitchOutput, OperationError> {
             PitchBuilder builder(request.record.outputInterval);
             for (std::size_t index = 0; index < results.size(); ++index) {
                 const auto start = static_cast<double>(request.spans[index].begin) / request.record.sampleRate;
@@ -248,12 +248,12 @@ namespace dssp::extraction {
     }
 
     void Service::separation(SeparationInput input, std::stop_token stop, Completion<SeparationOutput> complete) const {
-        const auto *record = impl_->catalog->find(Kind::Separation, input.extractor);
+        const auto *record = m_impl->catalog->find(Kind::Separation, input.extractor);
         if (!record) {
             complete(fail<ExtractionErrors>(InvalidInputError("Separation extractor does not exist: " + input.extractor)));
             return;
         }
 
-        extractSeparation(impl_->catalog, *record, impl_->tasks, std::move(input), stop, std::move(complete));
+        extractSeparation(m_impl->catalog, *record, m_impl->tasks, std::move(input), stop, std::move(complete));
     }
 }

@@ -35,26 +35,26 @@ namespace dssp::tests {
         // without sleeps, external models, or edits to any upstream library.
         class ControlledExecutive final : public G2P::G2PExecutive {
         public:
-            ControlledExecutive(srt::InferenceSpec &spec, std::shared_ptr<ExecutionControl> control) : G2PExecutive(spec), control_(std::move(control)) { ++control_->created; }
+            ControlledExecutive(srt::InferenceSpec &spec, std::shared_ptr<ExecutionControl> control) : G2PExecutive(spec), m_control(std::move(control)) { ++m_control->created; }
 
             srt::Expected<void> initialize(const G2P::G2PInitArgs &) override { return {}; }
 
             srt::Expected<std::unique_ptr<G2P::G2PResult>> start(const G2P::G2PStartInput &input) override {
-                state_ = srt::ITask::Running;
+                m_state = srt::ITask::Running;
                 if (input.lyrics.front() == "throw") {
                     throw std::runtime_error("simulated native failure");
                 }
 
                 {
-                    std::unique_lock lock(control_->mutex);
-                    ++control_->active;
-                    control_->maximumActive = std::max(control_->maximumActive, control_->active);
-                    control_->starts.push_back(input.lyrics.front());
-                    control_->wake.notify_all();
-                    if (control_->block) {
-                        control_->wake.wait_for(lock, 5s, [&] { return stopped_ || control_->released; });
+                    std::unique_lock lock(m_control->mutex);
+                    ++m_control->active;
+                    m_control->maximumActive = std::max(m_control->maximumActive, m_control->active);
+                    m_control->starts.push_back(input.lyrics.front());
+                    m_control->wake.notify_all();
+                    if (m_control->block) {
+                        m_control->wake.wait_for(lock, 5s, [&] { return m_stopped || m_control->released; });
                     }
-                    --control_->active;
+                    --m_control->active;
                 }
 
                 auto result = std::make_unique<G2P::G2PResult>();
@@ -64,7 +64,7 @@ namespace dssp::tests {
                     result->words.push_back(std::move(word));
                 }
 
-                state_ = stopped_ ? srt::ITask::Canceled : srt::ITask::Succeeded;
+                m_state = m_stopped ? srt::ITask::Canceled : srt::ITask::Succeeded;
                 return result;
             }
 
@@ -73,25 +73,25 @@ namespace dssp::tests {
                 return {};
             }
 
-            srt::ITask::State state() const noexcept override { return state_; }
+            srt::ITask::State state() const noexcept override { return m_state; }
 
             srt::Expected<void> stop() override {
                 {
-                    const std::lock_guard lock(control_->mutex);
-                    stopped_ = true;
+                    const std::lock_guard lock(m_control->mutex);
+                    m_stopped = true;
                 }
 
-                ++control_->stopped;
-                control_->wake.notify_all();
+                ++m_control->stopped;
+                m_control->wake.notify_all();
                 return {};
             }
 
             srt::Expected<void> waitForFinished() override { return {}; }
 
         private:
-            std::shared_ptr<ExecutionControl> control_;
-            std::atomic<srt::ITask::State> state_ = srt::ITask::Idle;
-            std::atomic<bool> stopped_ = false;
+            std::shared_ptr<ExecutionControl> m_control;
+            std::atomic<srt::ITask::State> m_state = srt::ITask::Idle;
+            std::atomic<bool> m_stopped = false;
         };
 
         G2pResult awaitResult(std::future<G2pResult> result) {
@@ -116,37 +116,37 @@ namespace dssp::tests {
     class InferencePoolTest : public ::testing::Test {
     protected:
         void SetUp() override {
-            writeLanguagePackage(files, "one");
-            writeLanguagePackage(files, "two", {.version = "2"});
+            writeLanguagePackage(m_files, "one");
+            writeLanguagePackage(m_files, "two", {.version = "2"});
             inference::EnvironmentOptions options;
-            options.packageRoots = {files.path()};
+            options.packageRoots = {m_files.path()};
             const std::filesystem::path plugins(DSSP_TEST_PLUGIN_DIR);
             options.pluginPaths = {{"inference", plugins / "wolf" / "inferenceinterpreters"}, {"linguist", plugins / "wolf" / "linguistproviders"}};
             options.cacheGroups = {{"diffsinger-pronunciation", {1, 0ms, 60s}}, {"diffsinger-acoustic", {2, 0ms, 60s}}};
             const auto created = inference::Environment::create(options);
             ASSERT_TRUE(created) << (created ? "" : created.error().formatChain());
-            host = *created;
-            ASSERT_TRUE(host->problems().empty()) << (host->problems().empty() ? "" : host->problems().front().error.formatChain());
-            ASSERT_EQ(host->packages().size(), 2U);
-            const auto group = host->inferences("diffsinger-pronunciation");
+            m_host = *created;
+            ASSERT_TRUE(m_host->problems().empty()) << (m_host->problems().empty() ? "" : m_host->problems().front().error.formatChain());
+            ASSERT_EQ(m_host->packages().size(), 2U);
+            const auto group = m_host->inferences("diffsinger-pronunciation");
             ASSERT_TRUE(group);
-            pool = *group;
-            spec = dynamic_cast<srt::InferenceSpec *>(host->packages().front().contribution("inference", "g2p"));
-            ASSERT_NE(spec, nullptr);
+            m_pool = *group;
+            m_spec = dynamic_cast<srt::InferenceSpec *>(m_host->packages().front().contribution("inference", "g2p"));
+            ASSERT_NE(m_spec, nullptr);
         }
 
         void TearDown() override {
-            if (host) {
-                host->shutdown();
+            if (m_host) {
+                m_host->shutdown();
             }
         }
 
         inference::InferenceHandle controlled(std::string key, const std::shared_ptr<ExecutionControl> &control, inference::InferencePool *group = nullptr, bool parallelSafe = false) {
-            auto definition = inference::InferenceDefinition{key, key, {spec->package()}, [spec = spec, control]() -> std::expected<std::unique_ptr<srt::InferenceExecutive>, inference::ExecutionError> {
+            auto definition = inference::InferenceDefinition{key, key, {m_spec->package()}, [spec = m_spec, control]() -> std::expected<std::unique_ptr<srt::InferenceExecutive>, inference::ExecutionError> {
                 return std::make_unique<ControlledExecutive>(*spec, control);
             }};
             definition.parallelSafe = parallelSafe;
-            const auto handle = (group ? group : pool)->bind(std::move(definition));
+            const auto handle = (group ? group : m_pool)->bind(std::move(definition));
             EXPECT_TRUE(handle);
             return handle ? *handle : inference::InferenceHandle{};
         }
@@ -156,14 +156,14 @@ namespace dssp::tests {
             input->lyrics.push_back(std::move(lyric));
             auto promise = std::make_shared<std::promise<G2pResult>>();
             auto result = promise->get_future();
-            (group ? group : pool)->run<G2P::G2PExecutive>(std::move(handle), stop, [input](auto &executive) { return executive.start(*input); }, [promise](auto value) { promise->set_value(std::move(value)); });
+            (group ? group : m_pool)->run<G2P::G2PExecutive>(std::move(handle), stop, [input](auto &executive) { return executive.start(*input); }, [promise](auto value) { promise->set_value(std::move(value)); });
             return result;
         }
 
-        TestFiles files;
-        std::shared_ptr<inference::Environment> host;
-        inference::InferencePool *pool = nullptr;
-        srt::InferenceSpec *spec = nullptr;
+        TestFiles m_files;
+        std::shared_ptr<inference::Environment> m_host;
+        inference::InferencePool *m_pool = nullptr;
+        srt::InferenceSpec *m_spec = nullptr;
     };
 
     TEST_F(InferencePoolTest, QueueIsSharedByIdentityAndBothQueuedAndRunningCancellationAreIsolated) {
@@ -213,27 +213,27 @@ namespace dssp::tests {
         ASSERT_NE(error, nullptr);
         ASSERT_NE(error->cause(), nullptr);
         EXPECT_NE(error->formatChain().find("simulated native failure"), std::string::npos);
-        EXPECT_EQ(pool->residentCount(), 0U);
+        EXPECT_EQ(m_pool->residentCount(), 0U);
         const auto next = awaitResult(submit(handle, "next"));
         ASSERT_TRUE(next);
         EXPECT_EQ(control->created.load(), 2U);
     }
 
     TEST_F(InferencePoolTest, CacheGroupsApplyIndependentCapacitiesAndRejectForeignHandles) {
-        const auto synthesis = host->inferences("diffsinger-acoustic");
+        const auto synthesis = m_host->inferences("diffsinger-acoustic");
         ASSERT_TRUE(synthesis);
         const auto control = std::make_shared<ExecutionControl>();
         const auto one = controlled("one", control);
         const auto two = controlled("two", control);
         ASSERT_TRUE(awaitResult(submit(one, "one")));
         ASSERT_TRUE(awaitResult(submit(two, "two")));
-        EXPECT_EQ(pool->residentCount(), 1U);
+        EXPECT_EQ(m_pool->residentCount(), 1U);
         const auto synthOne = controlled("one", control, *synthesis);
         const auto synthTwo = controlled("two", control, *synthesis);
         ASSERT_TRUE(awaitResult(submit(synthOne, "one", {}, *synthesis)));
         ASSERT_TRUE(awaitResult(submit(synthTwo, "two", {}, *synthesis)));
         EXPECT_EQ((*synthesis)->residentCount(), 2U);
-        EXPECT_EQ(pool->residentCount(), 1U);
+        EXPECT_EQ(m_pool->residentCount(), 1U);
         EXPECT_EQ(control->created.load(), 4U);
         ASSERT_TRUE(awaitResult(submit(one, "one")));
         EXPECT_EQ(control->created.load(), 5U);
@@ -244,32 +244,32 @@ namespace dssp::tests {
     }
 
     TEST_F(InferencePoolTest, RealImportBindingsReuseTheSameExecutiveAndKeepVersionsAndRuntimeBindingsDistinct) {
-        const auto imported = host->packages().front().contribution("linguist", "eng")->findImport("linguist/g2p");
+        const auto imported = m_host->packages().front().contribution("linguist", "eng")->findImport("linguist/g2p");
         ASSERT_TRUE(imported);
         auto options = std::make_shared<G2P::G2PRuntimeOptions>("pipe-chain");
         options->binding = {"eng", "test"};
         const srt::JsonValue effective(srt::JsonObject{{"language", "eng"}, {"scheme", "test"}});
-        const auto one = pool->bindImport<G2P::G2PExecutive, G2P::G2PInitArgs>(*imported, options, effective);
+        const auto one = m_pool->bindImport<G2P::G2PExecutive, G2P::G2PInitArgs>(*imported, options, effective);
         ASSERT_TRUE(one);
-        const auto repeated = pool->bindImport<G2P::G2PExecutive, G2P::G2PInitArgs>(*imported, options, effective);
+        const auto repeated = m_pool->bindImport<G2P::G2PExecutive, G2P::G2PInitArgs>(*imported, options, effective);
         ASSERT_TRUE(repeated);
         EXPECT_EQ(*one, *repeated);
         auto changedOptions = std::make_shared<G2P::G2PRuntimeOptions>("pipe-chain");
         changedOptions->binding = {"eng", "other"};
-        const auto changed = pool->bindImport<G2P::G2PExecutive, G2P::G2PInitArgs>(*imported, changedOptions, srt::JsonObject{{"language", "eng"}, {"scheme", "other"}});
+        const auto changed = m_pool->bindImport<G2P::G2PExecutive, G2P::G2PInitArgs>(*imported, changedOptions, srt::JsonObject{{"language", "eng"}, {"scheme", "other"}});
         ASSERT_TRUE(changed);
         EXPECT_NE(*changed, *one);
-        const auto otherImport = host->packages().back().contribution("linguist", "eng")->findImport("linguist/g2p");
+        const auto otherImport = m_host->packages().back().contribution("linguist", "eng")->findImport("linguist/g2p");
         ASSERT_TRUE(otherImport);
-        const auto otherVersion = pool->bindImport<G2P::G2PExecutive, G2P::G2PInitArgs>(*otherImport, options, effective);
+        const auto otherVersion = m_pool->bindImport<G2P::G2PExecutive, G2P::G2PInitArgs>(*otherImport, options, effective);
         ASSERT_TRUE(otherVersion);
         EXPECT_NE(*otherVersion, *one);
-        EXPECT_EQ(pool->residentCount(), 0U);
+        EXPECT_EQ(m_pool->residentCount(), 0U);
         const auto result = awaitResult(submit(*one, "read"));
         ASSERT_TRUE(result) << (result ? "" : result.error().asError().formatChain());
         ASSERT_EQ((*result)->words.size(), 1U);
         EXPECT_EQ((*result)->words.front().pronunciation, "b a b i");
-        EXPECT_EQ(pool->residentCount(), 1U);
+        EXPECT_EQ(m_pool->residentCount(), 1U);
     }
 
     TEST_F(InferencePoolTest, ShutdownCancelsAcceptedWorkAndRejectsSubsequentBindingsAndTasks) {
@@ -283,12 +283,12 @@ namespace dssp::tests {
         }
 
         auto queued = submit(handle, "queued");
-        host->shutdown();
+        m_host->shutdown();
         EXPECT_FALSE(awaitResult(std::move(first)));
         EXPECT_FALSE(awaitResult(std::move(queued)));
         EXPECT_FALSE(awaitResult(submit(handle, "after-shutdown")));
-        EXPECT_FALSE(host->inferences("diffsinger-pronunciation"));
-        EXPECT_EQ(pool->residentCount(), 0U);
+        EXPECT_FALSE(m_host->inferences("diffsinger-pronunciation"));
+        EXPECT_EQ(m_pool->residentCount(), 0U);
     }
 
     TEST_F(InferencePoolTest, SharedAdmissionCoversGroupsWithoutBlockingWorkersAndAllowsWhitelistedTasks) {
@@ -315,7 +315,7 @@ namespace dssp::tests {
             const auto created = std::make_shared<std::promise<void>>();
             loaded.push_back(created->get_future());
             const auto key = "gated-" + std::to_string(i);
-            inference::InferenceDefinition definition{key, key, {spec->package()}, [spec = spec, control, created]() -> std::expected<std::unique_ptr<srt::InferenceExecutive>, inference::ExecutionError> {
+            inference::InferenceDefinition definition{key, key, {m_spec->package()}, [spec = m_spec, control, created]() -> std::expected<std::unique_ptr<srt::InferenceExecutive>, inference::ExecutionError> {
                 auto executive = std::make_unique<ControlledExecutive>(*spec, control);
                 created->set_value();
                 return executive;

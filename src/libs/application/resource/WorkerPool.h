@@ -33,7 +33,7 @@ namespace dssp::resource {
     private:
         struct Impl;
         explicit WorkerPool(std::unique_ptr<Impl>);
-        std::unique_ptr<Impl> impl_;
+        std::unique_ptr<Impl> m_impl;
     };
 }
 

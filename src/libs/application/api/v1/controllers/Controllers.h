@@ -16,10 +16,10 @@ namespace dssp::api_v1 {
 
     class ControllerSupport {
     public:
-        explicit ControllerSupport(std::shared_ptr<http::RequestLifetimeRegistry> lifetime) : lifetime_(std::move(lifetime)) {}
+        explicit ControllerSupport(std::shared_ptr<http::RequestLifetimeRegistry> lifetime) : m_lifetime(std::move(lifetime)) {}
 
     protected:
-        std::shared_ptr<http::RequestLifetimeRegistry> lifetime_;
+        std::shared_ptr<http::RequestLifetimeRegistry> m_lifetime;
     };
 
     class ApplicationController final : public drogon::HttpController<ApplicationController, false> {
@@ -32,7 +32,7 @@ namespace dssp::api_v1 {
 
     class CatalogController final : public drogon::HttpController<CatalogController, false> {
     public:
-        explicit CatalogController(std::shared_ptr<const arch::ArchitectureCatalog> architectures) : architectures_(std::move(architectures)) {}
+        explicit CatalogController(std::shared_ptr<const arch::ArchitectureCatalog> architectures) : m_architectures(std::move(architectures)) {}
 
         METHOD_LIST_BEGIN
             ADD_METHOD_TO(CatalogController::architectures, "/v1/arch", drogon::Get);
@@ -63,12 +63,12 @@ namespace dssp::api_v1 {
         void groupSingers(const drogon::HttpRequestPtr &, http::Callback &&, std::string arch, std::string group) const;
 
     private:
-        const std::shared_ptr<const arch::ArchitectureCatalog> architectures_;
+        const std::shared_ptr<const arch::ArchitectureCatalog> m_architectures;
     };
 
     class SynthesisController final : public drogon::HttpController<SynthesisController, false>, public ControllerSupport {
     public:
-        SynthesisController(std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::shared_ptr<const arch::ArchitectureCatalog> architectures) : ControllerSupport(std::move(lifetime)), architectures_(std::move(architectures)) {}
+        SynthesisController(std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::shared_ptr<const arch::ArchitectureCatalog> architectures) : ControllerSupport(std::move(lifetime)), m_architectures(std::move(architectures)) {}
 
         METHOD_LIST_BEGIN
             ADD_METHOD_TO(SynthesisController::envTag, "/v1/synth/env-tag", drogon::Post);
@@ -86,12 +86,12 @@ namespace dssp::api_v1 {
         drogon::Task<> audio(drogon::HttpRequestPtr, http::Callback) const;
 
     private:
-        const std::shared_ptr<const arch::ArchitectureCatalog> architectures_;
+        const std::shared_ptr<const arch::ArchitectureCatalog> m_architectures;
     };
 
     class ExtractionController final : public drogon::HttpController<ExtractionController, false>, public ControllerSupport {
     public:
-        ExtractionController(std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::shared_ptr<extraction::Service> service) : ControllerSupport(std::move(lifetime)), service_(std::move(service)) {}
+        ExtractionController(std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::shared_ptr<extraction::Service> service) : ControllerSupport(std::move(lifetime)), m_service(std::move(service)) {}
 
         METHOD_LIST_BEGIN
             ADD_METHOD_TO(ExtractionController::extractors, "/v1/extractor", drogon::Get);
@@ -115,7 +115,7 @@ namespace dssp::api_v1 {
         drogon::Task<> separation(drogon::HttpRequestPtr, http::Callback) const;
 
     private:
-        const std::shared_ptr<extraction::Service> service_;
+        const std::shared_ptr<extraction::Service> m_service;
     };
 
     void registerControllers(drogon::HttpAppFramework &app, const std::shared_ptr<http::RequestLifetimeRegistry> &lifetime, const std::shared_ptr<const arch::ArchitectureCatalog> &architectures, const std::shared_ptr<extraction::Service> &extraction);

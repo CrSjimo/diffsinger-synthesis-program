@@ -32,7 +32,7 @@ namespace dssp::arch {
 
     private:
         explicit ArchitectureCatalog(std::vector<ArchitecturePtr> entries);
-        std::vector<ArchitecturePtr> entries_;
+        std::vector<ArchitecturePtr> m_entries;
     };
 
 }

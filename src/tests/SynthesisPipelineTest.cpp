@@ -30,14 +30,14 @@ namespace dssp::tests {
         public:
             using Hook = std::function<std::unique_ptr<Result>(const Input &)>;
 
-            TestExecutive(srt::InferenceSpec &spec, Hook hook) : Executive(spec), hook_(std::move(hook)) {}
+            TestExecutive(srt::InferenceSpec &spec, Hook hook) : Executive(spec), m_hook(std::move(hook)) {}
 
             srt::Expected<void> initialize(const Init &) override { return {}; }
 
             srt::Expected<std::unique_ptr<Result>> start(const Input &input) override {
-                state_ = srt::ITask::Running;
-                auto result = hook_(input);
-                state_ = srt::ITask::Succeeded;
+                m_state = srt::ITask::Running;
+                auto result = m_hook(input);
+                m_state = srt::ITask::Succeeded;
                 return result;
             }
 
@@ -46,18 +46,18 @@ namespace dssp::tests {
                 return {};
             }
 
-            srt::ITask::State state() const noexcept override { return state_; }
+            srt::ITask::State state() const noexcept override { return m_state; }
 
             srt::Expected<void> stop() override {
-                state_ = srt::ITask::Canceled;
+                m_state = srt::ITask::Canceled;
                 return {};
             }
 
             srt::Expected<void> waitForFinished() override { return {}; }
 
         private:
-            Hook hook_;
-            std::atomic<srt::ITask::State> state_ = srt::ITask::Idle;
+            Hook m_hook;
+            std::atomic<srt::ITask::State> m_state = srt::ITask::Idle;
         };
 
         using DurationExecutive = TestExecutive<Du::DurationExecutive, Du::DurationInitArgs, Du::DurationStartInput, Du::DurationResult>;
@@ -75,9 +75,9 @@ namespace dssp::tests {
     class SynthesisPipelineTest : public ::testing::Test {
     protected:
         void SetUp() override {
-            writeLanguagePackage(files, "package", {.singer = true, .synthesisStages = true});
+            writeLanguagePackage(m_files, "package", {.singer = true, .synthesisStages = true});
             inference::EnvironmentOptions options;
-            options.packageRoots = {files.path()};
+            options.packageRoots = {m_files.path()};
             const std::filesystem::path plugins(DSSP_TEST_PLUGIN_DIR);
             options.pluginPaths = arch_diffsinger::pluginPaths(plugins);
             options.pluginPaths.push_back({"inference", plugins / "dsinfer" / "inferenceinterpreters"});
@@ -90,35 +90,35 @@ namespace dssp::tests {
             }
             const auto created = inference::Environment::create(options);
             ASSERT_TRUE(created);
-            environment = *created;
-            ASSERT_TRUE(environment->problems().empty()) << (environment->problems().empty() ? "" : environment->problems().front().error.formatChain());
+            m_environment = *created;
+            ASSERT_TRUE(m_environment->problems().empty()) << (m_environment->problems().empty() ? "" : m_environment->problems().front().error.formatChain());
             const auto resources = media::Resources::create(std::filesystem::path(DSSP_TEST_RESOURCE_DIR) / "media" / "magic.mgc");
             ASSERT_TRUE(resources);
-            const auto architecture = arch_diffsinger::create({environment, *resources, std::filesystem::path(DSSP_TEST_RESOURCE_DIR) / "localization"});
+            const auto architecture = arch_diffsinger::create({m_environment, *resources, std::filesystem::path(DSSP_TEST_RESOURCE_DIR) / "localization"});
             ASSERT_TRUE(architecture);
-            implementation = *architecture;
-            const auto *typed = dynamic_cast<const arch_diffsinger::DiffSinger *>(implementation.get());
+            m_implementation = *architecture;
+            const auto *typed = dynamic_cast<const arch_diffsinger::DiffSinger *>(m_implementation.get());
             ASSERT_NE(typed, nullptr);
             ASSERT_EQ(typed->catalog().singers().size(), 1U);
-            singer = &typed->catalog().singers().begin()->second;
-            context = {Json::Value(Json::objectValue), {{singer->info.id, Json::Value(Json::objectValue)}}};
+            m_singer = &typed->catalog().singers().begin()->second;
+            m_context = {Json::Value(Json::objectValue), {{m_singer->info.id, Json::Value(Json::objectValue)}}};
         }
 
         void TearDown() override {
-            implementation.reset();
-            if (environment) environment->shutdown();
+            m_implementation.reset();
+            if (m_environment) m_environment->shutdown();
         }
 
         template <class Executive>
         void install(Stage stage, typename Executive::Hook hook) {
-            const auto key = arch_diffsinger::synthesisInferenceKey(*singer, stage);
+            const auto key = arch_diffsinger::synthesisInferenceKey(*m_singer, stage);
             ASSERT_TRUE(key);
-            const auto &record = singer->stages.at(std::string(arch_diffsinger::stageName(stage)));
+            const auto &record = m_singer->stages.at(std::string(arch_diffsinger::stageName(stage)));
             auto *spec = dynamic_cast<srt::InferenceSpec *>(const_cast<srt::ContribSpec *>(record.spec));
             ASSERT_NE(spec, nullptr);
-            const auto pool = environment->inferences(arch_diffsinger::synthesisCacheGroup(stage));
+            const auto pool = m_environment->inferences(arch_diffsinger::synthesisCacheGroup(stage));
             ASSERT_TRUE(pool);
-            const auto handle = (*pool)->bind({*key, std::string(arch_diffsinger::stageName(stage)), {singer->package, spec->package()}, [spec, hook = std::move(hook)]() -> std::expected<std::unique_ptr<srt::InferenceExecutive>, inference::ExecutionError> {
+            const auto handle = (*pool)->bind({*key, std::string(arch_diffsinger::stageName(stage)), {m_singer->package, spec->package()}, [spec, hook = std::move(hook)]() -> std::expected<std::unique_ptr<srt::InferenceExecutive>, inference::ExecutionError> {
                 return std::make_unique<Executive>(*spec, hook);
             }});
             ASSERT_TRUE(handle);
@@ -151,7 +151,7 @@ namespace dssp::tests {
 
         arch::ParameterInput parameterInput() const {
             arch::ParameterInput input;
-            input.context = context;
+            input.context = m_context;
             input.piece = piece();
             input.parameters.emplace("pitch", arch::Parameter{{69.0 / 128}, 100, arch::ParameterRetake{20, 20}});
             input.parameters.emplace("energy", arch::Parameter{{1}, 100, arch::ParameterRetake{0, 50}});
@@ -159,11 +159,11 @@ namespace dssp::tests {
             return input;
         }
 
-        TestFiles files;
-        std::shared_ptr<inference::Environment> environment;
-        arch::ArchitecturePtr implementation;
-        const arch_diffsinger::SingerRecord *singer = nullptr;
-        arch::MultiSingerContext context;
+        TestFiles m_files;
+        std::shared_ptr<inference::Environment> m_environment;
+        arch::ArchitecturePtr m_implementation;
+        const arch_diffsinger::SingerRecord *m_singer = nullptr;
+        arch::MultiSingerContext m_context;
     };
 
     TEST_F(SynthesisPipelineTest, DurationRestoresSubmittedPhonemeOrigins) {
@@ -174,7 +174,7 @@ namespace dssp::tests {
             return result;
         });
         arch::DurationInput input;
-        input.context = context;
+        input.context = m_context;
         input.piece.pieceDuration = 0.5;
         arch::DurationNote note;
         note.position = {0.2, 0.3};
@@ -183,7 +183,7 @@ namespace dssp::tests {
         note.language = "eng";
         note.phonemes = {{"b", false, "eng"}, {"a", true, "eng"}};
         input.piece.notes.push_back(note);
-        const auto output = await<arch::DurationOutput>([&](auto callback) { implementation->duration(input, {}, std::move(callback)); });
+        const auto output = await<arch::DurationOutput>([&](auto callback) { m_implementation->duration(input, {}, std::move(callback)); });
         ASSERT_TRUE(output) << (output ? "" : output.error().asError().formatChain());
         ASSERT_EQ(output->notes.size(), 1U);
         ASSERT_EQ(output->notes[0].phonemes.size(), 2U);
@@ -224,7 +224,7 @@ namespace dssp::tests {
             return result;
         });
         const auto input = parameterInput();
-        const auto output = await<arch::ParameterOutput>([&](auto callback) { implementation->parameter(input, {}, std::move(callback)); });
+        const auto output = await<arch::ParameterOutput>([&](auto callback) { m_implementation->parameter(input, {}, std::move(callback)); });
         ASSERT_TRUE(output) << (output ? "" : output.error().asError().formatChain());
         EXPECT_EQ(*order, (std::vector<std::string>{"pitch", "variance"}));
         ASSERT_EQ(output->parameters.size(), 2U);
@@ -246,13 +246,13 @@ namespace dssp::tests {
         });
         install<VarianceExecutive>(Stage::Variance, [](const auto &) { return std::make_unique<Va::VarianceResult>(); });
         const auto input = parameterInput();
-        const auto output = await<arch::ParameterOutput>([&](auto callback) { implementation->parameter(input, {}, std::move(callback)); });
+        const auto output = await<arch::ParameterOutput>([&](auto callback) { m_implementation->parameter(input, {}, std::move(callback)); });
         ASSERT_FALSE(output);
         EXPECT_NE(output.error().get_if<arch::OperationError>(), nullptr);
     }
 
     TEST_F(SynthesisPipelineTest, AcousticAndVocoderRunOnceAndOriginalPitchSurvivesToneShiftAndEviction) {
-        const auto *configuration = dynamic_cast<const Ac::AcousticConfiguration *>(singer->stages.at("acoustic").spec->configuration());
+        const auto *configuration = dynamic_cast<const Ac::AcousticConfiguration *>(m_singer->stages.at("acoustic").spec->configuration());
         ASSERT_NE(configuration, nullptr);
         const double interval = static_cast<double>(configuration->hopSize) / configuration->sampleRate;
         const auto frames = static_cast<std::int64_t>(std::round(0.5 / interval));
@@ -290,24 +290,24 @@ namespace dssp::tests {
             return result;
         });
         arch::AudioInput input;
-        input.context = context;
+        input.context = m_context;
         input.context.archExtra["steps"] = 30;
         input.context.archExtra["depth"] = 0.75;
         input.piece = piece();
         for (const auto id : {"pitch", "energy", "gender", "velocity", "tone_shift"}) input.parameters.emplace(id, arch::AudioParameter{100, std::nullopt});
         input.parameters.at("pitch").values = std::vector<double>{69.0 / 128};
         input.parameters.at("tone_shift").values = std::vector<double>{1};
-        const auto output = await<arch::AudioOutput>([&](auto callback) { implementation->audio(input, {}, std::move(callback)); });
+        const auto output = await<arch::AudioOutput>([&](auto callback) { m_implementation->audio(input, {}, std::move(callback)); });
         ASSERT_TRUE(output) << (output ? "" : output.error().asError().formatChain());
         EXPECT_TRUE(output->audioUrl.starts_with("data:audio/wav;base64,"));
         EXPECT_EQ(*order, (std::vector<std::string>{"acoustic", "vocoder"}));
         for (const auto stage : {Stage::Acoustic, Stage::Vocoder}) {
-            const auto pool = environment->inferences(arch_diffsinger::synthesisCacheGroup(stage));
+            const auto pool = m_environment->inferences(arch_diffsinger::synthesisCacheGroup(stage));
             ASSERT_TRUE(pool);
             EXPECT_EQ((*pool)->residentCount(), 1U);
         }
 
-        const auto duration = environment->inferences("diffsinger-duration");
+        const auto duration = m_environment->inferences("diffsinger-duration");
         ASSERT_TRUE(duration);
         EXPECT_EQ((*duration)->residentCount(), 0U);
     }
@@ -327,12 +327,12 @@ namespace dssp::tests {
             return std::make_unique<Vo::VocoderResult>();
         });
         arch::AudioInput input;
-        input.context = context;
+        input.context = m_context;
         input.piece = piece();
         input.piece.notes[0].pronunciation = "AP";
         input.piece.notes[0].phonemes.clear();
         for (const auto id : {"pitch", "energy", "gender", "velocity", "tone_shift"}) input.parameters.emplace(id, arch::AudioParameter{100, std::nullopt});
-        const auto output = await<arch::AudioOutput>([&](auto callback) { implementation->audio(input, {}, std::move(callback)); });
+        const auto output = await<arch::AudioOutput>([&](auto callback) { m_implementation->audio(input, {}, std::move(callback)); });
         ASSERT_FALSE(output);
         EXPECT_NE(output.error().get_if<arch::OperationError>(), nullptr);
         EXPECT_EQ(acousticCalls->load(), 1U);

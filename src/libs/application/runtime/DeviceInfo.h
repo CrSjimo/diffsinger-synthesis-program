@@ -22,13 +22,13 @@ namespace dssp::runtime {
             CoreML,
         };
 
-        explicit DeviceInfo(ExecutionProvider executionProvider, int index, std::string description, std::string id, std::size_t memory) : executionProvider_(executionProvider), index_(index), description_(std::move(description)), id_(std::move(id)), memory_(memory) {}
+        explicit DeviceInfo(ExecutionProvider executionProvider, int index, std::string description, std::string id, std::size_t memory) : m_executionProvider(executionProvider), m_index(index), m_description(std::move(description)), m_id(std::move(id)), m_memory(memory) {}
 
-        ExecutionProvider executionProvider() const noexcept { return executionProvider_; }
-        int index() const noexcept { return index_; }
-        const std::string &description() const noexcept { return description_; }
-        const std::string &id() const noexcept { return id_; }
-        std::size_t memory() const noexcept { return memory_; }
+        ExecutionProvider executionProvider() const noexcept { return m_executionProvider; }
+        int index() const noexcept { return m_index; }
+        const std::string &description() const noexcept { return m_description; }
+        const std::string &id() const noexcept { return m_id; }
+        std::size_t memory() const noexcept { return m_memory; }
 
         static std::expected<std::vector<DeviceInfo>, DeviceError> listDevices(std::optional<ExecutionProvider> provider = {});
         static ExecutionProvider defaultExecutionProvider() noexcept;
@@ -39,11 +39,11 @@ namespace dssp::runtime {
         static std::expected<ExecutionProvider, DeviceError> executionProviderFromString(const std::string &s);
 
     private:
-        ExecutionProvider executionProvider_;
-        int index_;
-        std::string description_;
-        std::string id_;
-        std::size_t memory_;
+        ExecutionProvider m_executionProvider;
+        int m_index;
+        std::string m_description;
+        std::string m_id;
+        std::size_t m_memory;
     };
 
     using ExecutionProvider = DeviceInfo::ExecutionProvider;

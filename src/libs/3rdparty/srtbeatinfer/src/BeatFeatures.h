@@ -12,9 +12,9 @@ namespace srtbeatinfer::beatthis {
         Features();
         srt::Expected<std::vector<float>> compute(std::span<const float>, const std::function<bool()> &cancelled = {}) const;
     private:
-        std::vector<float> window_, filter_;
-        std::vector<std::size_t> reversed_;
-        std::vector<std::complex<double>> roots_;
+        std::vector<float> m_window, m_filter;
+        std::vector<std::size_t> m_reversed;
+        std::vector<std::complex<double>> m_roots;
     };
 
     std::vector<Api::Beat::L1::Beat> postprocess(std::span<const float> beat, std::span<const float> downbeat, double startTime, double duration);

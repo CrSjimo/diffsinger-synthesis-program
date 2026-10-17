@@ -18,9 +18,9 @@ namespace dssp::tests {
 
     class TestArchitecture final : public arch::Architecture {
     public:
-        explicit TestArchitecture(std::string id = "diffsinger") : id_(std::move(id)) {}
-        std::string_view id() const noexcept override { return id_; }
-        arch::CatalogResult<arch::ArchitectureMetadata> metadata(const arch::CatalogOptions &) const override { return arch::ArchitectureMetadata{id_, "test architecture", {}}; }
+        explicit TestArchitecture(std::string id = "diffsinger") : m_id(std::move(id)) {}
+        std::string_view id() const noexcept override { return m_id; }
+        arch::CatalogResult<arch::ArchitectureMetadata> metadata(const arch::CatalogOptions &) const override { return arch::ArchitectureMetadata{m_id, "test architecture", {}}; }
         arch::CatalogResult<std::vector<arch::SingerInfo>> singers(const arch::CatalogOptions &) const override { return std::vector<arch::SingerInfo>{}; }
 
         arch::CatalogResult<std::optional<arch::SingerInfo>> singer(const arch::ResourceQuery &query) const override { return onSinger ? onSinger(query) : arch::CatalogResult<std::optional<arch::SingerInfo>>{std::optional<arch::SingerInfo>{}}; }
@@ -65,7 +65,7 @@ namespace dssp::tests {
             }
         }
 
-        const std::string id_;
+        const std::string m_id;
     };
 
     inline std::shared_ptr<const arch::ArchitectureCatalog> testCatalog(std::vector<arch::ArchitecturePtr> entries = {std::make_shared<TestArchitecture>()}) {

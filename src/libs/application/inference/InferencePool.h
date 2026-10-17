@@ -196,7 +196,7 @@ namespace dssp::inference {
         std::expected<InferenceHandle, ExecutionError> bindTask(ExecutiveDefinition<TaskExecutive>);
         void schedule(InferenceHandle, std::stop_token, std::function<bool(TaskExecutive &, std::stop_token)>, std::function<void(std::optional<ExecutionError>, bool)>);
         drogon::Task<bool> execute(InferenceHandle, std::stop_token, std::shared_ptr<std::optional<ExecutionError>>, std::function<bool(TaskExecutive &, std::stop_token)>);
-        std::unique_ptr<Impl> impl_;
+        std::unique_ptr<Impl> m_impl;
     };
 }
 

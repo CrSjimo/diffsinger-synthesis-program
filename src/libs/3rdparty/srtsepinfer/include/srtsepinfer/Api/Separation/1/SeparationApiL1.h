@@ -78,21 +78,21 @@ namespace srtsepinfer::Api::Separation::L1 {
     public:
         using AsyncCallback = std::function<void(srt::Expected<std::unique_ptr<SeparationResult>>)>;
         ~SeparationExecutive() override;
-        srt::Expected<std::unique_ptr<SeparationResult>> start(const SeparationStartInput &input) { return task_.run(input); }
-        srt::Expected<void> startAsync(std::shared_ptr<const SeparationStartInput> input, AsyncCallback callback) { return task_.runAsync(std::move(input), std::move(callback)); }
+        srt::Expected<std::unique_ptr<SeparationResult>> start(const SeparationStartInput &input) { return m_task.run(input); }
+        srt::Expected<void> startAsync(std::shared_ptr<const SeparationStartInput> input, AsyncCallback callback) { return m_task.runAsync(std::move(input), std::move(callback)); }
 
-        srt::ITask::State state() const noexcept override { return task_.state(); }
-        srt::Expected<void> stop() override { return task_.stop(); }
-        srt::Expected<void> waitForFinished() override { return task_.waitForFinished(); }
+        srt::ITask::State state() const noexcept override { return m_task.state(); }
+        srt::Expected<void> stop() override { return m_task.stop(); }
+        srt::Expected<void> waitForFinished() override { return m_task.waitForFinished(); }
 
     protected:
         explicit SeparationExecutive(srt::InferenceSpec &);
         virtual srt::Expected<std::unique_ptr<SeparationResult>> run(const SeparationStartInput &) = 0;
-        bool cancelled() const noexcept { return task_.cancelled(); }
+        bool cancelled() const noexcept { return m_task.cancelled(); }
 
     private:
         // Providers must stop and wait before destroying objects read by run().
-        SeparationTask<SeparationStartInput, SeparationResult> task_;
+        SeparationTask<SeparationStartInput, SeparationResult> m_task;
     };
 
     SRTSEPINFER_EXPORT srt::Expected<std::unique_ptr<SeparationExecutive>> createSeparator(srt::InferenceSpec &);

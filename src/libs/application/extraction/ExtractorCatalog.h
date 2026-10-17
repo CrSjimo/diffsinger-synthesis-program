@@ -33,13 +33,13 @@ namespace dssp::extraction {
         CatalogResult<ExtractorList> list(std::string_view acceptLanguage) const;
         CatalogResult<ExtractorInfo> metadata(Kind, std::string_view id, std::string_view acceptLanguage) const;
         const ExtractorRecord *find(Kind, std::string_view id) const;
-        const std::shared_ptr<inference::Environment> &environment() const noexcept { return environment_; }
+        const std::shared_ptr<inference::Environment> &environment() const noexcept { return m_environment; }
 
     private:
-        explicit ExtractorCatalog(std::shared_ptr<inference::Environment> environment) : environment_(std::move(environment)) {}
+        explicit ExtractorCatalog(std::shared_ptr<inference::Environment> environment) : m_environment(std::move(environment)) {}
 
-        std::shared_ptr<inference::Environment> environment_;
-        std::map<std::string, ExtractorRecord, std::less<>> records_;
+        std::shared_ptr<inference::Environment> m_environment;
+        std::map<std::string, ExtractorRecord, std::less<>> m_records;
     };
 }
 

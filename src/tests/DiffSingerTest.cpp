@@ -22,37 +22,37 @@ namespace dssp::tests {
         void SetUp() override {
             const auto createdEnvironment = inference::Environment::create({});
             ASSERT_TRUE(createdEnvironment);
-            environment = *createdEnvironment;
+            m_environment = *createdEnvironment;
             const auto createdMedia = media::Resources::create(std::filesystem::path(DSSP_TEST_RESOURCE_DIR) / "media" / "magic.mgc");
             ASSERT_TRUE(createdMedia);
-            services = {environment, *createdMedia, std::filesystem::path(DSSP_TEST_RESOURCE_DIR) / "localization"};
-            const auto createdArchitecture = arch_diffsinger::create(services);
+            m_services = {m_environment, *createdMedia, std::filesystem::path(DSSP_TEST_RESOURCE_DIR) / "localization"};
+            const auto createdArchitecture = arch_diffsinger::create(m_services);
             ASSERT_TRUE(createdArchitecture);
-            implementation = *createdArchitecture;
+            m_implementation = *createdArchitecture;
         }
 
-        std::shared_ptr<inference::Environment> environment;
-        arch::ArchitectureServices services;
-        arch::ArchitecturePtr implementation;
+        std::shared_ptr<inference::Environment> m_environment;
+        arch::ArchitectureServices m_services;
+        arch::ArchitecturePtr m_implementation;
     };
 
     TEST_F(DiffSingerTest, CompositionContainsTheCompiledSetAndFactoriesCreateIndependentInstances) {
-        const auto catalog = composeArchitectures(services);
+        const auto catalog = composeArchitectures(m_services);
         ASSERT_TRUE(catalog);
         ASSERT_EQ((*catalog)->entries().size(), 1U);
         const auto implementation = (*catalog)->find(arch_diffsinger::Id);
         ASSERT_NE(implementation, nullptr);
         EXPECT_EQ(implementation->id(), "diffsinger");
         EXPECT_EQ((*catalog)->find("DiffSinger"), nullptr);
-        const auto another = arch_diffsinger::create(services);
+        const auto another = arch_diffsinger::create(m_services);
         ASSERT_TRUE(another);
         EXPECT_NE(implementation, *another);
         EXPECT_EQ(implementation->id(), (*another)->id());
     }
 
     TEST_F(DiffSingerTest, EmptyEnvironmentAdvertisesMetadataAndReportsUnknownResources) {
-        EXPECT_TRUE(environment->packages().empty());
-        const auto metadata = implementation->metadata({});
+        EXPECT_TRUE(m_environment->packages().empty());
+        const auto metadata = m_implementation->metadata({});
         ASSERT_TRUE(metadata);
         EXPECT_EQ(metadata->id, "diffsinger");
         EXPECT_EQ(metadata->name, "DiffSinger");
@@ -64,38 +64,38 @@ namespace dssp::tests {
             EXPECT_DOUBLE_EQ(metadata->parameters.at(id).defaultValue, definition->defaultValue);
         }
 
-        const auto singers = implementation->singers({});
+        const auto singers = m_implementation->singers({});
         ASSERT_TRUE(singers);
         EXPECT_TRUE(singers->empty());
-        const auto singer = implementation->singer({});
+        const auto singer = m_implementation->singer({});
         ASSERT_FALSE(singer);
         EXPECT_NE(singer.error().get_if<arch::ResourceNotFoundError>(), nullptr);
-        const auto groups = implementation->groups({});
+        const auto groups = m_implementation->groups({});
         ASSERT_TRUE(groups);
         EXPECT_TRUE(groups->empty());
-        const auto group = implementation->group({});
+        const auto group = m_implementation->group({});
         ASSERT_FALSE(group);
         EXPECT_NE(group.error().get_if<arch::ResourceNotFoundError>(), nullptr);
-        const auto groupSingers = implementation->groupSingers({});
+        const auto groupSingers = m_implementation->groupSingers({});
         ASSERT_FALSE(groupSingers);
         EXPECT_NE(groupSingers.error().get_if<arch::ResourceNotFoundError>(), nullptr);
-        const auto avatar = implementation->avatar({});
+        const auto avatar = m_implementation->avatar({});
         ASSERT_FALSE(avatar);
         EXPECT_NE(avatar.error().get_if<arch::ResourceNotFoundError>(), nullptr);
-        const auto background = implementation->background({});
+        const auto background = m_implementation->background({});
         ASSERT_FALSE(background);
         EXPECT_NE(background.error().get_if<arch::ResourceNotFoundError>(), nullptr);
-        const auto demoAudio = implementation->demoAudio({});
+        const auto demoAudio = m_implementation->demoAudio({});
         ASSERT_FALSE(demoAudio);
         EXPECT_NE(demoAudio.error().get_if<arch::ResourceNotFoundError>(), nullptr);
-        const auto tag = implementation->envTag({});
+        const auto tag = m_implementation->envTag({});
         ASSERT_FALSE(tag);
         EXPECT_NE(tag.error().get_if<arch::InvalidInputError>(), nullptr);
     }
 
     TEST_F(DiffSingerTest, MissingTranslationFilesDoNotPreventArchitectureMetadata) {
         const TestFiles files;
-        auto untranslatedServices = services;
+        auto untranslatedServices = m_services;
         untranslatedServices.translationRoot = files.path();
         const auto untranslated = arch_diffsinger::create(untranslatedServices);
         ASSERT_TRUE(untranslated);
@@ -123,18 +123,18 @@ namespace dssp::tests {
             EXPECT_EQ(done.wait_for(std::chrono::seconds(5)), std::future_status::ready);
         };
 
-        check([&](auto callback) { implementation->pronunciation({}, {}, std::move(callback)); });
-        check([&](auto callback) { implementation->phoneme({}, {}, std::move(callback)); });
-        check([&](auto callback) { implementation->duration({}, {}, std::move(callback)); });
-        check([&](auto callback) { implementation->parameter({}, {}, std::move(callback)); });
-        check([&](auto callback) { implementation->audio({}, {}, std::move(callback)); });
+        check([&](auto callback) { m_implementation->pronunciation({}, {}, std::move(callback)); });
+        check([&](auto callback) { m_implementation->phoneme({}, {}, std::move(callback)); });
+        check([&](auto callback) { m_implementation->duration({}, {}, std::move(callback)); });
+        check([&](auto callback) { m_implementation->parameter({}, {}, std::move(callback)); });
+        check([&](auto callback) { m_implementation->audio({}, {}, std::move(callback)); });
     }
 
     TEST_F(DiffSingerTest, CancelledRequestDoesNotCancelConcurrentRequests) {
         std::stop_source cancelled;
         cancelled.request_stop();
         bool cancelledReply = false;
-        implementation->pronunciation({}, cancelled.get_token(), [&](auto result) {
+        m_implementation->pronunciation({}, cancelled.get_token(), [&](auto result) {
             ASSERT_FALSE(result);
             EXPECT_NE(result.error().template get_if<arch::CancelledError>(), nullptr);
             cancelledReply = true;
@@ -144,7 +144,7 @@ namespace dssp::tests {
         std::vector<std::jthread> workers;
         for (unsigned i = 0; i < 8; ++i) {
             workers.emplace_back([&] {
-                implementation->pronunciation({}, {}, [&](auto result) {
+                m_implementation->pronunciation({}, {}, [&](auto result) {
                     EXPECT_FALSE(result);
                     ++completed;
                 });

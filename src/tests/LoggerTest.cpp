@@ -18,22 +18,22 @@ namespace dssp::tests {
         class LoggerTest : public testing::Test {
         protected:
             void SetUp() override {
-                callback_ = stdc::Logger::logCallback();
-                level_ = logLevel();
-                mode_ = logMode();
-                color_ = stdc::console::get_color_mode();
-                zone_.reset(icu::TimeZone::createDefault());
+                m_callback = stdc::Logger::logCallback();
+                m_level = logLevel();
+                m_mode = logMode();
+                m_color = stdc::console::get_color_mode();
+                m_zone.reset(icu::TimeZone::createDefault());
                 icu::TimeZone::adoptDefault(icu::TimeZone::createTimeZone("Asia/Shanghai"));
                 stdc::console::set_color_mode(stdc::console::never);
                 installLogger();
             }
 
             void TearDown() override {
-                stdc::Logger::setLogCallback(callback_);
-                setLogLevel(level_);
-                setLogMode(mode_);
-                stdc::console::set_color_mode(color_);
-                icu::TimeZone::adoptDefault(zone_.release());
+                stdc::Logger::setLogCallback(m_callback);
+                setLogLevel(m_level);
+                setLogMode(m_mode);
+                stdc::console::set_color_mode(m_color);
+                icu::TimeZone::adoptDefault(m_zone.release());
             }
 
             static std::string output(int level, std::string_view message, const char *module = "dssp.Test") {
@@ -54,11 +54,11 @@ namespace dssp::tests {
             }
 
         private:
-            stdc::Logger::LogCallback callback_{};
-            LogLevel level_{};
-            LogMode mode_{};
-            stdc::console::color_mode color_{};
-            std::unique_ptr<icu::TimeZone> zone_;
+            stdc::Logger::LogCallback m_callback{};
+            LogLevel m_level{};
+            LogMode m_mode{};
+            stdc::console::color_mode m_color{};
+            std::unique_ptr<icu::TimeZone> m_zone;
         };
 
         TEST_F(LoggerTest, DefaultsToNormalAndInfo) {

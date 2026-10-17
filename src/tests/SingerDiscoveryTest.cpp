@@ -68,10 +68,10 @@ namespace dssp::tests {
     class SingerDiscoveryTest : public ::testing::Test {
     protected:
         void SetUp() override {
-            writeSingerPackage(files, "one", "1");
-            writeSingerPackage(files, "two", "2");
+            writeSingerPackage(m_files, "one", "1");
+            writeSingerPackage(m_files, "two", "2");
             inference::EnvironmentOptions options;
-            options.packageRoots = {files.path()};
+            options.packageRoots = {m_files.path()};
             const std::filesystem::path plugins(DSSP_TEST_PLUGIN_DIR);
             options.pluginPaths = arch_diffsinger::pluginPaths(plugins);
             options.pluginPaths.push_back({"inference", plugins / "dsinfer" / "inferenceinterpreters"});
@@ -79,27 +79,27 @@ namespace dssp::tests {
             options.pluginPaths.push_back({"linguist", plugins / "wolf" / "linguistproviders"});
             const auto host = inference::Environment::create(options);
             ASSERT_TRUE(host) << (host ? "" : host.error().formatChain());
-            environment = *host;
-            ASSERT_TRUE(environment->problems().empty()) << (environment->problems().empty() ? "" : environment->problems().front().error.formatChain());
+            m_environment = *host;
+            ASSERT_TRUE(m_environment->problems().empty()) << (m_environment->problems().empty() ? "" : m_environment->problems().front().error.formatChain());
             const auto mediaResources = media::Resources::create(std::filesystem::path(DSSP_TEST_RESOURCE_DIR) / "media" / "magic.mgc");
             ASSERT_TRUE(mediaResources);
-            const auto created = arch_diffsinger::create({environment, *mediaResources, std::filesystem::path(DSSP_TEST_RESOURCE_DIR) / "localization"});
+            const auto created = arch_diffsinger::create({m_environment, *mediaResources, std::filesystem::path(DSSP_TEST_RESOURCE_DIR) / "localization"});
             ASSERT_TRUE(created) << (created ? "" : created.error().formatChain());
-            implementation = *created;
+            m_implementation = *created;
         }
 
-        TestFiles files;
-        std::shared_ptr<inference::Environment> environment;
-        arch::ArchitecturePtr implementation;
+        TestFiles m_files;
+        std::shared_ptr<inference::Environment> m_environment;
+        arch::ArchitecturePtr m_implementation;
     };
 
     TEST_F(SingerDiscoveryTest, MissingModelsDoNotPreventDiscoveryAndVersionsHaveDistinctStableIdentities) {
-        ASSERT_EQ(environment->packages().size(), 2U);
-        const auto singers = implementation->singers({});
+        ASSERT_EQ(m_environment->packages().size(), 2U);
+        const auto singers = m_implementation->singers({});
         ASSERT_TRUE(singers);
         ASSERT_EQ(singers->size(), 4U);
-        EXPECT_TRUE(environment->unit().runtimeServices(ds::InferenceDriverPlugin::IID).empty());
-        const auto *diffsinger = dynamic_cast<const arch_diffsinger::DiffSinger *>(implementation.get());
+        EXPECT_TRUE(m_environment->unit().runtimeServices(ds::InferenceDriverPlugin::IID).empty());
+        const auto *diffsinger = dynamic_cast<const arch_diffsinger::DiffSinger *>(m_implementation.get());
         ASSERT_NE(diffsinger, nullptr);
         std::set<std::string> ids;
         for (const auto &singer : *singers) {
@@ -110,7 +110,7 @@ namespace dssp::tests {
             EXPECT_TRUE(singer.archSpecificInfo.isMember("speakers"));
             EXPECT_FALSE(singer.archSpecificInfo.isMember("hasDuration"));
             EXPECT_FALSE(singer.archSpecificInfo.isMember("languageCapabilities"));
-            const auto group = implementation->group({singer.group, {}});
+            const auto group = m_implementation->group({singer.group, {}});
             ASSERT_TRUE(group);
             ASSERT_TRUE(*group);
             ASSERT_EQ((**group).languages.size(), 1U);
@@ -127,24 +127,24 @@ namespace dssp::tests {
             EXPECT_EQ(record->languages.at("eng").depth, inference::LanguageDepth::Pronunciation);
             for (const auto &group : runtime::InferenceCacheGroups) {
                 if (!group.id.starts_with("diffsinger-")) continue;
-                const auto pool = environment->inferences(group.id);
+                const auto pool = m_environment->inferences(group.id);
                 ASSERT_TRUE(pool);
                 EXPECT_EQ((*pool)->residentCount(), 0U);
             }
             EXPECT_FALSE(std::filesystem::exists(record->package.path() / "missing-acoustic.onnx"));
-            const auto single = implementation->singer({singer.id, {"zh-CN"}});
+            const auto single = m_implementation->singer({singer.id, {"zh-CN"}});
             ASSERT_TRUE(single);
             ASSERT_TRUE(*single);
             EXPECT_EQ((**single).id, singer.id);
             EXPECT_EQ((**single).name, "歌手");
-            const auto japanese = implementation->group({singer.group, {"ja-JP"}});
+            const auto japanese = m_implementation->group({singer.group, {"ja-JP"}});
             ASSERT_TRUE(japanese);
             ASSERT_TRUE(*japanese);
             EXPECT_EQ((**japanese).languages.at("eng").name, "英語");
         }
 
         EXPECT_EQ(ids, (std::set<std::string>{"example/singers=1.0:singer/first", "example/singers=1.0:singer/second", "example/singers=2.0:singer/first", "example/singers=2.0:singer/second"}));
-        const auto repeated = arch_diffsinger::SingerCatalog::discover(environment);
+        const auto repeated = arch_diffsinger::SingerCatalog::discover(m_environment);
         ASSERT_TRUE(repeated);
         EXPECT_EQ((*repeated)->singers().size(), singers->size());
         for (const auto &singer : *singers) {
@@ -154,7 +154,7 @@ namespace dssp::tests {
     }
 
     TEST_F(SingerDiscoveryTest, GroupsReflectAvailableStagesAndSharedEffectivePipelines) {
-        const auto groups = implementation->groups({});
+        const auto groups = m_implementation->groups({});
         ASSERT_TRUE(groups);
         ASSERT_EQ(groups->size(), 2U);
         for (const auto &group : *groups) {
@@ -172,14 +172,14 @@ namespace dssp::tests {
             EXPECT_TRUE(group.parameterPipeline.contains("velocity"));
             EXPECT_TRUE(group.parameterPipeline.contains("tone_shift"));
             EXPECT_FALSE(group.parameterPipeline.contains("expressiveness"));
-            const auto members = implementation->groupSingers({group.id, {}});
+            const auto members = m_implementation->groupSingers({group.id, {}});
             ASSERT_TRUE(members);
             ASSERT_EQ(members->size(), 2U);
             EXPECT_NE((*members)[0].id, (*members)[1].id);
             for (const auto &singer : *members) {
                 EXPECT_EQ(singer.group, group.id);
             }
-            const auto single = implementation->group({group.id, {}});
+            const auto single = m_implementation->group({group.id, {}});
             ASSERT_TRUE(single);
             ASSERT_TRUE(*single);
             EXPECT_EQ((**single).id, group.id);
@@ -233,35 +233,35 @@ namespace dssp::tests {
     }
 
     TEST_F(SingerDiscoveryTest, MediaUsesRawBytesAndNegotiationWhileAbsentOptionalResourcesAreEmpty) {
-        const auto singers = implementation->singers({});
+        const auto singers = m_implementation->singers({});
         ASSERT_TRUE(singers);
         ASSERT_FALSE(singers->empty());
         arch::SingerMediaQuery query{{singers->front().id, {}}, {{"IMAGE/GIF"}, {"DATA"}}};
-        const auto avatar = implementation->avatar(query);
+        const auto avatar = m_implementation->avatar(query);
         ASSERT_TRUE(avatar);
         ASSERT_TRUE(avatar->starts_with("data:image/gif;base64,"));
         const std::string_view encoded(*avatar);
         const auto payload = encoded.substr(encoded.find(',') + 1);
         const codecutil::Base64DecodingView decoded(payload);
         EXPECT_EQ(std::string(decoded.begin(), decoded.end()), std::string(gif, sizeof(gif) - 1));
-        const auto background = implementation->background(query);
+        const auto background = m_implementation->background(query);
         ASSERT_TRUE(background);
         EXPECT_TRUE(background->empty());
-        const auto demo = implementation->demoAudio(query);
+        const auto demo = m_implementation->demoAudio(query);
     ASSERT_TRUE(demo) << (demo ? "" : demo.error().asError().formatChain());
         EXPECT_TRUE(demo->empty());
         query.media.acceptableFormats = {"image/png"};
-        const auto format = implementation->avatar(query);
+        const auto format = m_implementation->avatar(query);
         ASSERT_FALSE(format);
         EXPECT_NE(format.error().get_if<arch::InvalidInputError>(), nullptr);
         query.media.acceptableFormats.clear();
         query.media.acceptableSchemes = {"https"};
-        const auto scheme = implementation->avatar(query);
+        const auto scheme = m_implementation->avatar(query);
         ASSERT_FALSE(scheme);
         EXPECT_NE(scheme.error().get_if<arch::InvalidInputError>(), nullptr);
         query.media.acceptableSchemes.clear();
         query.singer.display.acceptLanguage = "zh-CN";
-        const auto missingLocalizedResource = implementation->avatar(query);
+        const auto missingLocalizedResource = m_implementation->avatar(query);
         ASSERT_FALSE(missingLocalizedResource);
         EXPECT_NE(missingLocalizedResource.error().get_if<arch::OperationError>(), nullptr);
     }
@@ -272,11 +272,11 @@ namespace dssp::tests {
         for (unsigned i = 0; i < 8; ++i) {
             workers.emplace_back([&] {
                 for (unsigned j = 0; j < 16; ++j) {
-                    const auto singers = implementation->singers({j % 2 ? "zh" : "ja"});
+                    const auto singers = m_implementation->singers({j % 2 ? "zh" : "ja"});
                     if (!singers || singers->size() != 4U) {
                         ++failures;
                     }
-                    const auto groups = implementation->groups({j % 2 ? "en" : "ja"});
+                    const auto groups = m_implementation->groups({j % 2 ? "en" : "ja"});
                     if (!groups || groups->size() != 2U) {
                         ++failures;
                         continue;
@@ -311,7 +311,7 @@ namespace dssp::tests {
         ASSERT_TRUE(catalog);
         ASSERT_EQ((*catalog)->singers().size(), 2U);
         for (const auto &[id, singer] : (*catalog)->singers()) {
-            const auto original = implementation->singer({id, {}});
+            const auto original = m_implementation->singer({id, {}});
             ASSERT_TRUE(original);
             ASSERT_TRUE(*original);
             EXPECT_EQ((**original).group, singer.info.group);

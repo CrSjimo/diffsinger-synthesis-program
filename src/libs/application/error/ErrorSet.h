@@ -29,18 +29,18 @@ namespace dssp::error {
 
         template <class E>
             requires contains<std::remove_cvref_t<E>>
-        explicit ErrorSet(E &&error) : value_(std::in_place_type<std::remove_cvref_t<E>>, std::forward<E>(error)) {}
+        explicit ErrorSet(E &&error) : m_value(std::in_place_type<std::remove_cvref_t<E>>, std::forward<E>(error)) {}
 
         template <class Visitor>
-        decltype(auto) visit(Visitor &&visitor) const & { return std::visit(std::forward<Visitor>(visitor), value_); }
+        decltype(auto) visit(Visitor &&visitor) const & { return std::visit(std::forward<Visitor>(visitor), m_value); }
 
         template <class Visitor>
-        decltype(auto) visit(Visitor &&visitor) && { return std::visit(std::forward<Visitor>(visitor), std::move(value_)); }
+        decltype(auto) visit(Visitor &&visitor) && { return std::visit(std::forward<Visitor>(visitor), std::move(m_value)); }
 
         template <class E>
             requires contains<E>
         const E *get_if() const noexcept {
-            return std::get_if<E>(&value_);
+            return std::get_if<E>(&m_value);
         }
 
         const Error &asError() const noexcept {
@@ -48,7 +48,7 @@ namespace dssp::error {
         }
 
     private:
-        std::variant<Errors...> value_;
+        std::variant<Errors...> m_value;
     };
 
     template <class To, class... From>

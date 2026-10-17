@@ -13,11 +13,11 @@ namespace dssp::tests {
         class LogTimestampTest : public testing::Test {
         protected:
             void SetUp() override {
-                previous_.reset(icu::TimeZone::createDefault());
+                m_previous.reset(icu::TimeZone::createDefault());
             }
 
             void TearDown() override {
-                icu::TimeZone::adoptDefault(previous_.release());
+                icu::TimeZone::adoptDefault(m_previous.release());
             }
 
             void zone(const char *value) {
@@ -32,7 +32,7 @@ namespace dssp::tests {
             }
 
         private:
-            std::unique_ptr<icu::TimeZone> previous_;
+            std::unique_ptr<icu::TimeZone> m_previous;
         };
 
         TEST_F(LogTimestampTest, UtcPreservesMilliseconds) {

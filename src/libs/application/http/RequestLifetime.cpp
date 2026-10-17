@@ -29,11 +29,11 @@ namespace dssp::http {
 
     const RequestLog &RequestContext::logContext() const noexcept {
         static const RequestLog empty;
-        return state_ ? state_->logContext : empty;
+        return m_state ? m_state->logContext : empty;
     }
 
     std::stop_token RequestContext::cancellation() const noexcept {
-        return state_ ? state_->source.get_token() : std::stop_token{};
+        return m_state ? m_state->source.get_token() : std::stop_token{};
     }
 
     bool RequestContext::stopRequested() const noexcept {
@@ -42,40 +42,40 @@ namespace dssp::http {
 
     const std::string &RequestContext::acceptLanguage() const noexcept {
         static const std::string empty;
-        return state_ ? state_->acceptLanguage : empty;
+        return m_state ? m_state->acceptLanguage : empty;
     }
 
     RequestContext RequestLifetimeRegistry::track(const drogon::HttpRequest &request) {
         RequestContext context;
-        context.state_ = std::make_shared<RequestContext::State>();
-        context.state_->acceptLanguage = request.getHeader("accept-language");
-        context.state_->logContext = requestLog(request);
-        context.state_->registry = weak_from_this();
+        context.m_state = std::make_shared<RequestContext::State>();
+        context.m_state->acceptLanguage = request.getHeader("accept-language");
+        context.m_state->logContext = requestLog(request);
+        context.m_state->registry = weak_from_this();
 
         bool stop = false;
         {
-            std::lock_guard lock(mutex_);
-            context.state_->registrationId = ++nextId_;
+            std::lock_guard lock(m_mutex);
+            context.m_state->registrationId = ++m_nextId;
             const auto connection = request.getConnectionPtr();
             const auto live = connection.lock();
             const std::weak_ptr<trantor::TcpConnection> empty;
             const bool hasConnection = connection.owner_before(empty) || empty.owner_before(connection);
-            stop = closing_ || (live ? !live->connected() : hasConnection);
+            stop = m_closing || (live ? !live->connected() : hasConnection);
             if (!stop) {
-                requests_.emplace(nextId_, Entry{connection, context.state_});
+                m_requests.emplace(m_nextId, Entry{connection, context.m_state});
             }
         }
 
         if (stop) {
-            context.state_->source.request_stop();
+            context.m_state->source.request_stop();
         }
 
         return context;
     }
 
     void RequestLifetimeRegistry::release(std::uint64_t registrationId) {
-        std::lock_guard lock(mutex_);
-        requests_.erase(registrationId);
+        std::lock_guard lock(m_mutex);
+        m_requests.erase(registrationId);
     }
 
     void RequestLifetimeRegistry::connectionChanged(const trantor::TcpConnectionPtr &connection) {
@@ -85,13 +85,13 @@ namespace dssp::http {
 
         std::vector<std::shared_ptr<RequestContext::State>> states;
         {
-            std::lock_guard lock(mutex_);
-            for (auto it = requests_.begin(); it != requests_.end();) {
+            std::lock_guard lock(m_mutex);
+            for (auto it = m_requests.begin(); it != m_requests.end();) {
                 if (it->second.connection.lock() == connection) {
                     if (auto state = it->second.state.lock()) {
                         states.push_back(std::move(state));
                     }
-                    it = requests_.erase(it);
+                    it = m_requests.erase(it);
                 } else {
                     ++it;
                 }
@@ -109,14 +109,14 @@ namespace dssp::http {
     void RequestLifetimeRegistry::cancelAll() {
         std::vector<std::shared_ptr<RequestContext::State>> states;
         {
-            std::lock_guard lock(mutex_);
-            closing_ = true;
-            for (const auto &[id, entry] : requests_) {
+            std::lock_guard lock(m_mutex);
+            m_closing = true;
+            for (const auto &[id, entry] : m_requests) {
                 if (auto state = entry.state.lock()) {
                     states.push_back(std::move(state));
                 }
             }
-            requests_.clear();
+            m_requests.clear();
         }
 
         for (auto &state : states) {

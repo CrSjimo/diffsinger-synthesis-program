@@ -26,21 +26,21 @@ namespace dssp::inference {
     public:
         template <class Executive>
         explicit TaskExecutive(std::unique_ptr<Executive> executive)
-            : executive_(std::move(executive)),
-              state_([task = static_cast<Executive *>(executive_.get())] { return task->state(); }),
-              stop_([task = static_cast<Executive *>(executive_.get())] { return task->stop(); }),
-              wait_([task = static_cast<Executive *>(executive_.get())] { return task->waitForFinished(); }) {}
+            : m_executive(std::move(executive)),
+              m_state([task = static_cast<Executive *>(m_executive.get())] { return task->state(); }),
+              m_stop([task = static_cast<Executive *>(m_executive.get())] { return task->stop(); }),
+              m_wait([task = static_cast<Executive *>(m_executive.get())] { return task->waitForFinished(); }) {}
 
-        srt::ContribExecutive &native() const noexcept { return *executive_; }
-        srt::ITask::State state() const noexcept { return state_(); }
-        std::expected<void, ExecutionError> stop() { return nativeCall("Native task::stop", stop_); }
-        std::expected<void, ExecutionError> waitForFinished() { return nativeCall("Native task::waitForFinished", wait_); }
+        srt::ContribExecutive &native() const noexcept { return *m_executive; }
+        srt::ITask::State state() const noexcept { return m_state(); }
+        std::expected<void, ExecutionError> stop() { return nativeCall("Native task::stop", m_stop); }
+        std::expected<void, ExecutionError> waitForFinished() { return nativeCall("Native task::waitForFinished", m_wait); }
 
     private:
-        std::unique_ptr<srt::ContribExecutive> executive_;
-        std::function<srt::ITask::State()> state_;
-        std::function<srt::Expected<void>()> stop_;
-        std::function<srt::Expected<void>()> wait_;
+        std::unique_ptr<srt::ContribExecutive> m_executive;
+        std::function<srt::ITask::State()> m_state;
+        std::function<srt::Expected<void>()> m_stop;
+        std::function<srt::Expected<void>()> m_wait;
     };
 }
 

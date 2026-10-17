@@ -84,7 +84,7 @@ namespace dssp::media {
         }
     }
 
-    Resources::Resources(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+    Resources::Resources(std::unique_ptr<Impl> impl) : m_impl(std::move(impl)) {}
 
     Resources::~Resources() = default;
 
@@ -95,10 +95,10 @@ namespace dssp::media {
 
         std::string result;
         {
-            const std::lock_guard lock(impl_->mutex);
-            const auto *type = magic_buffer(impl_->cookie, bytes.data(), bytes.size());
+            const std::lock_guard lock(m_impl->mutex);
+            const auto *type = magic_buffer(m_impl->cookie, bytes.data(), bytes.size());
             if (!type) {
-                return std::unexpected{magicError(impl_->cookie, "magic_buffer")};
+                return std::unexpected{magicError(m_impl->cookie, "magic_buffer")};
             }
             result = type;
         }

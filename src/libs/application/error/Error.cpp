@@ -8,18 +8,18 @@ namespace dssp::error {
         std::source_location location;
     };
 
-    Error::Error(std::string message, Ptr cause, std::source_location location) : data_(std::make_shared<const Data>(Data{std::move(message), std::move(cause), location})) {}
+    Error::Error(std::string message, Ptr cause, std::source_location location) : m_data(std::make_shared<const Data>(Data{std::move(message), std::move(cause), location})) {}
 
     const std::string &Error::message() const noexcept {
-        return data_->message;
+        return m_data->message;
     }
 
     Error::Ptr Error::cause() const noexcept {
-        return data_->cause;
+        return m_data->cause;
     }
 
     std::source_location Error::location() const noexcept {
-        return data_->location;
+        return m_data->location;
     }
 
     std::string_view Error::kind() const noexcept {

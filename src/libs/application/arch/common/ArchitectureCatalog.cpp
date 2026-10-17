@@ -11,7 +11,7 @@ namespace dssp::arch {
         stdc::LogCategory log("dssp.arch.ArchitectureCatalog");
     }
 
-    ArchitectureCatalog::ArchitectureCatalog(std::vector<ArchitecturePtr> entries) : entries_(std::move(entries)) {}
+    ArchitectureCatalog::ArchitectureCatalog(std::vector<ArchitecturePtr> entries) : m_entries(std::move(entries)) {}
 
     std::expected<ArchitectureCatalog, CatalogConstructionError> ArchitectureCatalog::create(std::vector<ArchitecturePtr> entries) {
         for (auto current = entries.begin(); current != entries.end(); ++current) {
@@ -37,12 +37,12 @@ namespace dssp::arch {
     }
 
     std::span<const ArchitecturePtr> ArchitectureCatalog::entries() const noexcept {
-        return entries_;
+        return m_entries;
     }
 
     ArchitecturePtr ArchitectureCatalog::find(std::string_view id) const noexcept {
-        const auto found = std::find_if(entries_.begin(), entries_.end(), [&](const auto &implementation) { return implementation->id() == id; });
-        return found == entries_.end() ? ArchitecturePtr{} : *found;
+        const auto found = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto &implementation) { return implementation->id() == id; });
+        return found == m_entries.end() ? ArchitecturePtr{} : *found;
     }
 
 }

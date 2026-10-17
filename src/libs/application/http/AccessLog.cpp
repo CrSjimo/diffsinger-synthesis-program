@@ -82,8 +82,8 @@ namespace dssp::http {
 
     RequestLog requestLog(const drogon::HttpRequest &request) {
         auto context = request.attributes()->get<RequestLog>(attributeName);
-        if (!context.state_) {
-            context.state_ = std::make_shared<RequestLog::State>(request);
+        if (!context.m_state) {
+            context.m_state = std::make_shared<RequestLog::State>(request);
             request.attributes()->insert(attributeName, context);
         }
 
@@ -91,18 +91,18 @@ namespace dssp::http {
     }
 
     std::uint64_t RequestLog::id() const noexcept {
-        return state_ ? state_->id : 0;
+        return m_state ? m_state->id : 0;
     }
 
     std::string RequestLog::description() const {
-        return state_ ? state_->description() : "request=none";
+        return m_state ? m_state->description() : "request=none";
     }
 
     void RequestLog::problem(std::string_view type, std::string_view reason) const {
-        if (state_) {
+        if (m_state) {
             const auto summary = " error=" + quoteLogValue(type, 128) + " reason=" + quoteLogValue(reason, 1024);
-            std::lock_guard lock(state_->problemMutex);
-            state_->problemSummary = summary;
+            std::lock_guard lock(m_state->problemMutex);
+            m_state->problemSummary = summary;
         }
     }
 
@@ -122,29 +122,29 @@ namespace dssp::http {
         const auto context = requestLog(request);
         bool closing;
         {
-            std::lock_guard lock(mutex_);
-            closing = closing_;
+            std::lock_guard lock(m_mutex);
+            closing = m_closing;
             if (!closing) {
-                context.state_->owner = weak_from_this();
-                requests_.emplace(context.id(), Entry{request.getConnectionPtr(), context.state_});
+                context.m_state->owner = weak_from_this();
+                m_requests.emplace(context.id(), Entry{request.getConnectionPtr(), context.m_state});
             }
         }
 
-        log.stdcTrace("%1 client=%2 received", context.description(), context.state_->client);
+        log.stdcTrace("%1 client=%2 received", context.description(), context.m_state->client);
         if (closing) {
-            context.state_->finish("server_shutdown", "-");
+            context.m_state->finish("server_shutdown", "-");
         }
     }
 
     void AccessLog::finish(const drogon::HttpRequest &request, const drogon::HttpResponse &response) {
         const auto context = requestLog(request);
         const auto route = request.matchedPathPattern();
-        context.state_->finish("response", std::to_string(static_cast<int>(response.statusCode())), route == request.path() ? std::string_view{} : route);
+        context.m_state->finish("response", std::to_string(static_cast<int>(response.statusCode())), route == request.path() ? std::string_view{} : route);
     }
 
     void AccessLog::release(std::uint64_t id) {
-        std::lock_guard lock(mutex_);
-        requests_.erase(id);
+        std::lock_guard lock(m_mutex);
+        m_requests.erase(id);
     }
 
     void AccessLog::connectionChanged(const trantor::TcpConnectionPtr &connection) {
@@ -154,13 +154,13 @@ namespace dssp::http {
 
         std::vector<std::shared_ptr<RequestLog::State>> states;
         {
-            std::lock_guard lock(mutex_);
-            for (auto it = requests_.begin(); it != requests_.end();) {
+            std::lock_guard lock(m_mutex);
+            for (auto it = m_requests.begin(); it != m_requests.end();) {
                 if (it->second.connection.lock() == connection) {
                     if (auto state = it->second.state.lock()) {
                         states.push_back(std::move(state));
                     }
-                    it = requests_.erase(it);
+                    it = m_requests.erase(it);
                 } else {
                     ++it;
                 }
@@ -175,14 +175,14 @@ namespace dssp::http {
     void AccessLog::shutdown() {
         std::vector<std::shared_ptr<RequestLog::State>> states;
         {
-            std::lock_guard lock(mutex_);
-            closing_ = true;
-            for (const auto &[id, entry] : requests_) {
+            std::lock_guard lock(m_mutex);
+            m_closing = true;
+            for (const auto &[id, entry] : m_requests) {
                 if (auto state = entry.state.lock()) {
                     states.push_back(std::move(state));
                 }
             }
-            requests_.clear();
+            m_requests.clear();
         }
 
         for (const auto &state : states) {

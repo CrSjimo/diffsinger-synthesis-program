@@ -31,12 +31,12 @@ namespace dssp::resource {
         return std::shared_ptr<ExecutionGate>(new ExecutionGate(std::move(impl)));
     }
 
-    ExecutionGate::ExecutionGate(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+    ExecutionGate::ExecutionGate(std::unique_ptr<Impl> impl) : m_impl(std::move(impl)) {}
 
     ExecutionGate::~ExecutionGate() { shutdown(); }
 
     drogon::Task<PermitResult> ExecutionGate::acquire(std::stop_token stop) {
-        co_return co_await awaitCallback<PermitResult>([queue = impl_->queue, stop](auto complete) {
+        co_return co_await awaitCallback<PermitResult>([queue = m_impl->queue, stop](auto complete) {
             const auto granted = std::make_shared<std::atomic<bool>>(false);
             queue->submit({{}, [granted, complete](bool) mutable {
                 if (!granted->load(std::memory_order_acquire)) complete(std::unexpected{TaskCancelledError("Execution admission was cancelled")});
@@ -47,13 +47,13 @@ namespace dssp::resource {
         });
     }
 
-    void ExecutionGate::close() { impl_->queue->close(); }
+    void ExecutionGate::close() { m_impl->queue->close(); }
 
     void ExecutionGate::shutdown() {
-        std::call_once(impl_->shutdownOnce, [&] {
+        std::call_once(m_impl->shutdownOnce, [&] {
             close();
-            impl_->queue->wait();
-            impl_->worker->shutdown();
+            m_impl->queue->wait();
+            m_impl->worker->shutdown();
         });
     }
 }

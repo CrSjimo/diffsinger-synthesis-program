@@ -61,12 +61,12 @@ namespace dssp::tests {
 
         class TestPitchExecutive final : public F0::F0Executive {
         public:
-            TestPitchExecutive(srt::InferenceSpec &spec, std::shared_ptr<std::promise<void>> started = {}) : F0Executive(spec), started_(std::move(started)) {}
+            TestPitchExecutive(srt::InferenceSpec &spec, std::shared_ptr<std::promise<void>> started = {}) : F0Executive(spec), m_started(std::move(started)) {}
 
         protected:
             srt::Expected<std::unique_ptr<F0::F0Result>> run(const F0::F0StartInput &input) override {
-                if (started_) {
-                    started_->set_value();
+                if (m_started) {
+                    m_started->set_value();
                     const auto deadline = std::chrono::steady_clock::now() + 2s;
                     while (!cancelled() && std::chrono::steady_clock::now() < deadline) std::this_thread::sleep_for(1ms);
                     if (cancelled()) return srt::Error(std::make_error_code(std::errc::operation_canceled), "Test analyzer was stopped");
@@ -82,40 +82,40 @@ namespace dssp::tests {
             }
 
         private:
-            std::shared_ptr<std::promise<void>> started_;
+            std::shared_ptr<std::promise<void>> m_started;
         };
     }
 
     class ExtractionServiceTest : public ::testing::Test {
     protected:
         void SetUp() override {
-            writeAnalysisPackage(files, "package");
+            writeAnalysisPackage(m_files, "package");
 
             inference::EnvironmentOptions options;
-            options.packageRoots = {files.path()};
+            options.packageRoots = {m_files.path()};
             options.pluginPaths = {{"inference", std::filesystem::path(DSSP_TEST_PLUGIN_DIR) / "otter" / "inferenceinterpreters"}};
             options.cacheGroups = {{"extraction-note", {1, 0ms, 60s}}, {"extraction-pitch", {2, 0ms, 60s}}};
 
             const auto created = inference::Environment::create(options);
             ASSERT_TRUE(created);
-            environment = *created;
-            ASSERT_TRUE(environment->problems().empty()) << (environment->problems().empty() ? "" : environment->problems().front().error.formatChain());
+            m_environment = *created;
+            ASSERT_TRUE(m_environment->problems().empty()) << (m_environment->problems().empty() ? "" : m_environment->problems().front().error.formatChain());
         }
 
         void TearDown() override {
-            if (service) service->shutdown();
-            if (environment) environment->shutdown();
+            if (m_service) m_service->shutdown();
+            if (m_environment) m_environment->shutdown();
         }
 
         void startService() {
-            const auto created = extraction::Service::create(environment, 0);
+            const auto created = extraction::Service::create(m_environment, 0);
             ASSERT_TRUE(created);
-            service = *created;
+            m_service = *created;
         }
 
         template <class Executive>
         void install(std::string_view id, const std::string &group, std::shared_ptr<std::promise<void>> started = {}) {
-            auto *category = dynamic_cast<srt::InferenceCategory *>(environment->unit().category(srt::InferenceCategory::NAME));
+            auto *category = dynamic_cast<srt::InferenceCategory *>(m_environment->unit().category(srt::InferenceCategory::NAME));
             ASSERT_NE(category, nullptr);
             srt::InferenceSpec *target = nullptr;
             for (auto *spec : category->inferences()) {
@@ -123,14 +123,14 @@ namespace dssp::tests {
             }
 
             ASSERT_NE(target, nullptr);
-            const auto pool = environment->inferences(group);
+            const auto pool = m_environment->inferences(group);
             ASSERT_TRUE(pool);
 
             inference::InferenceDefinition definition;
             definition.key = inference::resourceReference(*target) + "/default";
             definition.label = definition.key;
             definition.packages = {target->package()};
-            definition.create = [target, started, loaded = loaded]() -> std::expected<std::unique_ptr<srt::InferenceExecutive>, inference::ExecutionError> {
+            definition.create = [target, started, loaded = m_loaded]() -> std::expected<std::unique_ptr<srt::InferenceExecutive>, inference::ExecutionError> {
                 ++*loaded;
                 if constexpr (std::is_same_v<Executive, TestPitchExecutive>) return std::make_unique<Executive>(*target, started);
                 else return std::make_unique<Executive>(*target);
@@ -152,17 +152,17 @@ namespace dssp::tests {
             return future.get();
         }
 
-        TestFiles files;
-        std::shared_ptr<inference::Environment> environment;
-        std::shared_ptr<extraction::Service> service;
-        std::shared_ptr<std::atomic<unsigned>> loaded = std::make_shared<std::atomic<unsigned>>(0);
+        TestFiles m_files;
+        std::shared_ptr<inference::Environment> m_environment;
+        std::shared_ptr<extraction::Service> m_service;
+        std::shared_ptr<std::atomic<unsigned>> m_loaded = std::make_shared<std::atomic<unsigned>>(0);
     };
 
     TEST_F(ExtractionServiceTest, EnumeratesTypedMetadataWithoutOpeningAbsentModels) {
         startService();
-        ASSERT_NE(service, nullptr);
+        ASSERT_NE(m_service, nullptr);
 
-        const auto list = service->extractors("zh-CN");
+        const auto list = m_service->extractors("zh-CN");
         ASSERT_TRUE(list);
         ASSERT_EQ(list->note.size(), 1U);
         ASSERT_EQ(list->pitch.size(), 1U);
@@ -173,29 +173,29 @@ namespace dssp::tests {
         EXPECT_EQ(list->pitch[0].sampleRate, 16000U);
 
         for (const auto group : {"extraction-note", "extraction-pitch"}) {
-            const auto pool = environment->inferences(group);
+            const auto pool = m_environment->inferences(group);
             ASSERT_TRUE(pool);
             EXPECT_EQ((*pool)->residentCount(), 0U);
         }
 
-        EXPECT_FALSE(service->extractor(extraction::Kind::Pitch, analysisNoteId));
-        EXPECT_FALSE(service->extractor(extraction::Kind::Tempo, analysisNoteId));
+        EXPECT_FALSE(m_service->extractor(extraction::Kind::Pitch, analysisNoteId));
+        EXPECT_FALSE(m_service->extractor(extraction::Kind::Tempo, analysisNoteId));
     }
 
     TEST_F(ExtractionServiceTest, InvalidAudioAndWrongExtractorKindsDoNotLoadModels) {
         startService();
-        ASSERT_NE(service, nullptr);
-        ASSERT_TRUE(service->extractor(extraction::Kind::Note, analysisNoteId));
-        ASSERT_TRUE(service->extractor(extraction::Kind::Pitch, analysisPitchId));
+        ASSERT_NE(m_service, nullptr);
+        ASSERT_TRUE(m_service->extractor(extraction::Kind::Note, analysisNoteId));
+        ASSERT_TRUE(m_service->extractor(extraction::Kind::Pitch, analysisPitchId));
 
         for (const auto &input : std::vector<extraction::Input>{{analysisNoteId, "https://example.invalid/test.wav"}, {analysisNoteId, wave(16000, 1, 16)}, {analysisNoteId, wave(44100, 1, 0)}, {analysisPitchId, wave(44100, 1, 16)}}) {
-            const auto result = await<extraction::NoteOutput>([&](auto callback) { service->note(input, {}, std::move(callback)); });
+            const auto result = await<extraction::NoteOutput>([&](auto callback) { m_service->note(input, {}, std::move(callback)); });
             ASSERT_FALSE(result);
             EXPECT_NE(result.error().get_if<extraction::InvalidInputError>(), nullptr);
             EXPECT_NE(result.error().asError().message().find(input.extractor), std::string::npos);
         }
 
-        const auto pool = environment->inferences("extraction-note");
+        const auto pool = m_environment->inferences("extraction-note");
         ASSERT_TRUE(pool);
         EXPECT_EQ((*pool)->residentCount(), 0U);
     }
@@ -204,9 +204,9 @@ namespace dssp::tests {
         install<TestNoteExecutive>("note", "extraction-note");
         install<TestPitchExecutive>("pitch", "extraction-pitch");
         startService();
-        ASSERT_NE(service, nullptr);
+        ASSERT_NE(m_service, nullptr);
 
-        const auto notes = await<extraction::NoteOutput>([&](auto callback) { service->note({analysisNoteId, wave(44100, 2, 5292)}, {}, std::move(callback)); });
+        const auto notes = await<extraction::NoteOutput>([&](auto callback) { m_service->note({analysisNoteId, wave(44100, 2, 5292)}, {}, std::move(callback)); });
         ASSERT_TRUE(notes) << (notes ? "" : notes.error().asError().formatChain());
         ASSERT_EQ(notes->notes.size(), 3U);
 
@@ -219,16 +219,16 @@ namespace dssp::tests {
 
         EXPECT_NEAR(duration, 0.12, 1e-12);
 
-        const auto pitch = await<extraction::PitchOutput>([&](auto callback) { service->pitch({analysisPitchId, wave(16000, 1, 1921)}, {}, std::move(callback)); });
+        const auto pitch = await<extraction::PitchOutput>([&](auto callback) { m_service->pitch({analysisPitchId, wave(16000, 1, 1921)}, {}, std::move(callback)); });
         ASSERT_TRUE(pitch) << (pitch ? "" : pitch.error().asError().formatChain());
         ASSERT_EQ(pitch->segments.size(), 1U);
         EXPECT_EQ(pitch->segments[0].gap, 0U);
         EXPECT_EQ(pitch->segments[0].pitch.size(), 13U);
         EXPECT_DOUBLE_EQ(pitch->sampleRate, 100);
-        EXPECT_EQ(*loaded, 2U);
+        EXPECT_EQ(*m_loaded, 2U);
 
         for (const auto group : {"extraction-note", "extraction-pitch"}) {
-            const auto pool = environment->inferences(group);
+            const auto pool = m_environment->inferences(group);
             ASSERT_TRUE(pool);
             EXPECT_EQ((*pool)->residentCount(), 1U);
         }
@@ -239,12 +239,12 @@ namespace dssp::tests {
         auto startedFuture = started->get_future();
         install<TestPitchExecutive>("pitch", "extraction-pitch", started);
         startService();
-        ASSERT_NE(service, nullptr);
+        ASSERT_NE(m_service, nullptr);
 
         std::stop_source stop;
         const auto promise = std::make_shared<std::promise<extraction::ExtractionResult<extraction::PitchOutput>>>();
         auto future = promise->get_future();
-        service->pitch({analysisPitchId, wave(16000, 1, 160)}, stop.get_token(), [promise](auto result) { promise->set_value(std::move(result)); });
+        m_service->pitch({analysisPitchId, wave(16000, 1, 160)}, stop.get_token(), [promise](auto result) { promise->set_value(std::move(result)); });
 
         ASSERT_EQ(startedFuture.wait_for(1s), std::future_status::ready);
 
@@ -260,17 +260,17 @@ namespace dssp::tests {
         install<TestNoteExecutive>("note", "extraction-note");
         install<TestPitchExecutive>("pitch", "extraction-pitch");
         startService();
-        ASSERT_NE(service, nullptr);
+        ASSERT_NE(m_service, nullptr);
 
-        ASSERT_TRUE(await<extraction::NoteOutput>([&](auto callback) { service->note({analysisNoteId, wave(44100, 2, 441)}, {}, std::move(callback)); }));
-        ASSERT_TRUE(await<extraction::PitchOutput>([&](auto callback) { service->pitch({analysisPitchId, wave(16000, 1, 160)}, {}, std::move(callback)); }));
+        ASSERT_TRUE(await<extraction::NoteOutput>([&](auto callback) { m_service->note({analysisNoteId, wave(44100, 2, 441)}, {}, std::move(callback)); }));
+        ASSERT_TRUE(await<extraction::PitchOutput>([&](auto callback) { m_service->pitch({analysisPitchId, wave(16000, 1, 160)}, {}, std::move(callback)); }));
 
-        const auto notePool = environment->inferences("extraction-note");
-        const auto pitchPool = environment->inferences("extraction-pitch");
+        const auto notePool = m_environment->inferences("extraction-note");
+        const auto pitchPool = m_environment->inferences("extraction-pitch");
         ASSERT_TRUE(notePool);
         ASSERT_TRUE(pitchPool);
 
-        auto *category = dynamic_cast<srt::InferenceCategory *>(environment->unit().category(srt::InferenceCategory::NAME));
+        auto *category = dynamic_cast<srt::InferenceCategory *>(m_environment->unit().category(srt::InferenceCategory::NAME));
         ASSERT_NE(category, nullptr);
         srt::InferenceSpec *noteSpec = nullptr;
         for (auto *spec : category->inferences()) {
@@ -283,7 +283,7 @@ namespace dssp::tests {
         another.key = "another-note-resource";
         another.label = another.key;
         another.packages = {noteSpec->package()};
-        another.create = [noteSpec, loaded = loaded]() -> std::expected<std::unique_ptr<srt::InferenceExecutive>, inference::ExecutionError> {
+        another.create = [noteSpec, loaded = m_loaded]() -> std::expected<std::unique_ptr<srt::InferenceExecutive>, inference::ExecutionError> {
             ++*loaded;
             return std::make_unique<TestNoteExecutive>(*noteSpec);
         };
@@ -304,20 +304,20 @@ namespace dssp::tests {
         ASSERT_TRUE(future.get());
         EXPECT_EQ((*notePool)->residentCount(), 1U);
         EXPECT_EQ((*pitchPool)->residentCount(), 1U);
-        EXPECT_EQ(*loaded, 3U);
+        EXPECT_EQ(*m_loaded, 3U);
 
-        ASSERT_TRUE(await<extraction::PitchOutput>([&](auto callback) { service->pitch({analysisPitchId, wave(16000, 1, 160)}, {}, std::move(callback)); }));
-        EXPECT_EQ(*loaded, 3U);
+        ASSERT_TRUE(await<extraction::PitchOutput>([&](auto callback) { m_service->pitch({analysisPitchId, wave(16000, 1, 160)}, {}, std::move(callback)); }));
+        EXPECT_EQ(*m_loaded, 3U);
 
-        ASSERT_TRUE(await<extraction::NoteOutput>([&](auto callback) { service->note({analysisNoteId, wave(44100, 2, 441)}, {}, std::move(callback)); }));
-        EXPECT_EQ(*loaded, 4U);
+        ASSERT_TRUE(await<extraction::NoteOutput>([&](auto callback) { m_service->note({analysisNoteId, wave(44100, 2, 441)}, {}, std::move(callback)); }));
+        EXPECT_EQ(*m_loaded, 4U);
     }
 
     TEST_F(ExtractionServiceTest, NativeInitializationFailureIsAnUnexpectedOperationError) {
         startService();
-        ASSERT_NE(service, nullptr);
+        ASSERT_NE(m_service, nullptr);
 
-        const auto result = await<extraction::PitchOutput>([&](auto callback) { service->pitch({analysisPitchId, wave(16000, 1, 160)}, {}, std::move(callback)); });
+        const auto result = await<extraction::PitchOutput>([&](auto callback) { m_service->pitch({analysisPitchId, wave(16000, 1, 160)}, {}, std::move(callback)); });
 
         ASSERT_FALSE(result);
         EXPECT_NE(result.error().get_if<extraction::OperationError>(), nullptr);

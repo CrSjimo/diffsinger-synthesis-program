@@ -33,23 +33,23 @@ namespace {
     class Executive final : public Beat::BeatExecutive {
     public:
         Executive(srt::InferenceSpec &spec, std::unique_ptr<ds::InferenceSession> session, const Configuration &config)
-            : BeatExecutive(spec), session_(std::move(session)), config_(config) {}
+            : BeatExecutive(spec), m_session(std::move(session)), m_config(config) {}
 
         ~Executive() override {
             (void)stop();
             (void)waitForFinished();
-            (void)session_->close();
+            (void)m_session->close();
         }
 
         srt::Expected<void> stop() override {
             (void)BeatExecutive::stop();
-            (void)session_->stop();
+            (void)m_session->stop();
             return {};
         }
 
         srt::Expected<void> waitForFinished() override {
             (void)BeatExecutive::waitForFinished();
-            return session_->waitForFinished();
+            return m_session->waitForFinished();
         }
 
     protected:
@@ -67,25 +67,25 @@ namespace {
             };
             if (!progress(0)) return cancelledError();
 
-            auto features = features_.compute(audio.samples, [this] { return cancelled(); });
+            auto features = m_features.compute(audio.samples, [this] { return cancelled(); });
             if (!features) return features.takeError();
             if (!progress(0.1)) return cancelledError();
 
             const auto frameCount = features->size() / 128;
-            if (frameCount > static_cast<std::size_t>(std::numeric_limits<std::ptrdiff_t>::max() - config_.chunkFrames))
+            if (frameCount > static_cast<std::size_t>(std::numeric_limits<std::ptrdiff_t>::max() - m_config.chunkFrames))
                 return srt::Error(srt::Error::InvalidArgument, "Audio has too many feature frames");
 
             std::vector<float> beat(frameCount, -1000), downbeat(frameCount, -1000);
             std::vector<bool> assigned(frameCount, false);
-            const auto starts = srtbeatinfer::beatthis::chunkStarts(frameCount, config_.chunkFrames, config_.borderFrames);
+            const auto starts = srtbeatinfer::beatthis::chunkStarts(frameCount, m_config.chunkFrames, m_config.borderFrames);
 
             for (std::size_t chunkIndex = 0; chunkIndex < starts.size(); ++chunkIndex) {
                 if (cancelled()) return cancelledError();
 
                 const auto start = starts[chunkIndex];
-                const auto end = std::min(start + config_.chunkFrames, static_cast<std::ptrdiff_t>(frameCount));
+                const auto end = std::min(start + m_config.chunkFrames, static_cast<std::ptrdiff_t>(frameCount));
                 const auto left = std::max<std::ptrdiff_t>(0, -start);
-                const auto right = std::max<std::ptrdiff_t>(0, std::min<std::ptrdiff_t>(config_.borderFrames, start + config_.chunkFrames - static_cast<std::ptrdiff_t>(frameCount)));
+                const auto right = std::max<std::ptrdiff_t>(0, std::min<std::ptrdiff_t>(m_config.borderFrames, start + m_config.chunkFrames - static_cast<std::ptrdiff_t>(frameCount)));
                 const auto length = end - std::max<std::ptrdiff_t>(start, 0) + left + right;
                 std::vector<float> chunk(length * 128, 0);
                 std::copy(features->begin() + std::max<std::ptrdiff_t>(start, 0) * 128, features->begin() + end * 128, chunk.begin() + left * 128);
@@ -98,7 +98,7 @@ namespace {
                 modelInput.outputs = {"beat", "downbeat"};
                 if (cancelled()) return cancelledError();
 
-                auto ran = session_->start(modelInput);
+                auto ran = m_session->start(modelInput);
                 if (cancelled()) return cancelledError();
                 if (!ran) return ran.takeError().withContext("Beat This neural core failed");
 
@@ -115,7 +115,7 @@ namespace {
                 }
 
                 const auto beats = output->outputs.at("beat")->view<float>(), downbeats = output->outputs.at("downbeat")->view<float>();
-                for (std::ptrdiff_t i = config_.borderFrames; i < length - config_.borderFrames; ++i) {
+                for (std::ptrdiff_t i = m_config.borderFrames; i < length - m_config.borderFrames; ++i) {
                     const auto destination = start + i;
                     if (destination < 0 || destination >= static_cast<std::ptrdiff_t>(frameCount) || assigned[destination]) continue;
                     beat[destination] = beats[i];
@@ -136,9 +136,9 @@ namespace {
         }
 
     private:
-        std::unique_ptr<ds::InferenceSession> session_;
-        const Configuration &config_;
-        srtbeatinfer::beatthis::Features features_;
+        std::unique_ptr<ds::InferenceSession> m_session;
+        const Configuration &m_config;
+        srtbeatinfer::beatthis::Features m_features;
     };
 
     class Interpreter final : public srtbeatinfer::BeatInterpreter {

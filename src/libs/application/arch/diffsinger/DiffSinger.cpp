@@ -64,14 +64,14 @@ namespace dssp::arch_diffsinger {
     }
 
     arch::CatalogResult<arch::ArchitectureMetadata> DiffSinger::metadata(const arch::CatalogOptions &options) const {
-        return catalogueCall<arch::ArchitectureMetadata>([&] { return architectureMetadata(options, *translations_); });
+        return catalogueCall<arch::ArchitectureMetadata>([&] { return architectureMetadata(options, *m_translations); });
     }
 
     arch::CatalogResult<std::vector<arch::SingerInfo>> DiffSinger::singers(const arch::CatalogOptions &options) const {
         return catalogueCall<std::vector<arch::SingerInfo>>([&]() -> arch::CatalogResult<std::vector<arch::SingerInfo>> {
             std::vector<arch::SingerInfo> result;
-            result.reserve(catalog_->singers().size());
-            for (const auto &[id, singer] : catalog_->singers()) {
+            result.reserve(m_catalog->singers().size());
+            for (const auto &[id, singer] : m_catalog->singers()) {
                 auto info = singerInfo(singer, options);
                 if (!info) {
                     return std::unexpected{std::move(info.error())};
@@ -85,7 +85,7 @@ namespace dssp::arch_diffsinger {
 
     arch::CatalogResult<std::optional<arch::SingerInfo>> DiffSinger::singer(const arch::ResourceQuery &query) const {
         return catalogueCall<std::optional<arch::SingerInfo>>([&]() -> arch::CatalogResult<std::optional<arch::SingerInfo>> {
-            const auto *record = catalog_->find(query.id);
+            const auto *record = m_catalog->find(query.id);
             if (!record) {
                 return fail<arch::CatalogErrors>(arch::ResourceNotFoundError("Singer does not exist: " + query.id));
             }
@@ -101,34 +101,34 @@ namespace dssp::arch_diffsinger {
 
     arch::CatalogResult<std::string> DiffSinger::avatar(const arch::SingerMediaQuery &query) const {
         return catalogueCall<std::string>([&]() -> arch::CatalogResult<std::string> {
-            const auto *record = catalog_->find(query.singer.id);
+            const auto *record = m_catalog->find(query.singer.id);
             if (!record) {
                 return fail<arch::CatalogErrors>(arch::ResourceNotFoundError("Singer does not exist: " + query.singer.id));
             }
 
-            return mediaUrl(*media_, *record, record->avatar, query, media::Kind::Image);
+            return mediaUrl(*m_media, *record, record->avatar, query, media::Kind::Image);
         });
     }
 
     arch::CatalogResult<std::string> DiffSinger::background(const arch::SingerMediaQuery &query) const {
         return catalogueCall<std::string>([&]() -> arch::CatalogResult<std::string> {
-            const auto *record = catalog_->find(query.singer.id);
+            const auto *record = m_catalog->find(query.singer.id);
             if (!record) {
                 return fail<arch::CatalogErrors>(arch::ResourceNotFoundError("Singer does not exist: " + query.singer.id));
             }
 
-            return mediaUrl(*media_, *record, record->background, query, media::Kind::Image);
+            return mediaUrl(*m_media, *record, record->background, query, media::Kind::Image);
         });
     }
 
     arch::CatalogResult<std::vector<arch::SingerDemoAudio>> DiffSinger::demoAudio(const arch::SingerMediaQuery &query) const {
         return catalogueCall<std::vector<arch::SingerDemoAudio>>([&]() -> arch::CatalogResult<std::vector<arch::SingerDemoAudio>> {
-            const auto *record = catalog_->find(query.singer.id);
+            const auto *record = m_catalog->find(query.singer.id);
             if (!record) {
                 return fail<arch::CatalogErrors>(arch::ResourceNotFoundError("Singer does not exist: " + query.singer.id));
             }
 
-            auto url = mediaUrl(*media_, *record, record->demoAudio, query, media::Kind::Audio);
+            auto url = mediaUrl(*m_media, *record, record->demoAudio, query, media::Kind::Audio);
             if (!url) {
                 return std::unexpected{std::move(url.error())};
             }
@@ -149,8 +149,8 @@ namespace dssp::arch_diffsinger {
     arch::CatalogResult<std::vector<arch::GroupMetadata>> DiffSinger::groups(const arch::CatalogOptions &options) const {
         return catalogueCall<std::vector<arch::GroupMetadata>>([&]() -> arch::CatalogResult<std::vector<arch::GroupMetadata>> {
             std::vector<arch::GroupMetadata> result;
-            result.reserve(catalog_->groups().size());
-            for (const auto &[id, group] : catalog_->groups()) {
+            result.reserve(m_catalog->groups().size());
+            for (const auto &[id, group] : m_catalog->groups()) {
                 auto info = groupInfo(group, options);
                 if (!info) {
                     return std::unexpected{std::move(info.error())};
@@ -164,8 +164,8 @@ namespace dssp::arch_diffsinger {
 
     arch::CatalogResult<std::optional<arch::GroupMetadata>> DiffSinger::group(const arch::ResourceQuery &query) const {
         return catalogueCall<std::optional<arch::GroupMetadata>>([&]() -> arch::CatalogResult<std::optional<arch::GroupMetadata>> {
-            const auto found = catalog_->groups().find(query.id);
-            if (found == catalog_->groups().end()) {
+            const auto found = m_catalog->groups().find(query.id);
+            if (found == m_catalog->groups().end()) {
                 return fail<arch::CatalogErrors>(arch::ResourceNotFoundError("Group does not exist: " + query.id));
             }
 
@@ -180,12 +180,12 @@ namespace dssp::arch_diffsinger {
 
     arch::CatalogResult<std::vector<arch::SingerInfo>> DiffSinger::groupSingers(const arch::ResourceQuery &query) const {
         return catalogueCall<std::vector<arch::SingerInfo>>([&]() -> arch::CatalogResult<std::vector<arch::SingerInfo>> {
-            if (!catalog_->groups().contains(query.id)) {
+            if (!m_catalog->groups().contains(query.id)) {
                 return fail<arch::CatalogErrors>(arch::ResourceNotFoundError("Group does not exist: " + query.id));
             }
 
             std::vector<arch::SingerInfo> result;
-            for (const auto &[id, singer] : catalog_->singers()) {
+            for (const auto &[id, singer] : m_catalog->singers()) {
                 if (singer.info.group == query.id) {
                     auto info = singerInfo(singer, query.display);
                     if (!info) {
@@ -200,27 +200,27 @@ namespace dssp::arch_diffsinger {
     }
 
     std::expected<std::string, arch::EnvironmentErrors> DiffSinger::envTag(arch::MultiSingerContext context) const {
-        return synthesisEnvironmentTag(*catalog_, context);
+        return synthesisEnvironmentTag(*m_catalog, context);
     }
 
     void DiffSinger::pronunciation(arch::PronunciationInput input, std::stop_token stop, arch::Completion<arch::PronunciationOutput> cb) const {
-        predictPronunciation(catalog_, std::move(input), stop, std::move(cb));
+        predictPronunciation(m_catalog, std::move(input), stop, std::move(cb));
     }
 
     void DiffSinger::phoneme(arch::PhonemeInput input, std::stop_token stop, arch::Completion<arch::PhonemeOutput> cb) const {
-        predictPhoneme(catalog_, std::move(input), stop, std::move(cb));
+        predictPhoneme(m_catalog, std::move(input), stop, std::move(cb));
     }
 
     void DiffSinger::duration(arch::DurationInput input, std::stop_token stop, arch::Completion<arch::DurationOutput> cb) const {
-        synthesize(catalog_, *tasks_, std::move(input), stop, std::move(cb), synthesizeDuration);
+        synthesize(m_catalog, *m_tasks, std::move(input), stop, std::move(cb), synthesizeDuration);
     }
 
     void DiffSinger::parameter(arch::ParameterInput input, std::stop_token stop, arch::Completion<arch::ParameterOutput> cb) const {
-        synthesize(catalog_, *tasks_, std::move(input), stop, std::move(cb), synthesizeParameters);
+        synthesize(m_catalog, *m_tasks, std::move(input), stop, std::move(cb), synthesizeParameters);
     }
 
     void DiffSinger::audio(arch::AudioInput input, std::stop_token stop, arch::Completion<arch::AudioOutput> cb) const {
-        synthesize(catalog_, *tasks_, std::move(input), stop, std::move(cb), synthesizeAudio);
+        synthesize(m_catalog, *m_tasks, std::move(input), stop, std::move(cb), synthesizeAudio);
     }
 
 }

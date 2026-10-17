@@ -25,9 +25,9 @@ namespace srtsepinfer::demucs {
             void operator()(PFFFT_Setup *) const;
         };
 
-        int size_, hop_;
-        std::vector<double> window_;
-        std::unique_ptr<PFFFT_Setup, SetupDeleter> setup_;
+        int m_size, m_hop;
+        std::vector<double> m_window;
+        std::unique_ptr<PFFFT_Setup, SetupDeleter> m_setup;
     };
 }
 

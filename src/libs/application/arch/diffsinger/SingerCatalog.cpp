@@ -401,7 +401,7 @@ namespace dssp::arch_diffsinger {
         try {
             auto catalog = std::shared_ptr<SingerCatalog>(new SingerCatalog(std::move(environment)));
             std::size_t skipped = 0;
-            for (const auto &package : catalog->environment_->packages()) {
+            for (const auto &package : catalog->m_environment->packages()) {
                 for (const auto *contribution : package.contributions("singer")) {
                     if (contribution->interface() != Ds::API_INTERFACE || contribution->variant() != Ds::API_VARIANT || contribution->level() != Ds::API_LEVEL) {
                         log.stdcTrace("Ignoring singer contribution %1 in package %2 with a different architecture contract", contribution->locator().contributionId(), package.id());
@@ -424,17 +424,17 @@ namespace dssp::arch_diffsinger {
 
                     auto [record, group] = std::move(*found);
                     const bool mixable = group.info.mixable;
-                    const auto [existing, inserted] = catalog->groups_.try_emplace(record.info.group, std::move(group));
+                    const auto [existing, inserted] = catalog->m_groups.try_emplace(record.info.group, std::move(group));
                     if (!inserted) {
                         existing->second.info.mixable = existing->second.info.mixable && mixable;
                     }
 
                     const auto id = record.info.id;
-                    catalog->singers_.emplace(id, std::move(record));
+                    catalog->m_singers.emplace(id, std::move(record));
                 }
             }
 
-            log.stdcInfo("DiffSinger singer catalogue ready: %1 singers, %2 groups, %3 rejected declarations", catalog->singers_.size(), catalog->groups_.size(), skipped);
+            log.stdcInfo("DiffSinger singer catalogue ready: %1 singers, %2 groups, %3 rejected declarations", catalog->m_singers.size(), catalog->m_groups.size(), skipped);
             return std::shared_ptr<const SingerCatalog>(std::move(catalog));
         } catch (const std::exception &error) {
             return std::unexpected{inference::ResourceError("Cannot read the loaded singer declarations", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"synthrt/Wolf/dsinfer", "discover singers", "exception"}))};
@@ -442,7 +442,7 @@ namespace dssp::arch_diffsinger {
     }
 
     const SingerRecord *SingerCatalog::find(std::string_view id) const {
-        const auto found = singers_.find(std::string(id));
-        return found == singers_.end() ? nullptr : &found->second;
+        const auto found = m_singers.find(std::string(id));
+        return found == m_singers.end() ? nullptr : &found->second;
     }
 }

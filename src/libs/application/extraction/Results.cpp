@@ -35,13 +35,13 @@ namespace dssp::extraction {
     }
 
     std::expected<void, OperationError> PitchBuilder::append(const otter::Api::F0::L1::F0Result &curve, double spanStart, double spanEnd, int audioSampleRate) {
-        if (!std::isfinite(interval_) || interval_ <= 0 || !std::isfinite(output_.sampleRate) || !std::isfinite(curve.interval) || curve.interval <= 0 || std::abs(curve.interval - interval_) > interval_ * 1e-9 || !std::isfinite(curve.startTime) || !std::isfinite(spanStart) || !std::isfinite(spanEnd) || spanStart < 0 || spanEnd <= spanStart || audioSampleRate <= 0) {
+        if (!std::isfinite(m_interval) || m_interval <= 0 || !std::isfinite(m_output.sampleRate) || !std::isfinite(curve.interval) || curve.interval <= 0 || std::abs(curve.interval - m_interval) > m_interval * 1e-9 || !std::isfinite(curve.startTime) || !std::isfinite(spanStart) || !std::isfinite(spanEnd) || spanStart < 0 || spanEnd <= spanStart || audioSampleRate <= 0) {
             return std::unexpected{OperationError("F0 analyzer returned an invalid or inconsistent output frame rate or timeline")};
         }
 
         const auto tolerance = 0.51 / audioSampleRate + 1e-9;
-        const auto firstFrame = std::round(curve.startTime / interval_);
-        if (std::abs(curve.startTime - spanStart) > tolerance || firstFrame < 0 || firstFrame > static_cast<double>(std::numeric_limits<std::int64_t>::max() / 2) || std::abs(firstFrame * interval_ - curve.startTime) > tolerance) {
+        const auto firstFrame = std::round(curve.startTime / m_interval);
+        if (std::abs(curve.startTime - spanStart) > tolerance || firstFrame < 0 || firstFrame > static_cast<double>(std::numeric_limits<std::int64_t>::max() / 2) || std::abs(firstFrame * m_interval - curve.startTime) > tolerance) {
             return std::unexpected{OperationError("F0 analyzer result is not anchored to the input span and global output grid")};
         }
         if (!curve.voiced.empty() && curve.voiced.size() != curve.f0.size()) {
@@ -49,8 +49,8 @@ namespace dssp::extraction {
         }
 
         const auto first = static_cast<std::uint64_t>(firstFrame);
-        if (first < consumedEnd_) return std::unexpected{OperationError("F0 analyzer returned overlapping output frames")};
-        const auto expected = std::ceil((spanEnd - spanStart) / interval_ - 1e-9);
+        if (first < m_consumedEnd) return std::unexpected{OperationError("F0 analyzer returned overlapping output frames")};
+        const auto expected = std::ceil((spanEnd - spanStart) / m_interval - 1e-9);
         if (static_cast<double>(curve.f0.size()) > expected + 1) {
             return std::unexpected{OperationError("F0 analyzer returned frames beyond the input span")};
         }
@@ -59,21 +59,21 @@ namespace dssp::extraction {
             const auto frame = first + index;
             // A centered model window can return one padded boundary frame.
             // Keep the requested half-open span; the next span owns that frame.
-            if (static_cast<double>(frame) * interval_ >= spanEnd - 1e-9) break;
+            if (static_cast<double>(frame) * m_interval >= spanEnd - 1e-9) break;
             const auto mask = curve.voiced.empty() ? (curve.f0[index] > 0 ? 1 : 0) : curve.voiced[index];
             if (mask > 1) return std::unexpected{OperationError("F0 analyzer returned a nonboolean voiced mask")};
-            consumedEnd_ = frame + 1;
+            m_consumedEnd = frame + 1;
             if (!mask) continue;
             const double frequency = curve.f0[index];
             if (!std::isfinite(frequency) || frequency <= 0) return std::unexpected{OperationError("F0 analyzer returned a nonpositive or nonfinite voiced frequency")};
             const auto cent = 100.0 * (69.0 + 12.0 * std::log2(frequency / 440.0));
             if (!std::isfinite(cent) || cent < 0 || cent > 12800) return std::unexpected{OperationError("F0 analyzer returned a voiced pitch outside [0,12800] cent")};
-            if (!output_.segments.empty() && frame == voicedEnd_) {
-                output_.segments.back().pitch.push_back(cent);
+            if (!m_output.segments.empty() && frame == m_voicedEnd) {
+                m_output.segments.back().pitch.push_back(cent);
             } else {
-                output_.segments.push_back({frame - voicedEnd_, {cent}});
+                m_output.segments.push_back({frame - m_voicedEnd, {cent}});
             }
-            voicedEnd_ = frame + 1;
+            m_voicedEnd = frame + 1;
         }
 
         return {};

@@ -30,7 +30,7 @@ namespace dssp::media {
     private:
         class Impl;
         explicit Resources(std::unique_ptr<Impl>);
-        std::unique_ptr<Impl> impl_;
+        std::unique_ptr<Impl> m_impl;
     };
 }
 

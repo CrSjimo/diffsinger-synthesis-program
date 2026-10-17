@@ -42,45 +42,45 @@ namespace {
     class Executive final : public Sep::SeparationExecutive {
     public:
         Executive(srt::InferenceSpec &spec, std::unique_ptr<ds::InferenceSession> session, const Sep::SeparationSchema &schema, const Configuration &configuration)
-            : SeparationExecutive(spec), session_(std::move(session)), schema_(schema), configuration_(configuration), transform_(configuration.fftSize, configuration.hopLength) {}
+            : SeparationExecutive(spec), m_session(std::move(session)), m_schema(schema), m_configuration(configuration), m_transform(configuration.fftSize, configuration.hopLength) {}
 
         ~Executive() override {
             (void)stop();
             (void)waitForFinished();
-            (void)session_->close();
+            (void)m_session->close();
         }
 
         srt::Expected<void> stop() override {
             (void)SeparationExecutive::stop();
-            (void)session_->stop();
+            (void)m_session->stop();
             return {};
         }
 
         srt::Expected<void> waitForFinished() override {
             (void)SeparationExecutive::waitForFinished();
-            return session_->waitForFinished();
+            return m_session->waitForFinished();
         }
 
     protected:
         srt::Expected<std::unique_ptr<Sep::SeparationResult>> run(const Sep::SeparationStartInput &input) override {
             const auto &audio = input.audio;
-            if (audio.sampleRate != schema_.sampleRate || audio.channelCount != schema_.channelCount || audio.samples.empty() || audio.samples.size() % audio.channelCount || !std::isfinite(audio.startTime) || audio.startTime < 0) {
+            if (audio.sampleRate != m_schema.sampleRate || audio.channelCount != m_schema.channelCount || audio.samples.empty() || audio.samples.size() % audio.channelCount || !std::isfinite(audio.startTime) || audio.startTime < 0) {
                 return srt::Error(srt::Error::InvalidArgument, "Demucs requires nonempty, interleaved stereo audio at 44100 Hz with a finite nonnegative startTime");
             }
             if (std::ranges::any_of(audio.samples, [](float value) { return !std::isfinite(value); }))
                 return srt::Error(srt::Error::InvalidArgument, "Audio contains nonfinite samples");
 
             const auto count = audio.samples.size() / audio.channelCount;
-            const auto segment = static_cast<std::size_t>(configuration_.segmentSamples);
-            const auto stride = static_cast<std::size_t>((1 - configuration_.overlap) * segment);
-            const auto frames = (segment + configuration_.hopLength - 1) / configuration_.hopLength;
-            const auto bins = configuration_.fftSize / 2;
-            const auto sources = schema_.tracks.size();
-            const auto modelSources = configuration_.modelTrackCount;
+            const auto segment = static_cast<std::size_t>(m_configuration.segmentSamples);
+            const auto stride = static_cast<std::size_t>((1 - m_configuration.overlap) * segment);
+            const auto frames = (segment + m_configuration.hopLength - 1) / m_configuration.hopLength;
+            const auto bins = m_configuration.fftSize / 2;
+            const auto sources = m_schema.tracks.size();
+            const auto modelSources = m_configuration.modelTrackCount;
 
             bool identityMapping = sources == modelSources;
             for (std::size_t i = 0; i < sources; ++i)
-                identityMapping = identityMapping && configuration_.trackMapping[i] == i;
+                identityMapping = identityMapping && m_configuration.trackMapping[i] == i;
 
             const auto stopped = [this] { return cancelled(); };
             const auto progress = [&](double value) {
@@ -92,7 +92,7 @@ namespace {
                 return cancelledError();
 
             auto result = std::make_unique<Sep::SeparationResult>();
-            for (const auto &track : schema_.tracks)
+            for (const auto &track : m_schema.tracks)
                 result->tracks.push_back({track.id, {audio.sampleRate, audio.channelCount, std::vector<float>(audio.samples.size(), 0), audio.startTime}});
 
             // Official separation normalizes using the mono reference, once for
@@ -139,7 +139,7 @@ namespace {
                 if (std::ranges::any_of(waveform, [](float value) { return !std::isfinite(value); }))
                     return srt::Error(srt::Error::InvalidArgument, "Normalized audio cannot be represented as float32");
 
-                auto spectrum = transform_.forward(waveform, 2, stopped);
+                auto spectrum = m_transform.forward(waveform, 2, stopped);
                 if (!spectrum)
                     return spectrum.takeError();
 
@@ -154,7 +154,7 @@ namespace {
                 modelInput.outputs = {"spectrum", "waveform_sources"};
                 if (cancelled())
                     return cancelledError();
-                auto ran = session_->start(modelInput);
+                auto ran = m_session->start(modelInput);
                 if (cancelled())
                     return cancelledError();
                 if (!ran)
@@ -180,15 +180,15 @@ namespace {
                 std::span<const float> exportedSpectrum(frequency.data(), frequency.size());
                 std::vector<float> selectedSpectrum;
                 if (sources == 1) {
-                    exportedSpectrum = exportedSpectrum.subspan(configuration_.trackMapping.front() * sourceSpectrumSize, sourceSpectrumSize);
+                    exportedSpectrum = exportedSpectrum.subspan(m_configuration.trackMapping.front() * sourceSpectrumSize, sourceSpectrumSize);
                 } else if (!identityMapping) {
                     selectedSpectrum.resize(sources * sourceSpectrumSize);
                     for (std::size_t i = 0; i < sources; ++i)
-                        std::copy_n(frequency.data() + configuration_.trackMapping[i] * sourceSpectrumSize, sourceSpectrumSize, selectedSpectrum.data() + i * sourceSpectrumSize);
+                        std::copy_n(frequency.data() + m_configuration.trackMapping[i] * sourceSpectrumSize, sourceSpectrumSize, selectedSpectrum.data() + i * sourceSpectrumSize);
                     exportedSpectrum = selectedSpectrum;
                 }
 
-                auto reconstructed = transform_.inverse(exportedSpectrum, static_cast<int>(sources * 2), segment, stopped);
+                auto reconstructed = m_transform.inverse(exportedSpectrum, static_cast<int>(sources * 2), segment, stopped);
                 if (!reconstructed)
                     return reconstructed.takeError();
 
@@ -198,7 +198,7 @@ namespace {
                     for (std::size_t source = 0; source < sources; ++source) {
                         for (int channel = 0; channel < 2; ++channel) {
                             const auto index = (source * 2 + channel) * segment + padding + i;
-                            const auto modelIndex = (configuration_.trackMapping[source] * 2 + channel) * segment + padding + i;
+                            const auto modelIndex = (m_configuration.trackMapping[source] * 2 + channel) * segment + padding + i;
                             const auto value = ((*reconstructed)[index] + time[modelIndex]) * deviation + mean;
                             result->tracks[source].audio.samples[2 * (offset + i) + channel] += static_cast<float>(value * triangle[i]);
                         }
@@ -226,10 +226,10 @@ namespace {
         }
 
     private:
-        std::unique_ptr<ds::InferenceSession> session_;
-        const Sep::SeparationSchema &schema_;
-        const Configuration &configuration_;
-        srtsepinfer::demucs::SpectralTransform transform_;
+        std::unique_ptr<ds::InferenceSession> m_session;
+        const Sep::SeparationSchema &m_schema;
+        const Configuration &m_configuration;
+        srtsepinfer::demucs::SpectralTransform m_transform;
     };
 
     class Interpreter final : public srtsepinfer::SeparationInterpreter {

@@ -57,7 +57,7 @@ namespace dssp::localization {
             }
 
             auto result = std::shared_ptr<Catalog>(new Catalog);
-            result->fallbackLocale_ = fallbackLocale;
+            result->m_fallbackLocale = fallbackLocale;
             std::error_code error;
             std::filesystem::directory_iterator iterator(directory, error), end;
             // A deployment without translation files may omit the directory.
@@ -85,13 +85,13 @@ namespace dssp::localization {
                 if (!strings) {
                     return std::unexpected{std::move(strings.error())};
                 }
-                result->locales_.push_back(locale);
-                result->translations_.push_back(std::move(*strings));
+                result->m_locales.push_back(locale);
+                result->m_translations.push_back(std::move(*strings));
             }
 
             if (locales.empty()) {
                 log.stdcDebug("No translation bundles available; display values will use resource keys");
-            } else if (std::ranges::find(locales, result->fallbackLocale_) == locales.end()) {
+            } else if (std::ranges::find(locales, result->m_fallbackLocale) == locales.end()) {
                 log.stdcDebug("Preferred fallback bundle %1 is absent; using available translations", fallbackLocale);
             }
 
@@ -107,9 +107,9 @@ namespace dssp::localization {
         // Only bundles containing this key participate in language matching.
         std::vector<std::string> locales;
         std::vector<const std::string *> strings;
-        for (std::size_t i = 0; i < locales_.size(); ++i) {
-            if (const auto it = translations_[i].find(resourceKey); it != translations_[i].end()) {
-                locales.push_back(locales_[i]);
+        for (std::size_t i = 0; i < m_locales.size(); ++i) {
+            if (const auto it = m_translations[i].find(resourceKey); it != m_translations[i].end()) {
+                locales.push_back(m_locales[i]);
                 strings.push_back(&it->second);
             }
         }
@@ -126,7 +126,7 @@ namespace dssp::localization {
         if (*matched) {
             return *strings[**matched];
         }
-        if (const auto fallback = std::ranges::find(locales, fallbackLocale_); fallback != locales.end()) {
+        if (const auto fallback = std::ranges::find(locales, m_fallbackLocale); fallback != locales.end()) {
             return *strings[static_cast<std::size_t>(fallback - locales.begin())];
         }
 

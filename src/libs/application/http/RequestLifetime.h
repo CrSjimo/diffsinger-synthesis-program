@@ -30,7 +30,7 @@ namespace dssp::http {
 
     private:
         friend class RequestLifetimeRegistry;
-        std::shared_ptr<State> state_;
+        std::shared_ptr<State> m_state;
     };
 
     class RequestLifetimeRegistry : public std::enable_shared_from_this<RequestLifetimeRegistry> {
@@ -47,10 +47,10 @@ namespace dssp::http {
             std::weak_ptr<RequestContext::State> state;
         };
 
-        std::mutex mutex_;
-        std::map<std::uint64_t, Entry> requests_;
-        std::uint64_t nextId_ = 0;
-        bool closing_ = false;
+        std::mutex m_mutex;
+        std::map<std::uint64_t, Entry> m_requests;
+        std::uint64_t m_nextId = 0;
+        bool m_closing = false;
     };
 }
 

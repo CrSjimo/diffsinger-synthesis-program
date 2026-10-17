@@ -59,7 +59,7 @@ namespace dssp::arch_diffsinger {
         template <class Output>
         class Request {
         public:
-            Request(std::shared_ptr<const SingerCatalog> catalog, resource::TaskExecutor &tasks, std::stop_token stop, arch::Completion<Output> complete) : catalog(std::move(catalog)), tasks(tasks), stop(stop), complete(std::move(complete)) {}
+            Request(std::shared_ptr<const SingerCatalog> catalog, resource::TaskExecutor &tasks, std::stop_token stop, arch::Completion<Output> complete) : catalog(std::move(catalog)), tasks(tasks), stop(stop), m_complete(std::move(complete)) {}
 
             std::shared_ptr<const SingerCatalog> catalog;
             resource::TaskExecutor &tasks;
@@ -77,14 +77,14 @@ namespace dssp::arch_diffsinger {
             }
 
             void finish(arch::SynthesisResult<Output> result) {
-                if (done.test_and_set(std::memory_order_acq_rel)) {
+                if (m_done.test_and_set(std::memory_order_acq_rel)) {
                     return;
                 }
                 if (stop.stop_requested()) {
                     result = fail<arch::SynthesisErrors>(arch::CancelledError("DiffSinger synthesis request was cancelled"));
                 }
 
-                complete(std::move(result));
+                m_complete(std::move(result));
             }
 
             template <class Note>
@@ -152,8 +152,8 @@ namespace dssp::arch_diffsinger {
             }
 
         private:
-            arch::Completion<Output> complete;
-            std::atomic_flag done;
+            arch::Completion<Output> m_complete;
+            std::atomic_flag m_done;
         };
 
         template <class Output>

@@ -18,22 +18,22 @@ namespace dssp::resource {
     template <class Result, class Start>
     class CallbackAwaiter final {
     public:
-        explicit CallbackAwaiter(Start start) : start_(std::move(start)), state_(std::make_shared<State>()) {}
+        explicit CallbackAwaiter(Start start) : m_start(std::move(start)), m_state(std::make_shared<State>()) {}
 
         bool await_ready() const noexcept { return false; }
 
         void await_suspend(std::coroutine_handle<> continuation) {
             // Publish only shared state. An inline callback can destroy this
             // awaiter before start() returns, so nothing accesses it afterwards.
-            auto start = std::move(start_);
-            start([state = state_, continuation](Result result) mutable {
+            auto start = std::move(m_start);
+            start([state = m_state, continuation](Result result) mutable {
                 if (state->completed.test_and_set(std::memory_order_acq_rel)) return;
                 state->result.emplace(std::move(result));
                 continuation.resume();
             });
         }
 
-        Result await_resume() { return std::move(*state_->result); }
+        Result await_resume() { return std::move(*m_state->result); }
 
     private:
         struct State {
@@ -41,8 +41,8 @@ namespace dssp::resource {
             std::optional<Result> result;
         };
 
-        Start start_;
-        std::shared_ptr<State> state_;
+        Start m_start;
+        std::shared_ptr<State> m_state;
     };
 
     template <class Result, class Start>

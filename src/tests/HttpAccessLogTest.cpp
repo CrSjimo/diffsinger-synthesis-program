@@ -32,20 +32,20 @@ namespace dssp::tests {
     namespace {
         class RunningServer {
         public:
-            RunningServer(drogon::HttpAppFramework &app, std::shared_ptr<http::AccessLog> access, std::shared_ptr<http::RequestLifetimeRegistry> lifetime) : app_(app), access_(std::move(access)), lifetime_(std::move(lifetime)), thread_([&app] { app.run(); }) {}
+            RunningServer(drogon::HttpAppFramework &app, std::shared_ptr<http::AccessLog> access, std::shared_ptr<http::RequestLifetimeRegistry> lifetime) : m_app(app), m_access(std::move(access)), m_lifetime(std::move(lifetime)), m_thread([&app] { app.run(); }) {}
 
             ~RunningServer() {
-                access_->shutdown();
-                lifetime_->cancelAll();
-                app_.getLoop()->queueInLoop([this] { app_.quit(); });
-                thread_.join();
+                m_access->shutdown();
+                m_lifetime->cancelAll();
+                m_app.getLoop()->queueInLoop([this] { m_app.quit(); });
+                m_thread.join();
             }
 
         private:
-            drogon::HttpAppFramework &app_;
-            const std::shared_ptr<http::AccessLog> access_;
-            const std::shared_ptr<http::RequestLifetimeRegistry> lifetime_;
-            std::thread thread_;
+            drogon::HttpAppFramework &m_app;
+            const std::shared_ptr<http::AccessLog> m_access;
+            const std::shared_ptr<http::RequestLifetimeRegistry> m_lifetime;
+            std::thread m_thread;
         };
     }
 

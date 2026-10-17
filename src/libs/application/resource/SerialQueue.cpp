@@ -126,12 +126,12 @@ namespace dssp::resource {
         }
     };
 
-    SerialQueue::SerialQueue(Dispatch dispatch, std::string name) : state_(std::make_shared<State>(std::move(dispatch), std::move(name))) {}
+    SerialQueue::SerialQueue(Dispatch dispatch, std::string name) : m_state(std::make_shared<State>(std::move(dispatch), std::move(name))) {}
 
     SerialQueue::~SerialQueue() { close(); }
 
     void SerialQueue::submit(Task task, std::stop_token stop) {
-        const auto state = state_;
+        const auto state = m_state;
         auto item = std::make_shared<State::Item>();
         item->task = std::move(task);
 
@@ -170,7 +170,7 @@ namespace dssp::resource {
     }
 
     void SerialQueue::close() {
-        const auto state = state_;
+        const auto state = m_state;
         std::list<std::shared_ptr<State::Item>> pending;
         std::shared_ptr<State::Item> running;
 
@@ -196,7 +196,7 @@ namespace dssp::resource {
     }
 
     void SerialQueue::wait() {
-        const auto state = state_;
+        const auto state = m_state;
         std::unique_lock lock(state->mutex);
         state->idle.wait(lock, [&] { return !state->scheduled && !state->running && !state->completing; });
     }

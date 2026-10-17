@@ -19,7 +19,7 @@ namespace srtbeatinfer::Api::Beat::L1 {
 
     BeatSchema::~BeatSchema() = default;
 
-    BeatExecutive::BeatExecutive(srt::InferenceSpec &spec) : InferenceExecutive(spec), task_([this](const BeatStartInput &input) { return run(input); }) {}
+    BeatExecutive::BeatExecutive(srt::InferenceSpec &spec) : InferenceExecutive(spec), m_task([this](const BeatStartInput &input) { return run(input); }) {}
 
     BeatExecutive::~BeatExecutive() {
         (void)stop();

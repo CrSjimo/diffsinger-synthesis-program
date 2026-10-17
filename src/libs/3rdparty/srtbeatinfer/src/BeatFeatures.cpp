@@ -41,19 +41,19 @@ namespace srtbeatinfer::beatthis {
         }
     }
 
-    Features::Features() : window_(Size), filter_(Bins * Mels), reversed_(Size), roots_(Size / 2) {
+    Features::Features() : m_window(Size), m_filter(Bins * Mels), m_reversed(Size), m_roots(Size / 2) {
         for (int i = 0; i < Size; ++i) {
-            window_[i] = static_cast<float>(0.5 - 0.5 * std::cos(2 * std::numbers::pi * i / Size));
+            m_window[i] = static_cast<float>(0.5 - 0.5 * std::cos(2 * std::numbers::pi * i / Size));
 
             std::size_t value = i, reversed = 0;
             for (int n = Size; n > 1; n >>= 1) {
                 reversed = (reversed << 1) | (value & 1);
                 value >>= 1;
             }
-            reversed_[i] = reversed;
+            m_reversed[i] = reversed;
         }
 
-        for (int i = 0; i < Size / 2; ++i) roots_[i] = std::polar(1.0, -2 * std::numbers::pi * i / Size);
+        for (int i = 0; i < Size / 2; ++i) m_roots[i] = std::polar(1.0, -2 * std::numbers::pi * i / Size);
 
         // torchaudio uses float32 linspace and triangular filters, with no area normalization.
         std::vector<float> points(Mels + 2);
@@ -63,7 +63,7 @@ namespace srtbeatinfer::beatthis {
         for (int bin = 0; bin < Bins; ++bin) {
             const auto frequency = static_cast<float>(11025.0 * bin / (Bins - 1));
             for (int mel = 0; mel < Mels; ++mel)
-                filter_[bin * Mels + mel] = std::max(0.0f, std::min((frequency - points[mel]) / (points[mel + 1] - points[mel]), (points[mel + 2] - frequency) / (points[mel + 2] - points[mel + 1])));
+                m_filter[bin * Mels + mel] = std::max(0.0f, std::min((frequency - points[mel]) / (points[mel + 1] - points[mel]), (points[mel + 2] - frequency) / (points[mel + 2] - points[mel + 1])));
         }
     }
 
@@ -88,14 +88,14 @@ namespace srtbeatinfer::beatthis {
                     if (index >= static_cast<std::ptrdiff_t>(audio.size())) index = period - index;
                 }
 
-                values[reversed_[i]] = static_cast<double>(audio[index]) * window_[i];
+                values[m_reversed[i]] = static_cast<double>(audio[index]) * m_window[i];
             }
 
             for (int span = 2; span <= Size; span *= 2) {
                 const int half = span / 2, step = Size / span;
                 for (int begin = 0; begin < Size; begin += span)
                     for (int j = 0; j < half; ++j) {
-                        const auto even = values[begin + j], odd = values[begin + j + half] * roots_[j * step];
+                        const auto even = values[begin + j], odd = values[begin + j + half] * m_roots[j * step];
                         values[begin + j] = even + odd;
                         values[begin + j + half] = even - odd;
                     }
@@ -105,7 +105,7 @@ namespace srtbeatinfer::beatthis {
 
             for (int mel = 0; mel < Mels; ++mel) {
                 double sum = 0;
-                for (int bin = 0; bin < Bins; ++bin) sum += magnitude[bin] * filter_[bin * Mels + mel];
+                for (int bin = 0; bin < Bins; ++bin) sum += magnitude[bin] * m_filter[bin * Mels + mel];
                 output[frame * Mels + mel] = static_cast<float>(std::log1p(1000 * sum));
                 if (!std::isfinite(output[frame * Mels + mel])) return srt::Error(srt::Error::InvalidArgument, "Beat features contain nonfinite values");
             }

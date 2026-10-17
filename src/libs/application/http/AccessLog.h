@@ -31,7 +31,7 @@ namespace dssp::http {
     private:
         friend class AccessLog;
         friend RequestLog requestLog(const drogon::HttpRequest &request);
-        std::shared_ptr<State> state_;
+        std::shared_ptr<State> m_state;
     };
 
     // Initialize on the request's event loop before dispatching asynchronous work.
@@ -57,9 +57,9 @@ namespace dssp::http {
             std::weak_ptr<RequestLog::State> state;
         };
 
-        std::mutex mutex_;
-        std::map<std::uint64_t, Entry> requests_;
-        bool closing_ = false;
+        std::mutex m_mutex;
+        std::map<std::uint64_t, Entry> m_requests;
+        bool m_closing = false;
     };
 }
 

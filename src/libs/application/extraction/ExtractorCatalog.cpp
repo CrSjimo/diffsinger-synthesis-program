@@ -105,16 +105,16 @@ namespace dssp::extraction {
     std::expected<std::shared_ptr<const ExtractorCatalog>, inference::InitializationError> ExtractorCatalog::discover(std::shared_ptr<inference::Environment> environment) {
         if (!environment) return std::unexpected{inference::InitializationError("Extraction requires an inference environment")};
         auto catalog = std::shared_ptr<ExtractorCatalog>(new ExtractorCatalog(std::move(environment)));
-        auto notePool = catalog->environment_->inferences("extraction-note");
-        auto pitchPool = catalog->environment_->inferences("extraction-pitch");
-        auto separationPool = catalog->environment_->inferences("extraction-separation");
-        auto tempoPool = catalog->environment_->inferences("extraction-tempo");
+        auto notePool = catalog->m_environment->inferences("extraction-note");
+        auto pitchPool = catalog->m_environment->inferences("extraction-pitch");
+        auto separationPool = catalog->m_environment->inferences("extraction-separation");
+        auto tempoPool = catalog->m_environment->inferences("extraction-tempo");
         if (!notePool) return std::unexpected{std::move(notePool.error())};
         if (!pitchPool) return std::unexpected{std::move(pitchPool.error())};
         if (!separationPool) return std::unexpected{std::move(separationPool.error())};
         if (!tempoPool) return std::unexpected{std::move(tempoPool.error())};
         try {
-            auto *category = dynamic_cast<srt::InferenceCategory *>(catalog->environment_->unit().category(srt::InferenceCategory::NAME));
+            auto *category = dynamic_cast<srt::InferenceCategory *>(catalog->m_environment->unit().category(srt::InferenceCategory::NAME));
             if (!category) return std::unexpected{inference::InitializationError("Synthrt inference category is unavailable")};
             std::size_t notes = 0, pitches = 0, tempos = 0, separations = 0, rejected = 0;
             for (auto *spec : category->inferences()) {
@@ -145,7 +145,7 @@ namespace dssp::extraction {
                 separations += record->kind == Kind::Separation;
                 log.stdcTrace("Registered extractor %1 rate=%2 maximum_seconds=%3 output_interval=%4", record->id, record->sampleRate, record->maximumDuration, record->outputInterval);
                 const auto id = record->id;
-                catalog->records_.emplace(id, std::move(*record));
+                catalog->m_records.emplace(id, std::move(*record));
             }
 
             log.stdcInfo("Extractor catalogue ready: %1 note extractors, %2 pitch extractors, %3 tempo extractors, %4 separation extractors, %5 rejected declarations", notes, pitches, tempos, separations, rejected);
@@ -156,8 +156,8 @@ namespace dssp::extraction {
     }
 
     const ExtractorRecord *ExtractorCatalog::find(Kind kind, std::string_view id) const {
-        const auto found = records_.find(id);
-        return found != records_.end() && found->second.kind == kind ? &found->second : nullptr;
+        const auto found = m_records.find(id);
+        return found != m_records.end() && found->second.kind == kind ? &found->second : nullptr;
     }
 
     CatalogResult<ExtractorInfo> ExtractorCatalog::metadata(Kind kind, std::string_view id, std::string_view acceptLanguage) const {
@@ -168,7 +168,7 @@ namespace dssp::extraction {
 
     CatalogResult<ExtractorList> ExtractorCatalog::list(std::string_view acceptLanguage) const {
         ExtractorList result;
-        for (const auto &[id, record] : records_) {
+        for (const auto &[id, record] : m_records) {
             auto info = present(record, acceptLanguage);
             if (!info) return std::unexpected{std::move(info.error())};
             if (record.kind == Kind::Note) result.note.push_back(std::move(*info));

@@ -64,18 +64,18 @@ namespace dssp::arch_diffsinger {
     class SingerCatalog final {
     public:
         static std::expected<std::shared_ptr<const SingerCatalog>, inference::ResourceError> discover(std::shared_ptr<inference::Environment>);
-        const std::map<std::string, SingerRecord> &singers() const noexcept { return singers_; }
-        const std::map<std::string, GroupRecord> &groups() const noexcept { return groups_; }
+        const std::map<std::string, SingerRecord> &singers() const noexcept { return m_singers; }
+        const std::map<std::string, GroupRecord> &groups() const noexcept { return m_groups; }
         const SingerRecord *find(std::string_view id) const;
-        const std::shared_ptr<inference::Environment> &environment() const noexcept { return environment_; }
+        const std::shared_ptr<inference::Environment> &environment() const noexcept { return m_environment; }
 
     private:
-        explicit SingerCatalog(std::shared_ptr<inference::Environment> environment) : environment_(std::move(environment)) {}
+        explicit SingerCatalog(std::shared_ptr<inference::Environment> environment) : m_environment(std::move(environment)) {}
 
         // Retains the unit until all borrowed specs and package handles are gone.
-        std::shared_ptr<inference::Environment> environment_;
-        std::map<std::string, SingerRecord> singers_;
-        std::map<std::string, GroupRecord> groups_;
+        std::shared_ptr<inference::Environment> m_environment;
+        std::map<std::string, SingerRecord> m_singers;
+        std::map<std::string, GroupRecord> m_groups;
     };
 
     std::vector<std::string> commonSpeakers(const std::map<std::string, StageRecord> &);

@@ -444,51 +444,51 @@ namespace dssp::inference {
         }
     }
 
-    Environment::Environment(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+    Environment::Environment(std::unique_ptr<Impl> impl) : m_impl(std::move(impl)) {}
 
     Environment::~Environment() { shutdown(); }
 
-    srt::SynthUnit &Environment::unit() const noexcept { return impl_->unit; }
+    srt::SynthUnit &Environment::unit() const noexcept { return m_impl->unit; }
 
     std::expected<InferencePool *, InitializationError> Environment::inferences(std::string_view group) {
-        const std::lock_guard lock(impl_->poolsMutex);
-        if (impl_->stopped) {
+        const std::lock_guard lock(m_impl->poolsMutex);
+        if (m_impl->stopped) {
             return std::unexpected{InitializationError("Inference environment has been shut down")};
         }
 
-        const auto found = impl_->pools.find(std::string(group));
-        if (found != impl_->pools.end()) {
+        const auto found = m_impl->pools.find(std::string(group));
+        if (found != m_impl->pools.end()) {
             return found->second.get();
         }
 
-        auto pool = InferencePool::create(std::string(group), {}, impl_->serialExecution);
+        auto pool = InferencePool::create(std::string(group), {}, m_impl->serialExecution);
         if (!pool) {
             return std::unexpected{std::move(pool.error())};
         }
 
         auto *result = pool->get();
-        impl_->pools.emplace(group, std::move(*pool));
+        m_impl->pools.emplace(group, std::move(*pool));
         return result;
     }
 
     void Environment::shutdown() {
-        std::call_once(impl_->shutdownOnce, [&] {
+        std::call_once(m_impl->shutdownOnce, [&] {
             {
-                const std::lock_guard lock(impl_->poolsMutex);
-                impl_->stopped = true;
+                const std::lock_guard lock(m_impl->poolsMutex);
+                m_impl->stopped = true;
             }
 
-            if (impl_->serialExecution) impl_->serialExecution->close();
-            for (const auto &[group, pool] : impl_->pools) {
+            if (m_impl->serialExecution) m_impl->serialExecution->close();
+            for (const auto &[group, pool] : m_impl->pools) {
                 pool->shutdown();
             }
 
-            if (impl_->serialExecution) impl_->serialExecution->shutdown();
+            if (m_impl->serialExecution) m_impl->serialExecution->shutdown();
         });
     }
 
-    const std::vector<srt::PackageHandle> &Environment::packages() const noexcept { return impl_->packages; }
+    const std::vector<srt::PackageHandle> &Environment::packages() const noexcept { return m_impl->packages; }
 
-    const std::vector<PackageProblem> &Environment::problems() const noexcept { return impl_->problems; }
+    const std::vector<PackageProblem> &Environment::problems() const noexcept { return m_impl->problems; }
 
 }

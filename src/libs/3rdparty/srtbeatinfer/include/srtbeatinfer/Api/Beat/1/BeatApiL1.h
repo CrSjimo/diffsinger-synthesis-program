@@ -72,21 +72,21 @@ namespace srtbeatinfer::Api::Beat::L1 {
         using AsyncCallback = std::function<void(srt::Expected<std::unique_ptr<BeatResult>>)>;
         ~BeatExecutive() override;
 
-        srt::Expected<std::unique_ptr<BeatResult>> start(const BeatStartInput &input) { return task_.run(input); }
-        srt::Expected<void> startAsync(std::shared_ptr<const BeatStartInput> input, AsyncCallback callback) { return task_.runAsync(std::move(input), std::move(callback)); }
+        srt::Expected<std::unique_ptr<BeatResult>> start(const BeatStartInput &input) { return m_task.run(input); }
+        srt::Expected<void> startAsync(std::shared_ptr<const BeatStartInput> input, AsyncCallback callback) { return m_task.runAsync(std::move(input), std::move(callback)); }
 
-        srt::ITask::State state() const noexcept override { return task_.state(); }
-        srt::Expected<void> stop() override { return task_.stop(); }
-        srt::Expected<void> waitForFinished() override { return task_.waitForFinished(); }
+        srt::ITask::State state() const noexcept override { return m_task.state(); }
+        srt::Expected<void> stop() override { return m_task.stop(); }
+        srt::Expected<void> waitForFinished() override { return m_task.waitForFinished(); }
 
     protected:
         explicit BeatExecutive(srt::InferenceSpec &);
         virtual srt::Expected<std::unique_ptr<BeatResult>> run(const BeatStartInput &) = 0;
-        bool cancelled() const noexcept { return task_.cancelled(); }
+        bool cancelled() const noexcept { return m_task.cancelled(); }
 
     private:
         // Providers stop and wait before destroying members accessed by run().
-        BeatTask<BeatStartInput, BeatResult> task_;
+        BeatTask<BeatStartInput, BeatResult> m_task;
     };
 
     SRTBEATINFER_EXPORT srt::Expected<std::unique_ptr<BeatExecutive>> createBeatTracker(srt::InferenceSpec &);

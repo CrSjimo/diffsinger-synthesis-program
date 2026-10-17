@@ -20,7 +20,7 @@ namespace srtsepinfer::Api::Separation::L1 {
 
     SeparationSchema::~SeparationSchema() = default;
 
-    SeparationExecutive::SeparationExecutive(srt::InferenceSpec &spec) : InferenceExecutive(spec), task_([this](const SeparationStartInput &input) { return run(input); }) {}
+    SeparationExecutive::SeparationExecutive(srt::InferenceSpec &spec) : InferenceExecutive(spec), m_task([this](const SeparationStartInput &input) { return run(input); }) {}
 
     SeparationExecutive::~SeparationExecutive() {
         (void)stop();

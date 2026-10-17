@@ -17,26 +17,26 @@ namespace dssp::resource {
     // using the protected resource. Cancellation alone never releases it.
     class ExecutionPermit final {
     public:
-        ExecutionPermit(std::function<void()> release, std::stop_token stop) : release_(std::move(release)), stop_(stop) {}
+        ExecutionPermit(std::function<void()> release, std::stop_token stop) : m_release(std::move(release)), m_stop(stop) {}
 
-        ExecutionPermit(ExecutionPermit &&other) noexcept : release_(std::exchange(other.release_, {})), stop_(other.stop_) {}
+        ExecutionPermit(ExecutionPermit &&other) noexcept : m_release(std::exchange(other.m_release, {})), m_stop(other.m_stop) {}
 
         ExecutionPermit &operator=(ExecutionPermit &&other) noexcept {
             if (this != &other) {
                 release();
-                release_ = std::exchange(other.release_, {});
-                stop_ = other.stop_;
+                m_release = std::exchange(other.m_release, {});
+                m_stop = other.m_stop;
             }
             return *this;
         }
 
         ~ExecutionPermit() { release(); }
-        std::stop_token cancellation() const noexcept { return stop_; }
+        std::stop_token cancellation() const noexcept { return m_stop; }
 
     private:
-        void release() { if (auto release = std::exchange(release_, {})) release(); }
-        std::function<void()> release_;
-        std::stop_token stop_;
+        void release() { if (auto release = std::exchange(m_release, {})) release(); }
+        std::function<void()> m_release;
+        std::stop_token m_stop;
     };
 
     using PermitResult = std::expected<ExecutionPermit, TaskCancelledError>;
@@ -56,7 +56,7 @@ namespace dssp::resource {
     private:
         class Impl;
         explicit ExecutionGate(std::unique_ptr<Impl>);
-        std::unique_ptr<Impl> impl_;
+        std::unique_ptr<Impl> m_impl;
     };
 }
 

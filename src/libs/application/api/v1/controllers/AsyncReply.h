@@ -19,37 +19,37 @@ namespace dssp::api_v1::detail {
     // Backend tasks must release their callback when finished or cancelled.
     class AsyncReply {
     public:
-        AsyncReply(http::Callback callback, http::RequestContext context, std::shared_ptr<const void> implementation, std::string_view operation) : callback_(std::move(callback)), context_(std::move(context)), implementation_(std::move(implementation)), operation_(operation) {}
+        AsyncReply(http::Callback callback, http::RequestContext context, std::shared_ptr<const void> implementation, std::string_view operation) : m_callback(std::move(callback)), m_context(std::move(context)), m_implementation(std::move(implementation)), m_operation(operation) {}
 
         bool claim() {
-            if (completed_.test_and_set(std::memory_order_acq_rel)) {
-                replyLog.stdcWarning("%1 operation=%2 discarded a duplicate backend completion", context_.logContext().description(), operation_);
+            if (m_completed.test_and_set(std::memory_order_acq_rel)) {
+                replyLog.stdcWarning("%1 operation=%2 discarded a duplicate backend completion", m_context.logContext().description(), m_operation);
                 return false;
             }
-            if (context_.stopRequested()) {
+            if (m_context.stopRequested()) {
                 return false;
             }
             return true;
         }
 
         void send(const drogon::HttpResponsePtr &response) const {
-            if (!context_.stopRequested()) {
+            if (!m_context.stopRequested()) {
                 // This callback now runs on an inference worker. Drogon's
                 // synchronous exception handler cannot cover this boundary.
                 try {
-                    callback_(response);
+                    m_callback(response);
                 } catch (const std::exception &error) {
-                    replyLog.stdcCritical("%1 operation=%2 HTTP response callback failed: %3", context_.logContext().description(), operation_, error.what());
+                    replyLog.stdcCritical("%1 operation=%2 HTTP response callback failed: %3", m_context.logContext().description(), m_operation, error.what());
                 }
             }
         }
 
     private:
-        const http::Callback callback_;
-        const http::RequestContext context_;
-        const std::shared_ptr<const void> implementation_;
-        const std::string operation_;
-        std::atomic_flag completed_ = ATOMIC_FLAG_INIT;
+        const http::Callback m_callback;
+        const http::RequestContext m_context;
+        const std::shared_ptr<const void> m_implementation;
+        const std::string m_operation;
+        std::atomic_flag m_completed = ATOMIC_FLAG_INIT;
     };
 }
 

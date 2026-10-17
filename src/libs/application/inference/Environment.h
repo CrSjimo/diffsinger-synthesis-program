@@ -62,7 +62,7 @@ namespace dssp::inference {
     private:
         class Impl;
         explicit Environment(std::unique_ptr<Impl>);
-        std::unique_ptr<Impl> impl_;
+        std::unique_ptr<Impl> m_impl;
     };
 
 }

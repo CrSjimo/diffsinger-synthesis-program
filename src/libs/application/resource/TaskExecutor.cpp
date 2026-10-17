@@ -49,12 +49,12 @@ namespace dssp::resource {
         }
     }
 
-    TaskExecutor::TaskExecutor(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+    TaskExecutor::TaskExecutor(std::unique_ptr<Impl> impl) : m_impl(std::move(impl)) {}
 
     TaskExecutor::~TaskExecutor() { shutdown(); }
 
     void TaskExecutor::submit(Task task, std::stop_token stop) {
-        auto *impl = impl_.get();
+        auto *impl = m_impl.get();
         const auto submission = std::make_shared<Submission>();
 
         // A one-item SerialQueue supplies the existing cancellation/lifecycle
@@ -112,7 +112,7 @@ namespace dssp::resource {
     }
 
     void TaskExecutor::shutdown() {
-        auto *impl = impl_.get();
+        auto *impl = m_impl.get();
         std::call_once(impl->shutdownOnce, [impl] {
             std::vector<std::shared_ptr<SerialQueue>> jobs;
             {

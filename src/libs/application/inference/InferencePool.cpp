@@ -77,7 +77,7 @@ namespace dssp::inference {
                 return std::unexpected{InitializationError("Cannot create inference workers", executor.error().clone())};
             }
             auto pool = std::unique_ptr<InferencePool>(new InferencePool(std::make_unique<Impl>(std::move(group), options, std::move(*executor))));
-            auto *impl = pool->impl_.get();
+            auto *impl = pool->m_impl.get();
             impl->serialExecution = std::move(serialExecution);
             if (options.idleTimeout.count() > 0) {
                 impl->cleanup = std::jthread([impl](std::stop_token stop) {
@@ -99,7 +99,7 @@ namespace dssp::inference {
         }
     }
 
-    InferencePool::InferencePool(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+    InferencePool::InferencePool(std::unique_ptr<Impl> impl) : m_impl(std::move(impl)) {}
 
     InferencePool::~InferencePool() { shutdown(); }
 
@@ -145,18 +145,18 @@ namespace dssp::inference {
             return std::unexpected{ExecutionError("Inference resource requires an identity and a factory")};
         }
 
-        const std::lock_guard lock(impl_->mutex);
-        if (impl_->stopped) {
+        const std::lock_guard lock(m_impl->mutex);
+        if (m_impl->stopped) {
             return std::unexpected{ExecutionError("Inference cache group has been shut down")};
         }
-        if (const auto found = impl_->resources.find(definition.key); found != impl_->resources.end()) {
+        if (const auto found = m_impl->resources.find(definition.key); found != m_impl->resources.end()) {
             return found->second;
         }
 
         auto resource = std::make_shared<InferenceResource>();
         resource->definition = std::move(definition);
-        resource->owner = impl_.get();
-        resource->queue = std::make_shared<resource::SerialQueue>([impl = impl_.get(), weakResource = std::weak_ptr<InferenceResource>(resource)](std::function<void()> task) {
+        resource->owner = m_impl.get();
+        resource->queue = std::make_shared<resource::SerialQueue>([impl = m_impl.get(), weakResource = std::weak_ptr<InferenceResource>(resource)](std::function<void()> task) {
             auto dispatched = impl->executor->dispatch(task);
             if (dispatched) {
                 return;
@@ -171,13 +171,13 @@ namespace dssp::inference {
             // Closing completes queued requests with the dispatch diagnostic;
             // this only clears the rejected drain's scheduled state.
             task();
-        }, impl_->group + "/" + resource->definition.label + "#" + resource->definition.key.substr(0, 12));
-        impl_->resources.emplace(resource->definition.key, resource);
+        }, m_impl->group + "/" + resource->definition.label + "#" + resource->definition.key.substr(0, 12));
+        m_impl->resources.emplace(resource->definition.key, resource);
         return InferenceHandle(std::move(resource));
     }
 
     void InferencePool::schedule(InferenceHandle handle, std::stop_token stop, std::function<bool(TaskExecutive &, std::stop_token)> run, std::function<void(std::optional<ExecutionError>, bool)> complete) {
-        if (!handle || handle->owner != impl_.get()) {
+        if (!handle || handle->owner != m_impl.get()) {
             complete(ExecutionError("Inference resource belongs to another cache group"), stop.stop_requested());
             return;
         }
@@ -201,7 +201,7 @@ namespace dssp::inference {
     }
 
     drogon::Task<bool> InferencePool::execute(InferenceHandle handle, std::stop_token token, std::shared_ptr<std::optional<ExecutionError>> error, std::function<bool(TaskExecutive &, std::stop_token)> run) {
-        auto *impl = impl_.get();
+        auto *impl = m_impl.get();
         if (token.stop_requested()) co_return true;
         auto lease = impl->cache.acquire(handle->definition.key);
         if (!lease) {
@@ -269,24 +269,24 @@ namespace dssp::inference {
         co_return token.stop_requested() || (permit && permit->cancellation().stop_requested());
     }
 
-    std::size_t InferencePool::residentCount() const { return impl_->cache.size(); }
+    std::size_t InferencePool::residentCount() const { return m_impl->cache.size(); }
 
-    void InferencePool::sweep() { impl_->cache.sweep(); }
+    void InferencePool::sweep() { m_impl->cache.sweep(); }
 
     void InferencePool::shutdown() {
-        std::call_once(impl_->shutdownOnce, [&] {
+        std::call_once(m_impl->shutdownOnce, [&] {
             std::vector<InferenceHandle> resources;
             {
-                const std::lock_guard lock(impl_->mutex);
-                impl_->stopped = true;
-                for (const auto &[key, resource] : impl_->resources) {
+                const std::lock_guard lock(m_impl->mutex);
+                m_impl->stopped = true;
+                for (const auto &[key, resource] : m_impl->resources) {
                     resources.push_back(resource);
                 }
             }
 
-            impl_->cleanup.request_stop();
-            if (impl_->cleanup.joinable()) {
-                impl_->cleanup.join();
+            m_impl->cleanup.request_stop();
+            if (m_impl->cleanup.joinable()) {
+                m_impl->cleanup.join();
             }
 
             for (const auto &resource : resources) {
@@ -297,10 +297,10 @@ namespace dssp::inference {
                 resource->queue->wait();
             }
 
-            impl_->executor->shutdown();
-            impl_->cache.clear();
+            m_impl->executor->shutdown();
+            m_impl->cache.clear();
             // Keep closed definitions valid for outstanding non-running handles.
-            log.stdcDebug("Inference cache group %1 stopped", impl_->group);
+            log.stdcDebug("Inference cache group %1 stopped", m_impl->group);
         });
     }
 }

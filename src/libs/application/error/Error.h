@@ -32,7 +32,7 @@ namespace dssp::error {
 
     private:
         struct Data;
-        std::shared_ptr<const Data> data_;
+        std::shared_ptr<const Data> m_data;
     };
 
     // Concrete errors should be final. Cloning through Error retains their payload.
@@ -56,12 +56,12 @@ namespace dssp::error {
     // Snapshot native codes instead of keeping pointers into unloadable plugins.
     class ExternalError final : public ErrorType<ExternalError> {
     public:
-        ExternalError(std::string message, NativeDiagnostic diagnostic, Ptr cause = {}, std::source_location location = std::source_location::current()) : ErrorType(std::move(message), std::move(cause), location), diagnostic_(std::make_shared<const NativeDiagnostic>(std::move(diagnostic))) {}
-        const NativeDiagnostic &diagnostic() const noexcept { return *diagnostic_; }
+        ExternalError(std::string message, NativeDiagnostic diagnostic, Ptr cause = {}, std::source_location location = std::source_location::current()) : ErrorType(std::move(message), std::move(cause), location), m_diagnostic(std::make_shared<const NativeDiagnostic>(std::move(diagnostic))) {}
+        const NativeDiagnostic &diagnostic() const noexcept { return *m_diagnostic; }
         std::string_view kind() const noexcept override { return "dssp.external"; }
 
     private:
-        std::shared_ptr<const NativeDiagnostic> diagnostic_;
+        std::shared_ptr<const NativeDiagnostic> m_diagnostic;
     };
 
 }
