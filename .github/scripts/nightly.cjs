@@ -113,7 +113,7 @@ async function prepare({ github, context, core }) {
     let tag = '';
     if (buildType === 'nightly') {
         if (context.ref !== 'refs/heads/main' || sourceSha !== context.sha ||
-            context.repo.owner !== 'CrSjimo' || context.repo.repo !== 'diffsinger-synthesis-program') {
+            context.repo.owner !== 'diffscope' || context.repo.repo !== 'diffsinger-synthesis-program') {
             throw new Error('Nightly versions must be reserved for the triggering main commit');
         }
         const refs = await nightlyRefs(github, context.repo);
@@ -163,7 +163,6 @@ function expectedAssets(applicationName, semver) {
     const base = applicationName + '_' + semver.replace(/[.\-+]/g, '_');
     return [
         ['_Windows_amd64_portable.zip', 'windows', 'amd64', 'zip', 'portable'],
-        ['_macOS_arm64_portable.zip', 'macos', 'arm64', 'zip', 'portable'],
         // Enable this entry with the Linux matrix entry in build.yml.
         // ['_Linux_amd64_portable.zip', 'linux', 'amd64', 'zip', 'portable'],
     ].map(([suffix, platform, arch, format, variant]) => ({ name: base + suffix, platform, arch, format, variant }));
