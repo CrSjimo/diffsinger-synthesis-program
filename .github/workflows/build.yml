@@ -37,6 +37,7 @@ jobs:
       semver: ${{ steps.version.outputs.semver }}
       tag: ${{ steps.version.outputs.tag }}
       application_name: ${{ steps.version.outputs.application_name }}
+      version_identifier: ${{ steps.version.outputs.version_identifier }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -78,8 +79,9 @@ jobs:
       BUILD_DIR: ${{ github.workspace }}/build/build
       INSTALL_DIR: ${{ github.workspace }}/build/install
       CCACHE_DIR: ${{ github.workspace }}/build/ccache
-      APPLICATION_SEMVER: ${{ needs.Prepare.outputs.semver }}
-      APPLICATION_NAME: ${{ needs.Prepare.outputs.application_name }}
+      BUILD_TYPE: ${{ inputs.build_type }}
+      VERSION_IDENTIFIER: ${{ needs.Prepare.outputs.version_identifier }}
+      EXPECTED_SEMVER: ${{ needs.Prepare.outputs.semver }}
       ARTIFACT_PLATFORM: ${{ matrix.platform }}
       ARTIFACT_ARCH: ${{ matrix.arch }}
       USE_CCACHE: ${{ inputs.build_type != 'nightly' && inputs.use_cache && inputs.use_ccache }}
@@ -114,12 +116,22 @@ jobs:
           if ($env:RUNNER_ARCH -ne $expectedArch) {
             throw "Unexpected runner architecture: $env:RUNNER_ARCH"
           }
-          & ./scripts/ci/Build.ps1 `
+          $output = & ./scripts/ci/Build.ps1 `
+            -BuildType $env:BUILD_TYPE `
             -VcpkgRootDir $env:VCPKG_ROOT_DIR `
             -BuildDir $env:BUILD_DIR `
             -InstallDir $env:INSTALL_DIR `
-            -Semver $env:APPLICATION_SEMVER `
+            -VersionIdentifier $env:VERSION_IDENTIFIER `
+            -ArtifactPlatform $env:ARTIFACT_PLATFORM `
+            -ArtifactArchitecture $env:ARTIFACT_ARCH `
             -CCache:($env:USE_CCACHE -eq 'true')
+          if ($output.Semver -ne $env:EXPECTED_SEMVER) {
+            throw 'Built application version differs from the reserved version'
+          }
+          "ARTIFACT_NAME=$($output.ArtifactFileBase)" >> $env:GITHUB_ENV
+          "APPLICATION_SEMVER=$($output.Semver)" >> $env:GITHUB_ENV
+          "APPLICATION_DISPLAY_NAME=$($output.ApplicationDisplayName)" >> $env:GITHUB_ENV
+          "APPLICATION_NAME=$($output.ApplicationName)" >> $env:GITHUB_ENV
 
       - name: Save CCache cache
         if: inputs.build_type != 'nightly' && inputs.use_cache && inputs.use_ccache
@@ -128,20 +140,35 @@ jobs:
           path: ${{ env.CCACHE_DIR }}
           key: ${{ runner.os }}-ccache-${{ inputs.source_sha }}
 
+      - name: Collect symbol files
+        run: |
+          $output = & ./scripts/ci/Collect-Symbol-Files.ps1 `
+            -VcpkgRootDir $env:VCPKG_ROOT_DIR `
+            -InstallDir $env:INSTALL_DIR `
+            -ArchivePath "$($env:ARTIFACT_NAME)_debug_symbols.zip"
+          "SYMBOL_FILES_PATH=$output" >> $env:GITHUB_ENV
+
       - name: Create portable ZIP
         run: |
-          $fileBase = "$($env:APPLICATION_NAME)_$($env:APPLICATION_SEMVER -replace '[.\-+]', '_')_$($env:ARTIFACT_PLATFORM)_$($env:ARTIFACT_ARCH)_portable"
           $archive = & ./scripts/ci/Create-Portable.ps1 `
             -InstallDir $env:INSTALL_DIR `
             -ApplicationName $env:APPLICATION_NAME `
-            -ArchivePath "$fileBase.zip"
-          "ARTIFACT_NAME=$fileBase" >> $env:GITHUB_ENV
+            -ArchivePath "$($env:ARTIFACT_NAME)_portable.zip"
           "PORTABLE_PATH=$archive" >> $env:GITHUB_ENV
+
+      - name: Upload symbol files
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}_debug_symbols
+          path: ${{ env.SYMBOL_FILES_PATH }}
+          if-no-files-found: error
+          overwrite: true
+          compression-level: 0
 
       - name: Upload portable ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ARTIFACT_NAME }}
+          name: ${{ env.ARTIFACT_NAME }}_portable
           path: ${{ env.PORTABLE_PATH }}
           if-no-files-found: error
           overwrite: true

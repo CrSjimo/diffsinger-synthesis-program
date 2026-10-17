@@ -33,19 +33,6 @@ if ($IsWindows) {
     if ($LASTEXITCODE -ne 0) { throw 'Portable staging failed' }
 }
 
-# Symbol files are not part of the portable distribution.
-Get-ChildItem -LiteralPath $applicationDir -Recurse -Force -Directory -Filter '*.dSYM' |
-    ForEach-Object {
-        $symbolPath = (Resolve-Path -LiteralPath $_.FullName).Path
-        $stagingPrefix = [System.IO.Path]::GetFullPath($applicationDir) + [System.IO.Path]::DirectorySeparatorChar
-        if (-not $symbolPath.StartsWith($stagingPrefix, [System.StringComparison]::Ordinal) -or $_.LinkType) {
-            throw "Symbol directory is outside the staging tree or is a link: $symbolPath"
-        }
-        Remove-Item -LiteralPath $symbolPath -Recurse -Force
-    }
-Get-ChildItem -LiteralPath $applicationDir -Recurse -Force -File |
-    Where-Object { $_.Extension -in '.pdb', '.debug' } | Remove-Item -Force
-
 Push-Location $stagingRoot
 try {
     if ($IsWindows) {

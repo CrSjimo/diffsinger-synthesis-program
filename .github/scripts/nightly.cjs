@@ -1,6 +1,3 @@
-// SPDX-FileCopyrightText: Team OpenVPI
-// SPDX-License-Identifier: Apache-2.0
-
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -163,8 +160,12 @@ function expectedAssets(applicationName, semver) {
     const base = applicationName + '_' + semver.replace(/[.\-+]/g, '_');
     return [
         ['_Windows_amd64_portable.zip', 'windows', 'amd64', 'zip', 'portable'],
-        // Enable this entry with the Linux matrix entry in build.yml.
+        ['_Windows_amd64_debug_symbols.zip', 'windows', 'amd64', 'zip', 'debug_symbols'],
+        // Enable each platform's entries with its matrix entry in build.yml.
+        // ['_macOS_arm64_portable.zip', 'macos', 'arm64', 'zip', 'portable'],
+        // ['_macOS_arm64_debug_symbols.zip', 'macos', 'arm64', 'zip', 'debug_symbols'],
         // ['_Linux_amd64_portable.zip', 'linux', 'amd64', 'zip', 'portable'],
+        // ['_Linux_amd64_debug_symbols.zip', 'linux', 'amd64', 'zip', 'debug_symbols'],
     ].map(([suffix, platform, arch, format, variant]) => ({ name: base + suffix, platform, arch, format, variant }));
 }
 
@@ -265,6 +266,21 @@ async function publish({ github, context, core }) {
         });
     }
     if (!release.published_at) throw new Error('The nightly release has no publication timestamp');
+    const artifacts = [];
+    for (const { name, ...metadata } of expected) {
+        const asset = assets.find(asset => asset.name === name);
+        const url = 'https://github.com/' + context.repo.owner + '/' + context.repo.repo +
+            '/releases/download/' + encodeURIComponent(tag) + '/' + encodeURIComponent(name);
+        if (asset.browser_download_url !== url || !Number.isSafeInteger(asset.size)) {
+            throw new Error('Invalid published asset metadata: ' + name);
+        }
+        artifacts.push({ ...metadata, url, size: asset.size, sha256: await assetDigest(asset) });
+    }
+    core.setOutput('catalog_manifest', JSON.stringify({
+        $schema: 'https://catalogs.diffscope.org/schema/v1/version.schema.json',
+        channel: 'nightly', version: semver, date: release.published_at,
+        source: { commit: attempt.source_sha, tag }, releaseNotes: release.html_url, artifacts
+    }));
     await core.summary.addLink('Published ' + semver, release.html_url).write();
 }
 

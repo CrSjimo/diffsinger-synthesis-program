@@ -36,7 +36,7 @@ runs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          build-essential gcc-14 g++-14 ninja-build ccache patchelf zip unzip curl tar \
+          build-essential gcc-14 g++-14 ninja-build ccache patchelf zip unzip curl tar file binutils \
           autoconf autoconf-archive automake libtool libltdl-dev pkg-config \
           bison flex libmagic-dev
         echo 'CC=gcc-14' >> "$GITHUB_ENV"

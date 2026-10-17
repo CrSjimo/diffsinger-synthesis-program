@@ -6,13 +6,18 @@ on:
   #   paths-ignore:
   #     - README.md
   #     - COPYING
+  #     - LICENSE
+  #     - crowdin.yml
   #     - '.github/**'
   pull_request:
     branches: [main]
     paths-ignore:
       - README.md
       - COPYING
+      - LICENSE
+      - crowdin.yml
       - '.github/**'
+      - '**/translations/*.ts'
   workflow_dispatch:
     inputs:
       identifier:

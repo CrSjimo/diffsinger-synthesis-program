@@ -4,7 +4,8 @@ description: Install manifest dependencies with an optional binary cache
 inputs:
   ref:
     description: vcpkg commit
-    required: true
+    required: false
+    default: master
   use_cache:
     description: Restore and save vcpkg binary caches
     default: 'true'
@@ -16,7 +17,7 @@ runs:
       if: inputs.use_cache == 'true'
       shell: pwsh
       run: |
-        $cachePath = Join-Path $env:RUNNER_TEMP 'dssp-vcpkg-archives'
+        $cachePath = [System.IO.Path]::GetFullPath((Join-Path $env:GITHUB_WORKSPACE '../vcpkg_archives'))
         New-Item -ItemType Directory -Path $cachePath -Force | Out-Null
         "VCPKG_DEFAULT_BINARY_CACHE=$cachePath" >> $env:GITHUB_ENV
 
@@ -25,19 +26,19 @@ runs:
       uses: actions/cache/restore@v4
       with:
         path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-        key: dssp-${{ runner.os }}-${{ runner.arch }}-vcpkg-${{ inputs.ref }}-${{ github.sha }}
+        key: ${{ runner.os }}-vcpkg-${{ inputs.ref }}-${{ github.sha }}
         restore-keys: |
-          dssp-${{ runner.os }}-${{ runner.arch }}-vcpkg-${{ inputs.ref }}-
+          ${{ runner.os }}-vcpkg-${{ inputs.ref }}-
 
     - name: Install vcpkg dependencies
       shell: pwsh
       env:
         VCPKG_COMMIT: ${{ inputs.ref }}
         USE_CACHE: ${{ inputs.use_cache }}
-        VCPKG_KEEP_ENV_VARS: MACOSX_DEPLOYMENT_TARGET;CC;CXX
+        VCPKG_KEEP_ENV_VARS: VCPKG_BUILD_TYPE;MACOSX_DEPLOYMENT_TARGET;CC;CXX
       run: |
         $ErrorActionPreference = 'Stop'
-        $vcpkgRoot = Join-Path $env:RUNNER_TEMP 'dssp-vcpkg'
+        $vcpkgRoot = [System.IO.Path]::GetFullPath((Join-Path $env:GITHUB_WORKSPACE '../vcpkg'))
         git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
         if ($LASTEXITCODE -ne 0) { throw 'vcpkg clone failed' }
         git -C $vcpkgRoot checkout $env:VCPKG_COMMIT
@@ -60,6 +61,9 @@ runs:
           "--x-manifest-root=$env:GITHUB_WORKSPACE/scripts/vcpkg-manifest"
           "--x-install-root=$vcpkgRoot/installed"
         )
+        if ($env:USE_CACHE -ne 'true') {
+          $arguments += '--binarysource=clear'
+        }
         & (Join-Path $vcpkgRoot ($IsWindows ? 'vcpkg.exe' : 'vcpkg')) @arguments
         if ($LASTEXITCODE -ne 0) { throw 'vcpkg installation failed' }
 
@@ -68,4 +72,4 @@ runs:
       uses: actions/cache/save@v4
       with:
         path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-        key: dssp-${{ runner.os }}-${{ runner.arch }}-vcpkg-${{ inputs.ref }}-${{ github.sha }}
+        key: ${{ runner.os }}-vcpkg-${{ inputs.ref }}-${{ github.sha }}
