@@ -17,6 +17,7 @@
 #include <dssparchdiffsinger/SynthesisInferences.h>
 #include <dssparchdiffsinger/SynthesisParameters.h>
 #include <dsspmedia/Wave.h>
+#include <dsspresource/TaskProgress.h>
 
 namespace dssp::arch_diffsinger {
     namespace {
@@ -67,6 +68,7 @@ namespace dssp::arch_diffsinger {
             SynthesisContext context;
             SynthesisScore score;
             double duration = 0;
+            resource::TaskProgress progress;
 
             bool cancelled() {
                 if (!stop.stop_requested()) {
@@ -146,7 +148,7 @@ namespace dssp::arch_diffsinger {
                     }
 
                     return output;
-                });
+                }, progress);
                 if (!(co_await background())) co_return fail<inference::ExecutionErrors>(inference::CancelledError("DiffSinger continuation was cancelled"));
                 co_return std::move(result);
             }
@@ -353,6 +355,7 @@ namespace dssp::arch_diffsinger {
                     co_return;
                 }
 
+                progress.advance(std::ranges::any_of(recomputed, [](const auto &id) { return id != "pitch"; }) ? 0.5 : 1);
                 co_await variance();
             }
 
@@ -428,6 +431,7 @@ namespace dssp::arch_diffsinger {
                     }
                 }
 
+                progress.advance(1);
                 finish(std::move(output));
             }
         };
@@ -553,6 +557,7 @@ namespace dssp::arch_diffsinger {
                     co_return;
                 }
 
+                progress.advance(0.9);
                 auto task = std::make_shared<Vo::VocoderStartInput>();
                 task->mel = std::move(result->mel);
                 if (vocoderConfiguration->pitchControllable && curves.contains("tone_shift")) {
@@ -583,6 +588,7 @@ namespace dssp::arch_diffsinger {
                 } else if (!*output) {
                     finish(fail<arch::SynthesisErrors>(arch::OperationError("Vocoder inference returned a null result for singer " + singer().info.id)));
                 } else {
+                    progress.advance(1);
                     encode((*output)->audioData);
                 }
             }
@@ -591,6 +597,7 @@ namespace dssp::arch_diffsinger {
 
     void synthesizeDuration(std::shared_ptr<const SingerCatalog> catalog, resource::TaskExecutor &tasks, arch::DurationInput input, std::stop_token stop, arch::Completion<arch::DurationOutput> complete) {
         const auto request = std::make_shared<Request<arch::DurationOutput>>(std::move(catalog), tasks, stop, std::move(complete));
+        request->progress = input.progress;
         if (request->cancelled()) {
             return;
         }
@@ -638,6 +645,7 @@ namespace dssp::arch_diffsinger {
             } else if (!*result) {
                 request->finish(fail<arch::SynthesisErrors>(arch::OperationError("Duration inference returned a null result for singer " + request->singer().info.id)));
             } else {
+                request->progress.advance(1);
                 request->finish(durationOutput(request->score, (*result)->durations));
             }
         });
@@ -645,6 +653,7 @@ namespace dssp::arch_diffsinger {
 
     void synthesizeParameters(std::shared_ptr<const SingerCatalog> catalog, resource::TaskExecutor &tasks, arch::ParameterInput input, std::stop_token stop, arch::Completion<arch::ParameterOutput> complete) {
         const auto request = std::make_shared<ParameterRequest>(std::move(catalog), tasks, stop, std::move(complete));
+        request->progress = input.progress;
         if (request->cancelled()) {
             return;
         }
@@ -660,6 +669,7 @@ namespace dssp::arch_diffsinger {
 
     void synthesizeAudio(std::shared_ptr<const SingerCatalog> catalog, resource::TaskExecutor &tasks, arch::AudioInput input, std::stop_token stop, arch::Completion<arch::AudioOutput> complete) {
         const auto request = std::make_shared<AudioRequest>(std::move(catalog), tasks, stop, std::move(complete));
+        request->progress = input.progress;
         if (request->cancelled()) {
             return;
         }

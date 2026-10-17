@@ -2,6 +2,7 @@
 #include <atomic>
 #include <cmath>
 #include <dsspmedia/Wave.h>
+#include <dsspresource/TaskProgress.h>
 
 namespace dssp::extraction {
     namespace {
@@ -14,6 +15,7 @@ namespace dssp::extraction {
             const ExtractorRecord &record;
             std::shared_ptr<resource::TaskExecutor> tasks;
             Completion<TempoOutput> complete;
+            resource::TaskProgress progress;
             std::stop_source stop;
             std::stop_callback<std::function<void()>> cancel;
             std::atomic_flag done = ATOMIC_FLAG_INIT;
@@ -42,6 +44,7 @@ namespace dssp::extraction {
 
     void extractTempo(std::shared_ptr<const ExtractorCatalog> catalog, const ExtractorRecord &record, std::shared_ptr<resource::TaskExecutor> tasks, Input input, std::stop_token stop, Completion<TempoOutput> complete) {
         const auto request = std::make_shared<Request>(std::move(catalog), record, std::move(tasks), stop, std::move(complete));
+        request->progress = input.progress;
         drogon::async_run([request, input = std::move(input)]() mutable -> drogon::Task<> {
             if (!(co_await background(request))) co_return;
             auto audio = media::readWaveDataUrl(input.audioUrl, request->stop.get_token());
@@ -60,6 +63,11 @@ namespace dssp::extraction {
             const auto frames = audio->samples.size() / audio->channelCount;
             const auto duration = static_cast<double>(frames) / audio->sampleRate;
             Beat::BeatStartInput native;
+            native.progress = [request](double value) {
+                if (request->stop.stop_requested()) return false;
+                request->progress.advance(value);
+                return true;
+            };
             native.audio = {audio->sampleRate, 1, {}, 0};
             native.audio.samples.resize(frames);
             for (std::size_t frame = 0; frame < frames; ++frame) {
@@ -78,7 +86,9 @@ namespace dssp::extraction {
                 if (!ran) return fail<inference::ExecutionErrors>(inference::ExecutionError("Tempo inference failed", ran.error().clone()));
                 if (!*ran) return fail<inference::ExecutionErrors>(inference::ExecutionError("Beat tracker returned no result"));
                 return std::move(*ran);
-            });
+            }, resource::TaskProgress([request](resource::TaskUpdate update) {
+                if (update.state == resource::TaskUpdate::State::Queue) request->progress.queue();
+            }));
             if (!(co_await background(request))) co_return;
             if (!result) {
                 if (result.error().get_if<inference::CancelledError>()) request->finish(fail<ExtractionErrors>(CancelledError("Tempo inference was cancelled", result.error().asError().clone())));

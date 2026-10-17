@@ -61,6 +61,32 @@ namespace dssp::tests {
         EXPECT_EQ(extraction->inferenceCaches.at("extraction-pitch").idleTimeout, std::chrono::seconds(9));
     }
 
+    TEST(ServerConfig, StreamHeartbeatDefaultsAndOverrides) {
+        const auto root = std::filesystem::current_path();
+        const runtime::ConfigValues packages{{"--package-dir", root.string()}};
+        const auto defaults = resolveCpuConfig(packages, {}, root);
+        ASSERT_TRUE(defaults);
+        EXPECT_EQ(defaults->streamHeartbeatInterval, std::chrono::seconds(10));
+        const auto environment = resolveCpuConfig(packages, {{"DSSP_STREAM_HEARTBEAT_INTERVAL", "3"}}, root);
+        ASSERT_TRUE(environment);
+        EXPECT_EQ(environment->streamHeartbeatInterval, std::chrono::seconds(3));
+        const auto commandLine = resolveCpuConfig({{"--package-dir", root.string()}, {"--stream-heartbeat-interval", "7"}}, {{"DSSP_STREAM_HEARTBEAT_INTERVAL", "invalid"}}, root);
+        ASSERT_TRUE(commandLine);
+        EXPECT_EQ(commandLine->streamHeartbeatInterval, std::chrono::seconds(7));
+    }
+
+    TEST(ServerConfig, StreamHeartbeatRejectsInvalidIntervals) {
+        const auto root = std::filesystem::current_path();
+        for (const auto value : {"", "0", "-1", "1.5", "10s", " 10", "99999999999999999999"}) {
+            const auto commandLine = resolveCpuConfig({{"--package-dir", root.string()}, {"--stream-heartbeat-interval", value}}, {}, root);
+            ASSERT_FALSE(commandLine) << value;
+            EXPECT_EQ(commandLine.error().option(), "--stream-heartbeat-interval");
+            const auto environment = resolveCpuConfig({{"--package-dir", root.string()}}, {{"DSSP_STREAM_HEARTBEAT_INTERVAL", value}}, root);
+            ASSERT_FALSE(environment) << value;
+            EXPECT_EQ(environment.error().option(), "--stream-heartbeat-interval");
+        }
+    }
+
     TEST(ServerConfig, RequestBodyLimitDefaultsToOneGiBAndCliOverridesEnvironment) {
         const auto root = std::filesystem::current_path();
         const runtime::ConfigValues packages{{"--package-dir", root.string()}};

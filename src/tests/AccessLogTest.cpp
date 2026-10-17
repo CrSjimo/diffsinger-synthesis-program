@@ -36,6 +36,27 @@ namespace dssp::tests {
         EXPECT_EQ(capture.accessRecords().size(), 3U);
     }
 
+    TEST(AccessLog, StreamCompletionDefersTheRecordAndRetainsTheProblem) {
+        LogCapture capture;
+        auto request = drogon::HttpRequest::newHttpRequest();
+        request->setMethod(drogon::Post);
+        request->setPath("/v1/synth/audio");
+        auto log = std::make_shared<http::AccessLog>();
+        log->begin(*request);
+        const auto context = http::requestLog(*request);
+        context.beginStream();
+        log->finish(*request, *drogon::HttpResponse::newHttpResponse());
+        EXPECT_TRUE(capture.accessRecords().empty());
+        context.problem("operation", "Result encoding failed");
+        context.finishStream("/v1/synth/audio");
+        context.finishStream("/v1/synth/audio");
+        const auto records = capture.accessRecords();
+        ASSERT_EQ(records.size(), 1U);
+        EXPECT_NE(records.front().message.find("status=200"), std::string::npos);
+        EXPECT_NE(records.front().message.find("error=\"operation\""), std::string::npos);
+        EXPECT_NE(records.front().message.find("Result encoding failed"), std::string::npos);
+    }
+
     TEST(AccessLog, PreservesHeadWhenDrogonRoutesItAsGet) {
         LogCapture capture;
         auto request = drogon::HttpRequest::newHttpRequest();

@@ -17,6 +17,7 @@ add_executable(dssp_tests
     MediaTypeTest.cpp
     RequestCodecTest.cpp
     ResponseTest.cpp
+    ResponseNegotiationTest.cpp
     ControllerTest.cpp
     ArchitectureDispatchTest.cpp
     ArchitectureMappingTest.cpp
@@ -41,6 +42,11 @@ dssp_sync_include(dssp_tests PREFIX dssptests FORCE NO_INSTALL)
 add_executable(dssp_http_access_log_tests HttpAccessLogTest.cpp)
 target_compile_features(dssp_http_access_log_tests PRIVATE cxx_std_23)
 target_link_libraries(dssp_http_access_log_tests PRIVATE dssp_api_v1 GTest::gtest_main)
+
+# Streaming lifecycle coverage requires an independent Drogon singleton.
+add_executable(dssp_http_streaming_tests HttpStreamingTest.cpp)
+target_compile_features(dssp_http_streaming_tests PRIVATE cxx_std_23)
+target_link_libraries(dssp_http_streaming_tests PRIVATE dssp_api_v1 GTest::gtest_main)
 
 # Backend and composition tests are isolated from the HTTP/API target.
 add_executable(dssp_arch_diffsinger_tests DiffSingerTest.cpp SingerDiscoveryTest.cpp LanguagePredictionTest.cpp SynthesisConversionTest.cpp SynthesisTest.cpp SynthesisPipelineTest.cpp ../app/ArchComposition.cpp)
@@ -84,6 +90,8 @@ gtest_discover_tests(dssp_log_timestamp_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(dssp_logger_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(dssp_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(dssp_http_access_log_tests DISCOVERY_MODE PRE_TEST)
+
+gtest_discover_tests(dssp_http_streaming_tests DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 30)
 gtest_discover_tests(dssp_arch_diffsinger_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(dssp_inference_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(dssp_resource_tests DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 10)

@@ -28,6 +28,7 @@
 #include <dsspinference/TaskExecutive.h>
 #include <dsspresource/CacheOptions.h>
 #include <dsspresource/ExecutionGate.h>
+#include <dsspresource/TaskProgress.h>
 
 namespace dssp::inference {
 
@@ -117,7 +118,7 @@ namespace dssp::inference {
         // Invoke the synchronous native task contract on a pool worker. The
         // function must finish the task before returning its srt::Expected.
         template <class Executive, class Function, class Completion>
-        void run(InferenceHandle handle, std::stop_token stop, Function function, Completion complete) {
+        void run(InferenceHandle handle, std::stop_token stop, Function function, Completion complete, resource::TaskProgress progress = {}) {
             using Value = typename std::invoke_result_t<Function, Executive &>::value_type;
             use<Executive>(std::move(handle), stop, [function = std::move(function)](Executive &executive, std::stop_token) mutable -> ExecutionResult<Value> {
                 auto native = nativeCall("InferenceExecutive::start", [&] { return std::invoke(function, executive); });
@@ -129,22 +130,23 @@ namespace dssp::inference {
                 } else {
                     return std::move(*native);
                 }
-            }, std::move(complete));
+            }, std::move(complete), std::move(progress));
         }
 
         // Run a sequence on one resource lease. Each native call is adapted at
         // its own boundary; cancellation also covers shutdown between spans.
         template <class Executive, class Function, class Completion>
-        void use(InferenceHandle handle, std::stop_token stop, Function function, Completion complete) {
+        void use(InferenceHandle handle, std::stop_token stop, Function function, Completion complete, resource::TaskProgress progress = {}) {
             using Value = typename std::invoke_result_t<Function, Executive &, std::stop_token>::value_type;
             const auto result = std::make_shared<std::optional<ExecutionResult<Value>>>();
-            schedule(std::move(handle), stop, [result, function = std::move(function)](TaskExecutive &executive, std::stop_token token) mutable {
+            schedule(std::move(handle), stop, [result, function = std::move(function), progress](TaskExecutive &executive, std::stop_token token) mutable {
                 auto *typed = dynamic_cast<Executive *>(&executive.native());
                 if (!typed) {
                     result->emplace(fail<ExecutionErrors>(ExecutionError("Inference resource does not match the requested contract")));
                     return false;
                 }
 
+                progress.advance(0);
                 result->emplace(std::invoke(function, *typed, token));
                 if (executive.state() == srt::ITask::Canceled) {
                     result->emplace(fail<ExecutionErrors>(CancelledError("Inference execution was cancelled")));
@@ -164,23 +166,23 @@ namespace dssp::inference {
                 } else {
                     complete(ExecutionResult<Value>{fail<ExecutionErrors>(ExecutionError("Inference task completed without a result"))});
                 }
-            });
+            }, progress);
         }
 
         std::size_t residentCount() const;
         template <class Executive, class Function>
-        auto runCoro(InferenceHandle handle, std::stop_token stop, Function function) {
+        auto runCoro(InferenceHandle handle, std::stop_token stop, Function function, resource::TaskProgress progress = {}) {
             using Value = typename std::invoke_result_t<Function, Executive &>::value_type;
-            return resource::awaitCallback<ExecutionResult<Value>>([this, handle = std::move(handle), stop, function = std::move(function)](auto complete) mutable {
-                run<Executive>(std::move(handle), stop, std::move(function), std::move(complete));
+            return resource::awaitCallback<ExecutionResult<Value>>([this, handle = std::move(handle), stop, function = std::move(function), progress = std::move(progress)](auto complete) mutable {
+                run<Executive>(std::move(handle), stop, std::move(function), std::move(complete), std::move(progress));
             });
         }
 
         template <class Executive, class Function>
-        auto useCoro(InferenceHandle handle, std::stop_token stop, Function function) {
+        auto useCoro(InferenceHandle handle, std::stop_token stop, Function function, resource::TaskProgress progress = {}) {
             using Value = typename std::invoke_result_t<Function, Executive &, std::stop_token>::value_type;
-            return resource::awaitCallback<ExecutionResult<Value>>([this, handle = std::move(handle), stop, function = std::move(function)](auto complete) mutable {
-                use<Executive>(std::move(handle), stop, std::move(function), std::move(complete));
+            return resource::awaitCallback<ExecutionResult<Value>>([this, handle = std::move(handle), stop, function = std::move(function), progress = std::move(progress)](auto complete) mutable {
+                use<Executive>(std::move(handle), stop, std::move(function), std::move(complete), std::move(progress));
             });
         }
 
@@ -194,7 +196,7 @@ namespace dssp::inference {
         explicit InferencePool(std::unique_ptr<Impl>);
         static std::expected<InferenceDefinition, ExecutionError> importDefinition(const srt::ContribImport &, std::shared_ptr<const srt::InferenceRuntimeOptions>, const srt::JsonValue &);
         std::expected<InferenceHandle, ExecutionError> bindTask(ExecutiveDefinition<TaskExecutive>);
-        void schedule(InferenceHandle, std::stop_token, std::function<bool(TaskExecutive &, std::stop_token)>, std::function<void(std::optional<ExecutionError>, bool)>);
+        void schedule(InferenceHandle, std::stop_token, std::function<bool(TaskExecutive &, std::stop_token)>, std::function<void(std::optional<ExecutionError>, bool)>, resource::TaskProgress);
         drogon::Task<bool> execute(InferenceHandle, std::stop_token, std::shared_ptr<std::optional<ExecutionError>>, std::function<bool(TaskExecutive &, std::stop_token)>);
         std::unique_ptr<Impl> m_impl;
     };

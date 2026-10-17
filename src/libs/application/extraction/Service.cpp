@@ -15,6 +15,7 @@
 #include <dsspextraction/Tempo.h>
 #include <dsspmedia/Wave.h>
 #include <dsspresource/TaskExecutor.h>
+#include <dsspresource/TaskProgress.h>
 
 namespace dssp::extraction {
     namespace {
@@ -31,6 +32,7 @@ namespace dssp::extraction {
             const ExtractorRecord &record;
             std::shared_ptr<resource::TaskExecutor> tasks;
             Completion<Output> complete;
+            resource::TaskProgress progress;
             std::stop_source stop;
             std::stop_callback<std::function<void()>> externalCancel;
             std::atomic_flag done = ATOMIC_FLAG_INIT;
@@ -128,13 +130,18 @@ namespace dssp::extraction {
         template <class Executive, class InputType, class ResultType, class Output, class Convert>
         void extract(std::shared_ptr<const ExtractorCatalog> catalog, const ExtractorRecord &record, std::shared_ptr<resource::TaskExecutor> tasks, Input input, double threshold, std::stop_token stop, Completion<Output> complete, Convert convert) {
             const auto request = std::make_shared<Request<Output>>(std::move(catalog), record, std::move(tasks), stop, std::move(complete));
+            request->progress = input.progress;
             drogon::async_run([request, input = std::move(input), threshold, convert = std::move(convert)]() mutable -> drogon::Task<> {
                 if (!(co_await background(request))) co_return;
                 if (!prepare(request, input.audioUrl, threshold)) co_return;
                 input.audioUrl.clear();
-                auto result = co_await request->record.pool->template useCoro<Executive>(request->record.resource, request->stop.get_token(), [request](Executive &executive, std::stop_token token) -> inference::ExecutionResult<std::vector<std::unique_ptr<ResultType>>> {
+                inference::ExecutionResult<std::vector<std::unique_ptr<ResultType>>> result{std::vector<std::unique_ptr<ResultType>>{}};
+                if (!request->spans.empty()) result = co_await request->record.pool->template useCoro<Executive>(request->record.resource, request->stop.get_token(), [request](Executive &executive, std::stop_token token) -> inference::ExecutionResult<std::vector<std::unique_ptr<ResultType>>> {
                     std::vector<std::unique_ptr<ResultType>> results;
                     results.reserve(request->spans.size());
+                    std::size_t totalFrames = 0;
+                    for (const auto &span : request->spans) totalFrames += span.end - span.begin;
+                    std::size_t completedFrames = 0;
                     for (std::size_t index = 0; index < request->spans.size(); ++index) {
                         if (token.stop_requested() || request->stop.stop_requested()) return fail<inference::ExecutionErrors>(inference::CancelledError("Extraction was cancelled between spans"));
                         const auto &span = request->spans[index];
@@ -143,17 +150,41 @@ namespace dssp::extraction {
                         native.audio.channelCount = 1;
                         native.audio.startTime = static_cast<double>(span.begin) / request->record.sampleRate;
                         native.audio.samples.assign(request->samples.begin() + span.begin, request->samples.begin() + span.end);
+                        const auto length = span.end - span.begin;
+                        native.progress = [request, completedFrames, length, totalFrames, token](double value) {
+                            if (token.stop_requested() || request->stop.stop_requested()) return false;
+                            if constexpr (std::is_same_v<ResultType, Note::NoteResult>) {
+                                // Complete spans require successful result validation.
+                                if (std::isfinite(value) && value >= 0 && value < 1) request->progress.advance((completedFrames + length * value) / totalFrames);
+                            }
+                            return true;
+                        };
                         // Language, knownNotes and all knobs retain Otter defaults.
                         log.stdcTrace("Running extraction extractor=%1 span=%2/%3 start_seconds=%4 pcm_frames=%5", request->record.id, index + 1, request->spans.size(), native.audio.startTime, span.end - span.begin);
                         auto result = inference::nativeCall("Otter analyzer::start", [&] { return executive.start(native); });
                         if (!result) return fail<inference::ExecutionErrors>(inference::ExecutionError("Extractor " + request->record.id + " failed in span " + std::to_string(index), result.error().clone()));
                         if (!*result) return fail<inference::ExecutionErrors>(inference::ExecutionError("Extractor " + request->record.id + " returned a null result in span " + std::to_string(index)));
                         if (executive.state() == srt::ITask::Canceled) return fail<inference::ExecutionErrors>(inference::CancelledError("Otter analyzer was cancelled"));
+                        const auto start = static_cast<double>(span.begin) / request->record.sampleRate;
+                        const auto end = static_cast<double>(span.end) / request->record.sampleRate;
+                        if constexpr (std::is_same_v<ResultType, Note::NoteResult>) {
+                            for (const auto &note : (*result)->notes) {
+                                if (note.start < start - 1e-5 || note.start + note.duration > end + 1e-5) return fail<inference::ExecutionErrors>(inference::ExecutionError("Note timing lies outside its input span"));
+                            }
+                            auto valid = noteOutput((*result)->notes, end);
+                            if (!valid) return fail<inference::ExecutionErrors>(inference::ExecutionError("Invalid note extraction result", valid.error().clone()));
+                        } else {
+                            PitchBuilder validation(request->record.outputInterval);
+                            auto valid = validation.append(**result, start, end, request->record.sampleRate);
+                            if (!valid) return fail<inference::ExecutionErrors>(inference::ExecutionError("Invalid pitch extraction result", valid.error().clone()));
+                        }
                         results.push_back(std::move(*result));
+                        completedFrames += length;
+                        request->progress.advance(static_cast<double>(completedFrames) / totalFrames);
                     }
 
                     return results;
-                });
+                }, request->progress);
                 if (!(co_await background(request))) co_return;
                 if (!result) {
                     request->failExecution(result.error());

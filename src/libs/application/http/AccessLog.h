@@ -27,6 +27,8 @@ namespace dssp::http {
         std::uint64_t id() const noexcept;
         std::string description() const;
         void problem(std::string_view type, std::string_view reason) const;
+        void beginStream() const;
+        void finishStream(std::string_view route) const;
 
     private:
         friend class AccessLog;

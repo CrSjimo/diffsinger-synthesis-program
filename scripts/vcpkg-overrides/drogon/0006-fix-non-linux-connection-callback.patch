@@ -1,0 +1,14 @@
+diff --git a/lib/src/ListenerManager.cc b/lib/src/ListenerManager.cc
+--- a/lib/src/ListenerManager.cc
++++ b/lib/src/ListenerManager.cc
+@@ -180,6 +180,10 @@ void ListenerManager::createListeners(
+                 listeningThread_->getLoop(),
+                 InetAddress(ip, listener.port_, isIpv6),
+                 "drogon");
++            if (connectionCallback_)
++            {
++                serverPtr->setConnectionCallback(connectionCallback_);
++            }
+             if (listener.useSSL_ && utils::supportsTls())
+             {
+                 auto cert = listener.certFile_;

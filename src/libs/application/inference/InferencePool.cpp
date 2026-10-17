@@ -176,7 +176,7 @@ namespace dssp::inference {
         return InferenceHandle(std::move(resource));
     }
 
-    void InferencePool::schedule(InferenceHandle handle, std::stop_token stop, std::function<bool(TaskExecutive &, std::stop_token)> run, std::function<void(std::optional<ExecutionError>, bool)> complete) {
+    void InferencePool::schedule(InferenceHandle handle, std::stop_token stop, std::function<bool(TaskExecutive &, std::stop_token)> run, std::function<void(std::optional<ExecutionError>, bool)> complete, resource::TaskProgress progress) {
         if (!handle || handle->owner != m_impl.get()) {
             complete(ExecutionError("Inference resource belongs to another cache group"), stop.stop_requested());
             return;
@@ -184,6 +184,7 @@ namespace dssp::inference {
 
         const auto error = std::make_shared<std::optional<ExecutionError>>();
         const auto admissionCancelled = std::make_shared<bool>(false);
+        if (!stop.stop_requested()) progress.queue();
         handle->queue->submit({{}, [handle, error, admissionCancelled, complete = std::move(complete)](bool cancelled) mutable {
             std::optional<ExecutionError> dispatchError;
             {

@@ -62,7 +62,7 @@ namespace dssp {
                 applicationDir = stdc::system::application_directory();
                 temporaryDir = stdc::system::SystemPaths::writableDirectory(stdc::system::SystemPaths::TempDirectory);
                 for (const auto name : {
-                    "--host", "--port", "--max-request-body-size", "--package-dir", "--execution-provider", "--device-index", "--silence-threshold"
+                    "--host", "--port", "--max-request-body-size", "--package-dir", "--execution-provider", "--device-index", "--silence-threshold", "--stream-heartbeat-interval"
                 }) {
                     if (const auto value = result.valueForOption<std::string>(name)) {
                         options.emplace(name, *value);
@@ -155,7 +155,7 @@ namespace dssp {
                     callback(http::problemResponse(failure, http::requestLog(*request)));
                 });
 
-                api_v1::registerControllers(app, lifetime, *architectures, *extractionService);
+                api_v1::registerControllers(app, lifetime, *architectures, *extractionService, config->streamHeartbeatInterval);
 
                 app.setConnectionCallback([lifetime, accessLog](const trantor::TcpConnectionPtr &connection) {
                     accessLog->connectionChanged(connection);
@@ -204,6 +204,7 @@ namespace dssp {
             .addOption(stdc::cli::Option({"--execution-provider"}, "cpu, cuda, directml or coreml; default DirectML on Windows, CPU elsewhere (DSSP_EXECUTION_PROVIDER)").arg("provider"))
             .addOption(stdc::cli::Option({"--device-index"}, "Native backend device index; automatically recommended when omitted (DSSP_DEVICE_INDEX)").arg("index"))
             .addOption(stdc::cli::Option({"--silence-threshold"}, "Linear RMS threshold, default 0.02 (DSSP_SILENCE_THRESHOLD)").arg("threshold"))
+            .addOption(stdc::cli::Option({"--stream-heartbeat-interval"}, "Stream heartbeat interval in seconds, default 10 (DSSP_STREAM_HEARTBEAT_INTERVAL)").arg("seconds"))
             .setHandler(runServe);
         for (const auto &group : runtime::InferenceCacheGroups) {
             const auto option = "--" + std::string(group.id);

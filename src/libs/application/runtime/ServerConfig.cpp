@@ -141,6 +141,15 @@ namespace dssp::runtime {
             }
         }
 
+        if (const auto text = value("--stream-heartbeat-interval", "DSSP_STREAM_HEARTBEAT_INTERVAL")) {
+            std::int64_t seconds = 0;
+            const auto maximumSeconds = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::duration::max() / 2).count();
+            if (!number(*text, seconds) || seconds < 1 || seconds > maximumSeconds) {
+                return std::unexpected{ConfigurationError("--stream-heartbeat-interval", "Stream heartbeat interval must be a positive integer in seconds within the monotonic timer limit")};
+            }
+            config.streamHeartbeatInterval = std::chrono::seconds(seconds);
+        }
+
         for (const auto &descriptor : InferenceCacheGroups) {
             const auto group = descriptor.id;
             const auto prefix = descriptor.environmentPrefix;

@@ -65,11 +65,9 @@ namespace {
                 if (input.progress && !input.progress(value)) (void)stop();
                 return !cancelled();
             };
-            if (!progress(0)) return cancelledError();
-
             auto features = m_features.compute(audio.samples, [this] { return cancelled(); });
             if (!features) return features.takeError();
-            if (!progress(0.1)) return cancelledError();
+            if (!progress(0)) return cancelledError();
 
             const auto frameCount = features->size() / 128;
             if (frameCount > static_cast<std::size_t>(std::numeric_limits<std::ptrdiff_t>::max() - m_config.chunkFrames))
@@ -123,15 +121,13 @@ namespace {
                     assigned[destination] = true; // Official keep_first overlap policy.
                 }
 
-                if (!progress(0.1 + 0.85 * (chunkIndex + 1) / starts.size())) return cancelledError();
+                if (!progress(static_cast<double>(chunkIndex + 1) / starts.size())) return cancelledError();
             }
 
             if (std::ranges::any_of(assigned, [](bool value) { return !value; })) return srt::Error(BeatError::Internal, "Beat chunk aggregation left uncovered frames");
 
             auto result = std::make_unique<Beat::BeatResult>();
             result->beats = srtbeatinfer::beatthis::postprocess(beat, downbeat, audio.startTime, duration);
-            if (!progress(1)) return cancelledError();
-
             return result;
         }
 

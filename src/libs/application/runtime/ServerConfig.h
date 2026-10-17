@@ -1,6 +1,7 @@
 #ifndef DSSP_SERVERCONFIG_H
 #define DSSP_SERVERCONFIG_H
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -23,6 +24,7 @@ namespace dssp::runtime {
         ExecutionProvider executionProvider = DeviceInfo::defaultExecutionProvider();
         int deviceIndex = 0;
         double silenceThreshold = 0.02;
+        std::chrono::seconds streamHeartbeatInterval{10};
         std::map<std::string, resource::CacheOptions> inferenceCaches = defaultInferenceCaches();
         // Bundled deployment paths derived from the executable location.
         std::filesystem::path pluginDir;

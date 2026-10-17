@@ -11,6 +11,7 @@
 
 #include <dsspcodecutil/codecutil.h>
 #include <dsspmedia/Wave.h>
+#include <dsspresource/TaskProgress.h>
 
 namespace dssp::extraction {
     namespace {
@@ -23,6 +24,7 @@ namespace dssp::extraction {
             const ExtractorRecord &record;
             std::shared_ptr<resource::TaskExecutor> tasks;
             Completion<SeparationOutput> complete;
+            resource::TaskProgress progress;
             std::stop_source stop;
             std::stop_callback<std::function<void()>> cancel;
             std::atomic_flag done = ATOMIC_FLAG_INIT;
@@ -78,6 +80,7 @@ namespace dssp::extraction {
 
     void extractSeparation(std::shared_ptr<const ExtractorCatalog> catalog, const ExtractorRecord &record, std::shared_ptr<resource::TaskExecutor> tasks, SeparationInput input, std::stop_token stop, Completion<SeparationOutput> complete) {
         auto request = std::make_shared<Request>(std::move(catalog), record, std::move(tasks), stop, std::move(complete));
+        request->progress = input.progress;
         drogon::async_run([request, input = std::move(input)]() mutable -> drogon::Task<> {
             if (!(co_await background(request)))
                 co_return;
@@ -110,6 +113,11 @@ namespace dssp::extraction {
 
             const auto expectedSamples = audio->samples.size();
             Sep::SeparationStartInput native;
+            native.progress = [request](double value) {
+                if (request->stop.stop_requested()) return false;
+                request->progress.advance(value);
+                return true;
+            };
             native.audio = {audio->sampleRate, audio->channelCount, std::move(audio->samples), 0};
             auto result = co_await request->record.pool->useCoro<Sep::SeparationExecutive>(request->record.resource, request->stop.get_token(), [&native](Sep::SeparationExecutive &executive, std::stop_token token) -> inference::ExecutionResult<std::unique_ptr<Sep::SeparationResult>> {
                 if (token.stop_requested())
@@ -122,7 +130,7 @@ namespace dssp::extraction {
                 if (!*ran)
                     return fail<inference::ExecutionErrors>(inference::ExecutionError("Separator returned no result"));
                 return std::move(*ran);
-            });
+            }, request->progress);
             if (!(co_await background(request)))
                 co_return;
             if (!result) {

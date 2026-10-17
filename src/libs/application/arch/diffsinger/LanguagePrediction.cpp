@@ -14,6 +14,7 @@
 
 #include <dssparchdiffsinger/LanguageResults.h>
 #include <dssparchdiffsinger/SynthesisContext.h>
+#include <dsspresource/TaskProgress.h>
 
 namespace dssp::arch_diffsinger {
     namespace {
@@ -77,13 +78,16 @@ namespace dssp::arch_diffsinger {
         // Publish exactly one reply, and cancel the remaining work after a fault.
         template <class Output>
         struct Request {
-            Request(std::shared_ptr<const SingerCatalog> catalog, std::stop_token external, arch::Completion<Output> complete, Output output, std::size_t pending)
-                : catalog(std::move(catalog)), complete(std::move(complete)), output(std::move(output)), pending(pending), cancellation(external, [source = stop]() mutable { source.request_stop(); }) {}
+            Request(std::shared_ptr<const SingerCatalog> catalog, std::stop_token external, arch::Completion<Output> complete, Output output, std::size_t pending, resource::TaskProgress progress, std::size_t total)
+                : catalog(std::move(catalog)), complete(std::move(complete)), output(std::move(output)), pending(pending), progress(std::move(progress)), total(total), cancellation(external, [source = stop]() mutable { source.request_stop(); }) {}
             std::shared_ptr<const SingerCatalog> catalog;
 
             arch::Completion<Output> complete;
             Output output;
             std::size_t pending;
+            resource::TaskProgress progress;
+            std::size_t total;
+            std::size_t completed = 0;
             std::mutex mutex;
             bool done = false;
             std::stop_source stop;
@@ -92,6 +96,7 @@ namespace dssp::arch_diffsinger {
             template <class Note>
             void finish(const std::vector<std::size_t> &indices, arch::SynthesisResult<std::vector<Note>> result) {
                 std::optional<arch::SynthesisResult<Output>> reply;
+                std::optional<double> value;
                 {
                     const std::lock_guard lock(mutex);
                     if (done) {
@@ -105,6 +110,8 @@ namespace dssp::arch_diffsinger {
                         for (std::size_t i = 0; i < indices.size(); ++i) {
                             output.notes[indices[i]] = std::move((*result)[i]);
                         }
+                        completed += indices.size();
+                        value = static_cast<double>(completed) / total;
                         if (!--pending) {
                             reply.emplace(std::move(output));
                         }
@@ -112,6 +119,7 @@ namespace dssp::arch_diffsinger {
                     done = reply.has_value();
                 }
 
+                if (value) progress.advance(*value);
                 if (reply) {
                     if (!*reply) {
                         stop.request_stop();
@@ -158,7 +166,7 @@ namespace dssp::arch_diffsinger {
             auto input = std::make_shared<Onset::OnsetStartInput>();
             input->phonemes.push_back(std::move(tokens));
             const auto handle = task.onset;
-            auto result = co_await pool.runCoro<Onset::OnsetExecutive>(handle, request->stop.get_token(), [input](auto &executive) { return executive.start(*input); });
+            auto result = co_await pool.runCoro<Onset::OnsetExecutive>(handle, request->stop.get_token(), [input](auto &executive) { return executive.start(*input); }, request->progress);
             if (!result) {
                 request->finish<arch::PhonemeNote>({task.index}, std::unexpected{executionError(result.error())});
             } else if (!*result || (*result)->onsets.size() != 1 || (*result)->onsets[0].size() != input->phonemes[0].size()) {
@@ -229,12 +237,14 @@ namespace dssp::arch_diffsinger {
             return;
         }
 
-        const auto request = std::make_shared<Request<arch::PronunciationOutput>>(std::move(catalog), stop, std::move(complete), std::move(output), batches.size());
+        std::size_t total = 0;
+        for (const auto &batch : batches) total += batch.indices.size();
+        const auto request = std::make_shared<Request<arch::PronunciationOutput>>(std::move(catalog), stop, std::move(complete), std::move(output), batches.size(), input.progress, total);
         for (auto &batch : batches) {
             const auto nativeInput = batch.input;
             const auto handle = batch.handle;
             drogon::async_run([pool = *pool, request, batch = std::move(batch), nativeInput, handle]() -> drogon::Task<> {
-                auto result = co_await pool->runCoro<G2P::G2PExecutive>(handle, request->stop.get_token(), [nativeInput](auto &executive) { return executive.start(*nativeInput); });
+                auto result = co_await pool->runCoro<G2P::G2PExecutive>(handle, request->stop.get_token(), [nativeInput](auto &executive) { return executive.start(*nativeInput); }, request->progress);
                 if (!result) {
                     request->finish<arch::Pronunciation>(batch.indices, std::unexpected{executionError(result.error())});
                     co_return;
@@ -332,13 +342,13 @@ namespace dssp::arch_diffsinger {
             return;
         }
 
-        const auto request = std::make_shared<PhonemeRequest>(std::move(catalog), stop, std::move(complete), std::move(output), tasks.size());
+        const auto request = std::make_shared<PhonemeRequest>(std::move(catalog), stop, std::move(complete), std::move(output), tasks.size(), input.progress, tasks.size());
         for (auto &task : tasks) {
             auto nativeInput = std::make_shared<S2P::S2PStartInput>();
             nativeInput->pronunciations.push_back(task.note.pronunciation);
             const auto handle = task.s2p;
             drogon::async_run([pool = *pool, onsetPool = *onsetPool, request, task = std::move(task), nativeInput, handle]() mutable -> drogon::Task<> {
-                auto result = co_await pool->runCoro<S2P::S2PExecutive>(handle, request->stop.get_token(), [nativeInput](auto &executive) { return executive.start(*nativeInput); });
+                auto result = co_await pool->runCoro<S2P::S2PExecutive>(handle, request->stop.get_token(), [nativeInput](auto &executive) { return executive.start(*nativeInput); }, request->progress);
                 if (!result) {
                     request->finish<arch::PhonemeNote>({task.index}, std::unexpected{executionError(result.error())});
                 } else if (!*result || (*result)->phonemes.size() != 1) {

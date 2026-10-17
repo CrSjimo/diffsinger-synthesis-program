@@ -1,6 +1,7 @@
 #ifndef DSSP_API_V1_CONTROLLERS_EXTRACTIONDISPATCH_H
 #define DSSP_API_V1_CONTROLLERS_EXTRACTIONDISPATCH_H
 
+#include <chrono>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -13,6 +14,8 @@
 #include <dsspapiv1/RequestCodec.h>
 #include <dsspapiv1/ResponseCodec.h>
 #include <dsspextraction/Service.h>
+#include <dssphttp/ResponseNegotiation.h>
+#include <dssphttp/TaskStream.h>
 #include <dsspresource/Async.h>
 
 namespace dssp::api_v1::detail {
@@ -28,9 +31,26 @@ namespace dssp::api_v1::detail {
     }
 
     template <class Response, class Output, class Request = dto::ExtractionRequest, class Start>
-    drogon::Task<> extract(drogon::HttpRequestPtr request, http::Callback callback, std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::shared_ptr<extraction::Service> service, Start start, std::string_view operation) {
+    drogon::Task<> extract(drogon::HttpRequestPtr request, http::Callback callback, std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::shared_ptr<extraction::Service> service, Start start, std::string_view operation, std::chrono::seconds heartbeatInterval = std::chrono::seconds(10)) {
         const auto context = lifetime->track(*request);
         if (context.stopRequested()) co_return;
+        const auto representation = http::negotiateTaskResponse(request->getHeader("accept"));
+        if (representation == http::TaskRepresentation::Unacceptable) {
+            auto response = http::problemResponse(406, "not-acceptable", "Not acceptable", "Accept must allow application/json or application/x-ndjson", context.logContext());
+            response->addHeader("vary", "Accept");
+            callback(response);
+            co_return;
+        }
+        std::shared_ptr<http::TaskStream> stream;
+        if (representation == http::TaskRepresentation::Ndjson) {
+            stream = http::TaskStream::open(*request, callback, context, heartbeatInterval);
+            callback = [stream](const auto &response) { stream->finish(response); };
+        } else {
+            callback = [send = std::move(callback)](const auto &response) {
+                response->addHeader("vary", "Accept");
+                send(response);
+            };
+        }
         auto input = request->as<Decoded<Request>>();
         if (context.stopRequested()) co_return;
         if (!input) {
@@ -40,8 +60,13 @@ namespace dssp::api_v1::detail {
 
         const auto reply = std::make_shared<AsyncReply>(std::move(callback), context, service, operation);
         auto parameters = toExtraction(std::move(*input));
+        if (stream) parameters.progress = stream->progress();
         auto result = co_await resource::awaitCallback<extraction::ExtractionResult<Output>>([service, parameters = std::move(parameters), context, start](auto complete) mutable {
-            std::invoke(start, *service, std::move(parameters), context.cancellation(), std::move(complete));
+            try {
+                std::invoke(start, *service, std::move(parameters), context.cancellation(), complete);
+            } catch (const std::exception &error) {
+                complete(extraction::ExtractionResult<Output>{fail<extraction::ExtractionErrors>(extraction::OperationError("Cannot dispatch extraction work", std::make_shared<const ExternalError>(error.what(), NativeDiagnostic{"extraction", "dispatch extraction", "exception"})))});
+            }
         });
         if (!reply->claim()) co_return;
         try {

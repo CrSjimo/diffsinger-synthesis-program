@@ -1,6 +1,7 @@
 #ifndef DSSP_API_V1_CONTROLLERS_CONTROLLERS_H
 #define DSSP_API_V1_CONTROLLERS_CONTROLLERS_H
 
+#include <chrono>
 #include <memory>
 #include <utility>
 
@@ -16,10 +17,11 @@ namespace dssp::api_v1 {
 
     class ControllerSupport {
     public:
-        explicit ControllerSupport(std::shared_ptr<http::RequestLifetimeRegistry> lifetime) : m_lifetime(std::move(lifetime)) {}
+        explicit ControllerSupport(std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::chrono::seconds heartbeatInterval = std::chrono::seconds(10)) : m_lifetime(std::move(lifetime)), m_heartbeatInterval(heartbeatInterval) {}
 
     protected:
         std::shared_ptr<http::RequestLifetimeRegistry> m_lifetime;
+        std::chrono::seconds m_heartbeatInterval;
     };
 
     class ApplicationController final : public drogon::HttpController<ApplicationController, false> {
@@ -68,7 +70,7 @@ namespace dssp::api_v1 {
 
     class SynthesisController final : public drogon::HttpController<SynthesisController, false>, public ControllerSupport {
     public:
-        SynthesisController(std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::shared_ptr<const arch::ArchitectureCatalog> architectures) : ControllerSupport(std::move(lifetime)), m_architectures(std::move(architectures)) {}
+        SynthesisController(std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::shared_ptr<const arch::ArchitectureCatalog> architectures, std::chrono::seconds heartbeatInterval = std::chrono::seconds(10)) : ControllerSupport(std::move(lifetime), heartbeatInterval), m_architectures(std::move(architectures)) {}
 
         METHOD_LIST_BEGIN
             ADD_METHOD_TO(SynthesisController::envTag, "/v1/synth/env-tag", drogon::Post);
@@ -91,7 +93,7 @@ namespace dssp::api_v1 {
 
     class ExtractionController final : public drogon::HttpController<ExtractionController, false>, public ControllerSupport {
     public:
-        ExtractionController(std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::shared_ptr<extraction::Service> service) : ControllerSupport(std::move(lifetime)), m_service(std::move(service)) {}
+        ExtractionController(std::shared_ptr<http::RequestLifetimeRegistry> lifetime, std::shared_ptr<extraction::Service> service, std::chrono::seconds heartbeatInterval = std::chrono::seconds(10)) : ControllerSupport(std::move(lifetime), heartbeatInterval), m_service(std::move(service)) {}
 
         METHOD_LIST_BEGIN
             ADD_METHOD_TO(ExtractionController::extractors, "/v1/extractor", drogon::Get);
@@ -118,7 +120,7 @@ namespace dssp::api_v1 {
         const std::shared_ptr<extraction::Service> m_service;
     };
 
-    void registerControllers(drogon::HttpAppFramework &app, const std::shared_ptr<http::RequestLifetimeRegistry> &lifetime, const std::shared_ptr<const arch::ArchitectureCatalog> &architectures, const std::shared_ptr<extraction::Service> &extraction);
+    void registerControllers(drogon::HttpAppFramework &app, const std::shared_ptr<http::RequestLifetimeRegistry> &lifetime, const std::shared_ptr<const arch::ArchitectureCatalog> &architectures, const std::shared_ptr<extraction::Service> &extraction, std::chrono::seconds heartbeatInterval = std::chrono::seconds(10));
 
 }
 

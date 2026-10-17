@@ -3,7 +3,7 @@
   "info": {
     "title": "DiffScope Synthesis Platform API",
     "version": "1.0",
-    "description": "DSSP HTTP API surface represented by this service. A server implementation can support a subset of the broader DSSP API."
+    "description": "DSSP HTTP API surface represented by this service. A server implementation can support a subset of the broader DSSP API.\n\n## Response negotiation\n\nOperations whose response content declares application/x-ndjson support streaming on the same URL with the same method and request body as the corresponding non-streaming operation. The Accept request header specifies acceptable response media types. Accept: application/x-ndjson requests a stream. Accept: application/json requests a non-streaming response. If both media types are acceptable, selection follows HTTP content negotiation, including quality values. If Accept is absent or contains only */*, the response uses application/json. The response Content-Type identifies the selected representation. Request bodies retain Content-Type: application/json.\n\n## NDJSON response format\n\nAn application/x-ndjson response is a UTF-8 sequence of JSON objects. Each object occupies a single line terminated by LF. Line breaks within JSON strings are escaped. Each line contains one event with the envelope {\"event\": \"<event name>\", \"data\": <event data>}. The data member is omitted for queue and is optional for progress. Each operation's itemSchema describes one event. Event ordering is governed by the following table and is not validated by itemSchema.\n\n| Event | Data | Meaning | Allowed next events |\n| --- | --- | --- | --- |\n| queue | Absent. | The task is queued on the server. Disconnecting in this state does not discard any unfinished processing progress. | queue, progress, result, error |\n| progress | Optional object {\"value\": <number from 0 to 1 inclusive>}. Absent data is equivalent to {\"value\": 0}. | The task is processing. The normalized value is solely for client progress display and has no business meaning. | progress, result, error |\n| result | Required. The complete response body defined for application/json by the same operation. | The task completed successfully. Results are returned in full in a single event. | None. This event is terminal. |\n| error | Required. The error data format is unspecified, as for non-streaming errors. | The task failed. | None. This event is terminal. |\n\nThe stream may begin with any event. Queue and progress events are optional. A completed stream contains exactly one terminal event, result or error, and no events follow it. A connection that closes before a terminal event does not establish task completion. A progress value of 1 does not replace a result event.\n\nA negotiated application/x-ndjson response always uses HTTP status 200, including if its first event is error. Request decoding, validation, architecture selection, task execution, and result encoding failures use an error event. The error data contains the corresponding problem response body. The status member in that body describes the failure and does not change the HTTP response status. If neither application/json nor application/x-ndjson is acceptable, the server returns HTTP 406.\n\nDuring queue and progress, the server repeats the current event at the configured heartbeat interval, including if the progress value is unchanged. The default interval is 10 seconds. Preparation does not produce progress events. Only the initial resource admission produces queue events. Subsequent resource waits retain the last progress state. Progress measures the task body from 0 to 1 and excludes preparation and final result construction or encoding. A value of 1 indicates completion of the task body. A later error event remains possible. Tasks without model work may return a terminal event directly.\n\nExample of a successful /synth/duration response:\n\n```ndjson\n{\"event\":\"queue\"}\n{\"event\":\"progress\"}\n{\"event\":\"progress\",\"data\":{\"value\":1}}\n{\"event\":\"result\",\"data\":{\"output\":{\"notes\":[]}}}\n```"
   },
   "servers": [
     {
@@ -872,6 +872,37 @@
             "schema": {
               "$ref": "#/components/schemas/PronunciationResponse"
             }
+          },
+          "application/x-ndjson": {
+            "itemSchema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/QueueEvent"
+                },
+                {
+                  "$ref": "#/components/schemas/ProgressEvent"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "event",
+                    "data"
+                  ],
+                  "properties": {
+                    "event": {
+                      "const": "result"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PronunciationResponse"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorEvent"
+                }
+              ]
+            }
           }
         }
       },
@@ -881,6 +912,37 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/PhonemeResponse"
+            }
+          },
+          "application/x-ndjson": {
+            "itemSchema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/QueueEvent"
+                },
+                {
+                  "$ref": "#/components/schemas/ProgressEvent"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "event",
+                    "data"
+                  ],
+                  "properties": {
+                    "event": {
+                      "const": "result"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PhonemeResponse"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorEvent"
+                }
+              ]
             }
           }
         }
@@ -892,6 +954,37 @@
             "schema": {
               "$ref": "#/components/schemas/DurationResponse"
             }
+          },
+          "application/x-ndjson": {
+            "itemSchema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/QueueEvent"
+                },
+                {
+                  "$ref": "#/components/schemas/ProgressEvent"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "event",
+                    "data"
+                  ],
+                  "properties": {
+                    "event": {
+                      "const": "result"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DurationResponse"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorEvent"
+                }
+              ]
+            }
           }
         }
       },
@@ -902,6 +995,37 @@
             "schema": {
               "$ref": "#/components/schemas/ParameterResponse"
             }
+          },
+          "application/x-ndjson": {
+            "itemSchema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/QueueEvent"
+                },
+                {
+                  "$ref": "#/components/schemas/ProgressEvent"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "event",
+                    "data"
+                  ],
+                  "properties": {
+                    "event": {
+                      "const": "result"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ParameterResponse"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorEvent"
+                }
+              ]
+            }
           }
         }
       },
@@ -911,6 +1035,37 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/AudioResponse"
+            }
+          },
+          "application/x-ndjson": {
+            "itemSchema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/QueueEvent"
+                },
+                {
+                  "$ref": "#/components/schemas/ProgressEvent"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "event",
+                    "data"
+                  ],
+                  "properties": {
+                    "event": {
+                      "const": "result"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AudioResponse"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorEvent"
+                }
+              ]
             }
           }
         }
@@ -952,6 +1107,37 @@
             "schema": {
               "$ref": "#/components/schemas/NoteExtractionResponse"
             }
+          },
+          "application/x-ndjson": {
+            "itemSchema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/QueueEvent"
+                },
+                {
+                  "$ref": "#/components/schemas/ProgressEvent"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "event",
+                    "data"
+                  ],
+                  "properties": {
+                    "event": {
+                      "const": "result"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/NoteExtractionResponse"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorEvent"
+                }
+              ]
+            }
           }
         }
       },
@@ -961,6 +1147,37 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/TempoExtractionResponse"
+            }
+          },
+          "application/x-ndjson": {
+            "itemSchema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/QueueEvent"
+                },
+                {
+                  "$ref": "#/components/schemas/ProgressEvent"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "event",
+                    "data"
+                  ],
+                  "properties": {
+                    "event": {
+                      "const": "result"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TempoExtractionResponse"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorEvent"
+                }
+              ]
             }
           }
         }
@@ -972,6 +1189,37 @@
             "schema": {
               "$ref": "#/components/schemas/PitchExtractionResponse"
             }
+          },
+          "application/x-ndjson": {
+            "itemSchema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/QueueEvent"
+                },
+                {
+                  "$ref": "#/components/schemas/ProgressEvent"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "event",
+                    "data"
+                  ],
+                  "properties": {
+                    "event": {
+                      "const": "result"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PitchExtractionResponse"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorEvent"
+                }
+              ]
+            }
           }
         }
       },
@@ -982,11 +1230,101 @@
             "schema": {
               "$ref": "#/components/schemas/SeparationExtractionResponse"
             }
+          },
+          "application/x-ndjson": {
+            "itemSchema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/QueueEvent"
+                },
+                {
+                  "$ref": "#/components/schemas/ProgressEvent"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "event",
+                    "data"
+                  ],
+                  "properties": {
+                    "event": {
+                      "const": "result"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SeparationExtractionResponse"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorEvent"
+                }
+              ]
+            }
           }
         }
       }
     },
     "schemas": {
+      "QueueEvent": {
+        "type": "object",
+        "description": "Indicates initial resource admission. Heartbeats may repeat this event until processing begins. Subsequent resource waits retain the progress state. Disconnecting in this state does not discard unfinished processing progress. Any event may follow.",
+        "additionalProperties": false,
+        "required": [
+          "event"
+        ],
+        "properties": {
+          "event": {
+            "const": "queue"
+          }
+        }
+      },
+      "ProgressEvent": {
+        "type": "object",
+        "description": "Indicates that the task is processing. Absent data is equivalent to {\"value\": 0}. Values are monotonic and heartbeats may repeat the current value. A value of 1 indicates task body completion. Result construction may still fail. Only progress, result, or error may follow.",
+        "additionalProperties": false,
+        "required": [
+          "event"
+        ],
+        "properties": {
+          "event": {
+            "const": "progress"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Normalized progress for client display only. The value has no business meaning."
+              }
+            },
+            "default": {
+              "value": 0
+            }
+          }
+        }
+      },
+      "ErrorEvent": {
+        "type": "object",
+        "description": "Returns a task failure. The error data format is unspecified. This event is terminal.",
+        "additionalProperties": false,
+        "required": [
+          "event",
+          "data"
+        ],
+        "properties": {
+          "event": {
+            "const": "error"
+          },
+          "data": {}
+        }
+      },
       "ExtractorList": {
         "type": "object",
         "required": [

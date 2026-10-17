@@ -45,6 +45,7 @@ namespace dssp::http {
         const std::string client;
         std::weak_ptr<AccessLog> owner;
         std::atomic_flag completed = ATOMIC_FLAG_INIT;
+        std::atomic<bool> streaming = false;
         std::mutex problemMutex;
         std::string problemSummary;
 
@@ -106,6 +107,14 @@ namespace dssp::http {
         }
     }
 
+    void RequestLog::beginStream() const {
+        if (m_state) m_state->streaming.store(true, std::memory_order_release);
+    }
+
+    void RequestLog::finishStream(std::string_view route) const {
+        if (m_state) m_state->finish("response", "200", route);
+    }
+
     void AccessLog::install(drogon::HttpAppFramework &app) {
         const auto self = shared_from_this();
         app.registerSyncAdvice([self](const drogon::HttpRequestPtr &request) -> drogon::HttpResponsePtr {
@@ -138,6 +147,7 @@ namespace dssp::http {
 
     void AccessLog::finish(const drogon::HttpRequest &request, const drogon::HttpResponse &response) {
         const auto context = requestLog(request);
+        if (context.m_state->streaming.load(std::memory_order_acquire)) return;
         const auto route = request.matchedPathPattern();
         context.m_state->finish("response", std::to_string(static_cast<int>(response.statusCode())), route == request.path() ? std::string_view{} : route);
     }

@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <dsspextraction/ExtractionError.h>
+#include <dsspresource/TaskProgress.h>
 
 namespace dssp::extraction {
     enum class Kind { Note, Pitch, Tempo, Separation };
@@ -33,6 +34,7 @@ namespace dssp::extraction {
     struct Input {
         std::string extractor;
         std::string audioUrl;
+        resource::TaskProgress progress;
     };
 
     struct SeparationInput : Input {

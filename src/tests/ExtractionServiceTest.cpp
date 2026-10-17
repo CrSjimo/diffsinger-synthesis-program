@@ -14,6 +14,7 @@
 #include <dsspextraction/OtterTypes.h>
 #include <dsspextraction/Service.h>
 #include <dsspinference/ResourceIdentity.h>
+#include <dsspresource/TaskProgress.h>
 #include <dssptests/TestAnalysisPackage.h>
 
 namespace dssp::tests {
@@ -52,9 +53,15 @@ namespace dssp::tests {
                 EXPECT_FALSE(input.language.has_value());
                 EXPECT_TRUE(input.knownNotes.empty());
                 for (const auto value : input.audio.samples) EXPECT_FLOAT_EQ(value, 0.125f);
+                if (input.progress) {
+                    EXPECT_TRUE(input.progress(0));
+                    EXPECT_TRUE(input.progress(0.3));
+                    EXPECT_TRUE(input.progress(0.8));
+                }
 
                 auto result = std::make_unique<Note::NoteResult>();
                 result->notes.push_back({60, input.audio.startTime, static_cast<double>(input.audio.samples.size()) / input.audio.sampleRate, 1});
+                if (input.progress) EXPECT_TRUE(input.progress(1));
                 return result;
             }
         };
@@ -232,6 +239,31 @@ namespace dssp::tests {
             ASSERT_TRUE(pool);
             EXPECT_EQ((*pool)->residentCount(), 1U);
         }
+    }
+
+    TEST_F(ExtractionServiceTest, NoteProgressUsesSpanLengthsAndNativeModelStages) {
+        install<TestNoteExecutive>("note", "extraction-note");
+        startService();
+        ASSERT_NE(m_service, nullptr);
+        std::vector<double> values;
+        extraction::Input input{analysisNoteId, wave(44100, 2, 5292)};
+        input.progress = resource::TaskProgress([&](resource::TaskUpdate update) {
+            if (update.state == resource::TaskUpdate::State::Progress) values.push_back(update.value);
+        });
+        const auto result = await<extraction::NoteOutput>([&](auto callback) { m_service->note(input, {}, std::move(callback)); });
+        ASSERT_TRUE(result) << result.error().asError().formatChain();
+        ASSERT_EQ(result->notes.size(), 3U);
+        std::vector<double> expected{0};
+        double completed = 0;
+        for (const auto &note : result->notes) {
+            expected.push_back(completed / 0.12);
+            expected.push_back((completed + 0.3 * note.duration) / 0.12);
+            expected.push_back((completed + 0.8 * note.duration) / 0.12);
+            completed += note.duration;
+            expected.push_back(completed / 0.12);
+        }
+        ASSERT_EQ(values.size(), expected.size());
+        for (std::size_t i = 0; i < values.size(); ++i) EXPECT_NEAR(values[i], expected[i], 1e-12);
     }
 
     TEST_F(ExtractionServiceTest, NativeStopReachesAnExecutingOtterAnalyzer) {

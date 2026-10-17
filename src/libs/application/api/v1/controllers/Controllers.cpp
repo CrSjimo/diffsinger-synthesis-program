@@ -96,23 +96,23 @@ namespace dssp::api_v1 {
     }
 
     drogon::Task<> SynthesisController::pronunciation(drogon::HttpRequestPtr request, http::Callback callback) const {
-        co_await detail::process<dto::PronunciationRequest, dto::PronunciationResponse, arch::PronunciationOutput>(request, std::move(callback), m_lifetime, m_architectures, &arch::Architecture::pronunciation, "pronunciation");
+        co_await detail::process<dto::PronunciationRequest, dto::PronunciationResponse, arch::PronunciationOutput>(request, std::move(callback), m_lifetime, m_architectures, &arch::Architecture::pronunciation, "pronunciation", m_heartbeatInterval);
     }
 
     drogon::Task<> SynthesisController::phoneme(drogon::HttpRequestPtr request, http::Callback callback) const {
-        co_await detail::process<dto::PhonemeRequest, dto::PhonemeResponse, arch::PhonemeOutput>(request, std::move(callback), m_lifetime, m_architectures, &arch::Architecture::phoneme, "phoneme");
+        co_await detail::process<dto::PhonemeRequest, dto::PhonemeResponse, arch::PhonemeOutput>(request, std::move(callback), m_lifetime, m_architectures, &arch::Architecture::phoneme, "phoneme", m_heartbeatInterval);
     }
 
     drogon::Task<> SynthesisController::duration(drogon::HttpRequestPtr request, http::Callback callback) const {
-        co_await detail::process<dto::DurationRequest, dto::DurationResponse, arch::DurationOutput>(request, std::move(callback), m_lifetime, m_architectures, &arch::Architecture::duration, "duration");
+        co_await detail::process<dto::DurationRequest, dto::DurationResponse, arch::DurationOutput>(request, std::move(callback), m_lifetime, m_architectures, &arch::Architecture::duration, "duration", m_heartbeatInterval);
     }
 
     drogon::Task<> SynthesisController::parameter(drogon::HttpRequestPtr request, http::Callback callback) const {
-        co_await detail::process<dto::ParameterRequest, dto::ParameterResponse, arch::ParameterOutput>(request, std::move(callback), m_lifetime, m_architectures, &arch::Architecture::parameter, "parameter");
+        co_await detail::process<dto::ParameterRequest, dto::ParameterResponse, arch::ParameterOutput>(request, std::move(callback), m_lifetime, m_architectures, &arch::Architecture::parameter, "parameter", m_heartbeatInterval);
     }
 
     drogon::Task<> SynthesisController::audio(drogon::HttpRequestPtr request, http::Callback callback) const {
-        co_await detail::process<dto::AudioRequest, dto::AudioResponse, arch::AudioOutput>(request, std::move(callback), m_lifetime, m_architectures, &arch::Architecture::audio, "audio");
+        co_await detail::process<dto::AudioRequest, dto::AudioResponse, arch::AudioOutput>(request, std::move(callback), m_lifetime, m_architectures, &arch::Architecture::audio, "audio", m_heartbeatInterval);
     }
 
     void ExtractionController::extractors(const drogon::HttpRequestPtr &req, http::Callback &&cb) const {
@@ -136,26 +136,26 @@ namespace dssp::api_v1 {
     }
 
     drogon::Task<> ExtractionController::note(drogon::HttpRequestPtr request, http::Callback callback) const {
-        co_await detail::extract<dto::NoteExtractionResponse, extraction::NoteOutput>(request, std::move(callback), m_lifetime, m_service, &extraction::Service::note, "note extraction");
+        co_await detail::extract<dto::NoteExtractionResponse, extraction::NoteOutput>(request, std::move(callback), m_lifetime, m_service, &extraction::Service::note, "note extraction", m_heartbeatInterval);
     }
 
     drogon::Task<> ExtractionController::pitch(drogon::HttpRequestPtr request, http::Callback callback) const {
-        co_await detail::extract<dto::PitchExtractionResponse, extraction::PitchOutput>(request, std::move(callback), m_lifetime, m_service, &extraction::Service::pitch, "pitch extraction");
+        co_await detail::extract<dto::PitchExtractionResponse, extraction::PitchOutput>(request, std::move(callback), m_lifetime, m_service, &extraction::Service::pitch, "pitch extraction", m_heartbeatInterval);
     }
 
     drogon::Task<> ExtractionController::tempo(drogon::HttpRequestPtr request, http::Callback callback) const {
-        co_await detail::extract<dto::TempoExtractionResponse, extraction::TempoOutput>(request, std::move(callback), m_lifetime, m_service, &extraction::Service::tempo, "tempo extraction");
+        co_await detail::extract<dto::TempoExtractionResponse, extraction::TempoOutput>(request, std::move(callback), m_lifetime, m_service, &extraction::Service::tempo, "tempo extraction", m_heartbeatInterval);
     }
 
     drogon::Task<> ExtractionController::separation(drogon::HttpRequestPtr request, http::Callback callback) const {
-        co_await detail::extract<dto::SeparationExtractionResponse, extraction::SeparationOutput, dto::SeparationExtractionRequest>(request, std::move(callback), m_lifetime, m_service, &extraction::Service::separation, "audio separation");
+        co_await detail::extract<dto::SeparationExtractionResponse, extraction::SeparationOutput, dto::SeparationExtractionRequest>(request, std::move(callback), m_lifetime, m_service, &extraction::Service::separation, "audio separation", m_heartbeatInterval);
     }
 
-    void registerControllers(drogon::HttpAppFramework &app, const std::shared_ptr<http::RequestLifetimeRegistry> &lifetime, const std::shared_ptr<const arch::ArchitectureCatalog> &architectures, const std::shared_ptr<extraction::Service> &extraction) {
+    void registerControllers(drogon::HttpAppFramework &app, const std::shared_ptr<http::RequestLifetimeRegistry> &lifetime, const std::shared_ptr<const arch::ArchitectureCatalog> &architectures, const std::shared_ptr<extraction::Service> &extraction, std::chrono::seconds heartbeatInterval) {
         app.registerController(std::make_shared<ApplicationController>());
         app.registerController(std::make_shared<CatalogController>(architectures));
-        app.registerController(std::make_shared<SynthesisController>(lifetime, architectures));
-        app.registerController(std::make_shared<ExtractionController>(lifetime, extraction));
+        app.registerController(std::make_shared<SynthesisController>(lifetime, architectures, heartbeatInterval));
+        app.registerController(std::make_shared<ExtractionController>(lifetime, extraction, heartbeatInterval));
     }
 
 }

@@ -41,6 +41,8 @@ Each JSON record contains `timestamp` (integer milliseconds since the Unix epoch
 
 See [docs/open-api](docs/open-api) for API specs.
 
+Synthesis and extraction requests support streaming through `Accept: application/x-ndjson`. Streams use HTTP 200 and report task failures through terminal error events. Queue and progress heartbeats repeat every 10 seconds by default. Set `--stream-heartbeat-interval <seconds>` or `DSSP_STREAM_HEARTBEAT_INTERVAL` to configure a positive integer interval. See [task progress](docs/progress.md) for work units and event behavior.
+
 ## License
 
 GPL-3.0-or-later

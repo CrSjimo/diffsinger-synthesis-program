@@ -12,6 +12,7 @@
 #include <dssparchdiffsinger/Factory.h>
 #include <dssparchdiffsinger/SynthesisInferences.h>
 #include <dssparchdiffsinger/SynthesisParameters.h>
+#include <dsspresource/TaskProgress.h>
 #include <dssptests/TestLanguagePackage.h>
 
 namespace dssp::tests {
@@ -223,10 +224,15 @@ namespace dssp::tests {
             result->predictions.push_back({ds::ParamTag("energy"), std::vector<double>(50, -48), 0.01, std::nullopt});
             return result;
         });
-        const auto input = parameterInput();
+        auto input = parameterInput();
+        std::vector<double> progress;
+        input.progress = resource::TaskProgress([&](resource::TaskUpdate update) {
+            if (update.state == resource::TaskUpdate::State::Progress && update.value > 0) progress.push_back(update.value);
+        });
         const auto output = await<arch::ParameterOutput>([&](auto callback) { m_implementation->parameter(input, {}, std::move(callback)); });
         ASSERT_TRUE(output) << (output ? "" : output.error().asError().formatChain());
         EXPECT_EQ(*order, (std::vector<std::string>{"pitch", "variance"}));
+        EXPECT_EQ(progress, (std::vector<double>{0.5, 1}));
         ASSERT_EQ(output->parameters.size(), 2U);
         const auto &pitch = output->parameters.at("pitch");
         EXPECT_DOUBLE_EQ(pitch.sampleRate, 100);
@@ -297,10 +303,15 @@ namespace dssp::tests {
         for (const auto id : {"pitch", "energy", "gender", "velocity", "tone_shift"}) input.parameters.emplace(id, arch::AudioParameter{100, std::nullopt});
         input.parameters.at("pitch").values = std::vector<double>{69.0 / 128};
         input.parameters.at("tone_shift").values = std::vector<double>{1};
+        std::vector<double> progress;
+        input.progress = resource::TaskProgress([&](resource::TaskUpdate update) {
+            if (update.state == resource::TaskUpdate::State::Progress && update.value > 0) progress.push_back(update.value);
+        });
         const auto output = await<arch::AudioOutput>([&](auto callback) { m_implementation->audio(input, {}, std::move(callback)); });
         ASSERT_TRUE(output) << (output ? "" : output.error().asError().formatChain());
         EXPECT_TRUE(output->audioUrl.starts_with("data:audio/wav;base64,"));
         EXPECT_EQ(*order, (std::vector<std::string>{"acoustic", "vocoder"}));
+        EXPECT_EQ(progress, (std::vector<double>{0.9, 1}));
         for (const auto stage : {Stage::Acoustic, Stage::Vocoder}) {
             const auto pool = m_environment->inferences(arch_diffsinger::synthesisCacheGroup(stage));
             ASSERT_TRUE(pool);

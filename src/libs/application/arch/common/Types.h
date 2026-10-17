@@ -10,6 +10,8 @@
 
 #include <json/value.h>
 
+#include <dsspresource/TaskProgress.h>
+
 namespace dssp::arch {
 
     // Domain inputs retain API units. Runtime-specific conversion and extension
@@ -44,11 +46,13 @@ namespace dssp::arch {
     struct PronunciationInput {
         SingleSingerContext context;
         std::vector<Lyric> notes;
+        resource::TaskProgress progress;
     };
 
     struct PhonemeInput {
         SingleSingerContext context;
         std::vector<PronunciationNote> notes;
+        resource::TaskProgress progress;
     };
 
     enum class NoteKind {
@@ -94,6 +98,7 @@ namespace dssp::arch {
     struct DurationInput {
         MultiSingerContext context;
         Piece<DurationNote> piece;
+        resource::TaskProgress progress;
     };
 
     struct ParameterRetake {
@@ -121,6 +126,7 @@ namespace dssp::arch {
         MultiSingerContext context;
         Piece<ParameterNote> piece;
         std::map<std::string, Parameter> parameters;
+        resource::TaskProgress progress;
     };
 
     struct AudioInput {
@@ -128,6 +134,7 @@ namespace dssp::arch {
         Piece<ParameterNote> piece;
         std::map<std::string, AudioParameter> parameters;
         MediaPreferences media;
+        resource::TaskProgress progress;
     };
 
     struct CatalogOptions {

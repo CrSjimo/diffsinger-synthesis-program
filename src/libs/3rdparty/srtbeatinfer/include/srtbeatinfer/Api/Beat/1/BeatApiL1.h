@@ -49,7 +49,9 @@ namespace srtbeatinfer::Api::Beat::L1 {
         BeatStartInput() : TaskStartInput(API_INTERFACE, API_LEVEL) {}
 
         AudioSegment audio;
-        std::function<bool(double)> progress; // Monotonic [0,1]; false requests cancellation.
+        // Reports completed inference blocks in [0,1] after feature computation.
+        // Returning false requests cancellation.
+        std::function<bool(double)> progress;
     };
 
     struct Beat {
